@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartMatch - Trouvez l'amour</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fdf2f8;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
+        }
+        
+        .profile-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .chat-container {
+            height: calc(100vh - 200px);
+        }
+        
+        .online-dot {
+            width: 12px;
+            height: 12px;
+            background-color: #10b981;
+            border-radius: 50%;
+            position: absolute;
+            bottom: 0;
+            right: 0;
+            border: 2px solid white;
+        }
+        
+        .message-in {
+            background-color: #f3f4f6;
+            border-radius: 18px 18px 18px 0;
+        }
+        
+        .message-out {
+            background-color: #f472b6;
+            color: white;
+            border-radius: 18px 18px 0 18px;
+        }
+        
+        @media (max-width: 768px) {
+            .chat-container {
+                height: calc(100vh - 150px);
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fas fa-heart text-2xl"></i>
+                <h1 class="text-2xl font-bold">HeartMatch</h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button class="p-2 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition">
+                    <i class="fas fa-bell"></i>
+                </button>
+                <div class="relative">
+                    <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Profile" class="w-10 h-10 rounded-full object-cover border-2 border-white">
+                    <div class="online-dot"></div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-6">
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Profiles Section -->
+            <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-md overflow-hidden p-4">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-semibold">Profils à proximité</h2>
+                    <div class="flex space-x-2">
+                        <button class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
+                            <i class="fas fa-sliders-h"></i>
+                        </button>
+                        <button class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="space-y-4">
+                    <!-- Profile Card 1 -->
+                    <div class="profile-card transition duration-300 cursor-pointer">
+                        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100">
+                            <div class="relative">
+                                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" class="w-16 h-16 rounded-full object-cover">
+                                <div class="online-dot"></div>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">Thomas, 28</h3>
+                                <p class="text-sm text-gray-500">Paris, 5km</p>
+                                <div class="flex mt-1 space-x-1">
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Sportif</span>
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Voyages</span>
+                                </div>
+                            </div>
+                            <button class="ml-auto p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition">
+                                <i class="fas fa-comment-dots"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Card 2 -->
+                    <div class="profile-card transition duration-300 cursor-pointer">
+                        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100">
+                            <div class="relative">
+                                <img src="https://randomuser.me/api/portraits/women/65.jpg" alt="Profile" class="w-16 h-16 rounded-full object-cover">
+                                <div class="online-dot"></div>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">Sophie, 25</h3>
+                                <p class="text-sm text-gray-500">Lyon, 2km</p>
+                                <div class="flex mt-1 space-x-1">
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Musique</span>
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Cinéma</span>
+                                </div>
+                            </div>
+                            <button class="ml-auto p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition">
+                                <i class="fas fa-comment-dots"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Card 3 -->
+                    <div class="profile-card transition duration-300 cursor-pointer">
+                        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100">
+                            <div class="relative">
+                                <img src="https://randomuser.me/api/portraits/men/75.jpg" alt="Profile" class="w-16 h-16 rounded-full object-cover">
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">Alexandre, 31</h3>
+                                <p class="text-sm text-gray-500">Marseille, 10km</p>
+                                <div class="flex mt-1 space-x-1">
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Cuisine</span>
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Lecture</span>
+                                </div>
+                            </div>
+                            <button class="ml-auto p-2 rounded-full bg-gray-200 text-gray-600 hover:bg-gray-300 transition">
+                                <i class="fas fa-comment-dots"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Profile Card 4 -->
+                    <div class="profile-card transition duration-300 cursor-pointer">
+                        <div class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100">
+                            <div class="relative">
+                                <img src="https://randomuser.me/api/portraits/women/33.jpg" alt="Profile" class="w-16 h-16 rounded-full object-cover">
+                                <div class="online-dot"></div>
+                            </div>
+                            <div>
+                                <h3 class="font-semibold">Camille, 27</h3>
+                                <p class="text-sm text-gray-500">Toulouse, 7km</p>
+                                <div class="flex mt-1 space-x-1">
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Art</span>
+                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">Randonnée</span>
+                                </div>
+                            </div>
+                            <button class="ml-auto p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition">
+                                <i class="fas fa-comment-dots"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-4 text-center">
+                    <button class="px-4 py-2 bg-pink-500 text-white rounded-full hover:bg-pink-600 transition font-medium">
+                        Voir plus de profils
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Chat Section -->
+            <div class="w-full lg:w-2/3 bg-white rounded-xl shadow-md overflow-hidden">
+                <!-- Chat Header -->
+                <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
+                    <div class="relative">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" class="w-12 h-12 rounded-full object-cover">
+                        <div class="online-dot"></div>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Thomas</h3>
+                        <p class="text-sm text-gray-500">En ligne maintenant</p>
+                    </div>
+                    <div class="ml-auto flex space-x-2">
+                        <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <i class="fas fa-phone-alt"></i>
+                        </button>
+                        <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <i class="fas fa-video"></i>
+                        </button>
+                        <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Chat Messages -->
+                <div class="chat-container overflow-y-auto p-4 space-y-3">
+                    <!-- Date -->
+                    <div class="text-center text-xs text-gray-500 my-4">
+                        Aujourd'hui
+                    </div>
+                    
+                    <!-- Incoming Message -->
+                    <div class="flex space-x-2">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                        <div>
+                            <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
+                                Salut ! Comment ça va ? J'ai vu que tu aimais les voyages aussi. Où es-tu allé récemment ?
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">10:24</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Outgoing Message -->
+                    <div class="flex space-x-2 justify-end">
+                        <div>
+                            <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
+                                Salut Thomas ! Ça va bien merci :) Je suis allé en Italie le mois dernier, c'était magnifique ! Et toi ?
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 text-right">10:26</p>
+                        </div>
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                    </div>
+                    
+                    <!-- Incoming Message -->
+                    <div class="flex space-x-2">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                        <div>
+                            <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
+                                Super ! J'adore l'Italie. Moi je suis allé en Grèce cet été. Les paysages étaient incroyables !
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">10:28</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Outgoing Message -->
+                    <div class="flex space-x-2 justify-end">
+                        <div>
+                            <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
+                                Oh la Grèce c'est sur ma liste ! Tu recommandes quelle île en particulier ?
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 text-right">10:30</p>
+                        </div>
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                    </div>
+                    
+                    <!-- Incoming Message -->
+                    <div class="flex space-x-2">
+                        <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                        <div>
+                            <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
+                                Santorin est magnifique, mais j'ai aussi adoré Naxos qui est plus authentique et moins touristique.
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1">10:32</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Outgoing Message -->
+                    <div class="flex space-x-2 justify-end">
+                        <div>
+                            <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
+                                Merci pour les conseils ! Ça te dit qu'on en parle autour d'un café un de ces jours ? 😊
+                            </div>
+                            <p class="text-xs text-gray-500 mt-1 text-right">10:34</p>
+                        </div>
+                        <img src="https://randomuser.me/api/portraits/women/44.jpg" alt="Profile" class="w-8 h-8 rounded-full object-cover flex-shrink-0">
+                    </div>
+                </div>
+                
+                <!-- Message Input -->
+                <div class="border-t border-gray-200 p-4">
+                    <div class="flex items-center space-x-2">
+                        <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                        <input type="text" placeholder="Écrire un message..." class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500">
+                        <button class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition">
+                            <i class="fas fa-paper-plane"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation (Mobile) -->
+    <nav class="lg:hidden fixed bottom-0 left-0 right-0 bg-white shadow-lg border-t border-gray-200">
+        <div class="flex justify-around items-center p-3">
+            <a href="#" class="p-2 text-pink-600">
+                <i class="fas fa-home text-xl"></i>
+            </a>
+            <a href="#" class="p-2 text-gray-500 hover:text-pink-600">
+                <i class="fas fa-search text-xl"></i>
+            </a>
+            <a href="#" class="p-2 bg-pink-500 text-white rounded-full -mt-8 p-4 shadow-lg">
+                <i class="fas fa-heart text-xl"></i>
+            </a>
+            <a href="#" class="p-2 text-gray-500 hover:text-pink-600">
+                <i class="fas fa-comment-dots text-xl"></i>
+            </a>
+            <a href="#" class="p-2 text-gray-500 hover:text-pink-600">
+                <i class="fas fa-user text-xl"></i>
+            </a>
+        </div>
+    </nav>
+
+    <script>
+        // Simple script to handle profile selection
+        document.querySelectorAll('.profile-card').forEach(card => {
+            card.addEventListener('click', function() {
+                // Remove active class from all cards
+                document.querySelectorAll('.profile-card').forEach(c => {
+                    c.querySelector('button').classList.remove('bg-pink-500', 'text-white');
+                    c.querySelector('button').classList.add('bg-gray-200', 'text-gray-600');
+                });
+                
+                // Add active class to clicked card
+                const button = this.querySelector('button');
+                button.classList.remove('bg-gray-200', 'text-gray-600');
+                button.classList.add('bg-pink-500', 'text-white');
+                
+                // In a real app, you would load the chat for this user
+                console.log('Selected profile:', this.querySelector('h3').textContent);
+            });
+        });
+        
+        // Auto-scroll chat to bottom
+        window.onload = function() {
+            const chatContainer = document.querySelector('.chat-container');
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        };
+    </script>
+</body>
+</html>

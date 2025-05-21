@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartMatch - Inscription</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fdf2f8;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
+        }
+        
+        .input-field:focus {
+            box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.3);
+        }
+        
+        .checkbox:checked {
+            background-color: #f472b6;
+            border-color: #f472b6;
+        }
+        
+        .signup-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #9ca3af;
+        }
+        
+        .divider::before, .divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .divider::before {
+            margin-right: 1rem;
+        }
+        
+        .divider::after {
+            margin-left: 1rem;
+        }
+        
+        .gender-selector input:checked + label {
+            border-color: #f472b6;
+            background-color: #fdf2f8;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-center space-x-2">
+                <i class="fas fa-heart text-2xl"></i>
+                <h1 class="text-2xl font-bold">HeartMatch</h1>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-8">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-2">Créez votre compte</h2>
+            <p class="text-center text-gray-600 mb-8">Rejoignez notre communauté et trouvez l'amour</p>
+            
+            <!-- Social Login Buttons -->
+            <div class="space-y-3 mb-6">
+                <button class="w-full flex items-center justify-center space-x-2 bg-white border border-gray-300 rounded-lg py-3 px-4 hover:bg-gray-50 transition">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" class="w-5 h-5">
+                    <span>S'inscrire avec Google</span>
+                </button>
+                <button class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white rounded-lg py-3 px-4 hover:bg-blue-700 transition">
+                    <i class="fab fa-facebook-f"></i>
+                    <span>S'inscrire avec Facebook</span>
+                </button>
+            </div>
+            
+            <!-- Divider -->
+            <div class="divider text-sm mb-6">OU</div>
+            
+            <!-- Registration Form -->
+            <form>
+                <!-- Name Input -->
+                <div class="mb-4">
+                    <label for="name" class="block text-sm font-medium text-gray-700 mb-1">Nom complet</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-user text-gray-400"></i>
+                        </div>
+                        <input type="text" id="name" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500" placeholder="Votre nom complet">
+                    </div>
+                </div>
+                
+                <!-- Email Input -->
+                <div class="mb-4">
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-envelope text-gray-400"></i>
+                        </div>
+                        <input type="email" id="email" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500" placeholder="votre@email.com">
+                    </div>
+                </div>
+                
+                <!-- Password Input -->
+                <div class="mb-4">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" id="password" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500" placeholder="••••••••">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer">
+                            <i class="fas fa-eye-slash text-gray-400 hover:text-gray-600" id="togglePassword"></i>
+                        </div>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1">Minimum 8 caractères avec des chiffres et lettres</p>
+                </div>
+                
+                <!-- Date of Birth -->
+                <div class="mb-4">
+                    <label for="dob" class="block text-sm font-medium text-gray-700 mb-1">Date de naissance</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-calendar-alt text-gray-400"></i>
+                        </div>
+                        <input type="date" id="dob" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500">
+                    </div>
+                </div>
+                
+                <!-- Gender Selection -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Je suis</label>
+                    <div class="grid grid-cols-2 gap-3 gender-selector">
+                        <div>
+                            <input type="radio" id="male" name="gender" value="male" class="hidden peer" checked>
+                            <label for="male" class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50 transition">
+                                <i class="fas fa-mars text-blue-500 mr-2"></i>
+                                <span>Homme</span>
+                            </label>
+                        </div>
+                        <div>
+                            <input type="radio" id="female" name="gender" value="female" class="hidden peer">
+                            <label for="female" class="flex items-center justify-center p-3 border border-gray-300 rounded-lg cursor-pointer peer-checked:border-pink-500 peer-checked:bg-pink-50 transition">
+                                <i class="fas fa-venus text-pink-500 mr-2"></i>
+                                <span>Femme</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Terms Checkbox -->
+                <div class="mb-6">
+                    <div class="flex items-start">
+                        <div class="flex items-center h-5">
+                            <input id="terms" name="terms" type="checkbox" class="checkbox h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded">
+                        </div>
+                        <div class="ml-3 text-sm">
+                            <label for="terms" class="font-medium text-gray-700">J'accepte les <a href="#" class="text-pink-600 hover:text-pink-700">Conditions d'utilisation</a> et la <a href="#" class="text-pink-600 hover:text-pink-700">Politique de confidentialité</a></label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="signup-btn w-full bg-pink-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-pink-600 transition duration-300 mb-4">
+                    S'inscrire gratuitement
+                </button>
+                
+                <!-- Login Link -->
+                <p class="text-center text-sm text-gray-600">
+                    Vous avez déjà un compte ? <a href="#" class="text-pink-600 font-medium hover:text-pink-700">Connectez-vous</a>
+                </p>
+            </form>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center space-x-2 mb-4 md:mb-0">
+                    <i class="fas fa-heart text-pink-500"></i>
+                    <span class="font-medium">HeartMatch</span>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Confidentialité</a>
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Conditions</a>
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Aide</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Toggle password visibility
+        const togglePassword = document.querySelector('#togglePassword');
+        const password = document.querySelector('#password');
+        
+        togglePassword.addEventListener('click', function() {
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            this.classList.toggle('fa-eye-slash');
+            this.classList.toggle('fa-eye');
+        });
+        
+        // Form validation
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Simple validation
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const dob = document.getElementById('dob').value;
+            const terms = document.getElementById('terms').checked;
+            
+            if (!name || !email || !password || !dob || !terms) {
+                alert('Veuillez remplir tous les champs obligatoires');
+                return;
+            }
+            
+            if (password.length < 8) {
+                alert('Le mot de passe doit contenir au moins 8 caractères');
+                return;
+            }
+            
+            // In a real app, you would submit the form to your backend here
+            alert('Inscription réussie ! Redirection vers votre profil...');
+            // window.location.href = 'profile.html';
+        });
+        
+        // Set max date for date of birth (18 years ago)
+        window.onload = function() {
+            const today = new Date();
+            const minDate = new Date();
+            minDate.setFullYear(today.getFullYear() - 100);
+            
+            const maxDate = new Date();
+            maxDate.setFullYear(today.getFullYear() - 18);
+            
+            const dobInput = document.getElementById('dob');
+            dobInput.min = minDate.toISOString().split('T')[0];
+            dobInput.max = maxDate.toISOString().split('T')[0];
+            dobInput.value = maxDate.toISOString().split('T')[0];
+        };
+    </script>
+</body>
+</html>

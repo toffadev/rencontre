@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartMatch - Connexion</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #fdf2f8;
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
+        }
+        
+        .input-field:focus {
+            box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.3);
+        }
+        
+        .login-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            color: #9ca3af;
+        }
+        
+        .divider::before, .divider::after {
+            content: "";
+            flex: 1;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .divider::before {
+            margin-right: 1rem;
+        }
+        
+        .divider::after {
+            margin-left: 1rem;
+        }
+        
+        .forgot-password:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <!-- Header -->
+    <header class="gradient-bg text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex items-center justify-center space-x-2">
+                <i class="fas fa-heart text-2xl"></i>
+                <h1 class="text-2xl font-bold">HeartMatch</h1>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container mx-auto px-4 py-8">
+        <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-8">
+            <h2 class="text-2xl font-bold text-center text-gray-800 mb-2">Content de vous revoir !</h2>
+            <p class="text-center text-gray-600 mb-8">Connectez-vous pour retrouver vos matches</p>
+            
+            <!-- Social Login Buttons -->
+            <div class="space-y-3 mb-6">
+                <button class="w-full flex items-center justify-center space-x-2 bg-white border border-gray-300 rounded-lg py-3 px-4 hover:bg-gray-50 transition">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" class="w-5 h-5">
+                    <span>Se connecter avec Google</span>
+                </button>
+                <button class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white rounded-lg py-3 px-4 hover:bg-blue-700 transition">
+                    <i class="fab fa-facebook-f"></i>
+                    <span>Se connecter avec Facebook</span>
+                </button>
+            </div>
+            
+            <!-- Divider -->
+            <div class="divider text-sm mb-6">OU</div>
+            
+            <!-- Login Form -->
+            <form>
+                <!-- Email Input -->
+                <div class="mb-4">
+                    <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-envelope text-gray-400"></i>
+                        </div>
+                        <input type="email" id="email" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500" placeholder="votre@email.com">
+                    </div>
+                </div>
+                
+                <!-- Password Input -->
+                <div class="mb-4">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <i class="fas fa-lock text-gray-400"></i>
+                        </div>
+                        <input type="password" id="password" class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500" placeholder="••••••••">
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer">
+                            <i class="fas fa-eye-slash text-gray-400 hover:text-gray-600" id="togglePassword"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Remember me & Forgot password -->
+                <div class="flex items-center justify-between mb-6">
+                    <div class="flex items-center">
+                        <input id="remember" name="remember" type="checkbox" class="h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded">
+                        <label for="remember" class="ml-2 block text-sm text-gray-700">Se souvenir de moi</label>
+                    </div>
+                    <div>
+                        <a href="#" class="text-sm text-pink-600 hover:text-pink-700 forgot-password">Mot de passe oublié ?</a>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="login-btn w-full bg-pink-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-pink-600 transition duration-300 mb-4">
+                    Se connecter
+                </button>
+                
+                <!-- Signup Link -->
+                <p class="text-center text-sm text-gray-600">
+                    Pas encore membre ? <a href="#" class="text-pink-600 font-medium hover:text-pink-700">Créez un compte</a>
+                </p>
+            </form>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+        <div class="container mx-auto px-4">
+            <div class="flex flex-col md:flex-row justify-between items-center">
+                <div class="flex items-center space-x-2 mb-4 md:mb-0">
+                    <i class="fas fa-heart text-pink-500"></i>
+                    <span class="font-medium">HeartMatch</span>
+                </div>
+                <div class="flex space-x-6">
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Confidentialité</a>
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Conditions</a>
+                    <a href="#" class="text-gray-600 hover:text-pink-500 text-sm">Aide</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Toggle password visibility
+        const togglePassword = document.querySelector('#togglePassword');
+        const password = document.querySelector('#password');
+        
+        togglePassword.addEventListener('click', function() {
+            const type = password.getAttribute('type') === 'password' ? 'text' : 'password';
+            password.setAttribute('type', type);
+            this.classList.toggle('fa-eye-slash');
+            this.classList.toggle('fa-eye');
+        });
+        
+        // Form validation
+        const form = document.querySelector('form');
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Simple validation
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            
+            if (!email || !password) {
+                alert('Veuillez remplir tous les champs obligatoires');
+                return;
+            }
+            
+            // Email validation regex
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                alert('Veuillez entrer une adresse email valide');
+                return;
+            }
+            
+            // In a real app, you would submit the form to your backend here
+            alert('Connexion réussie ! Redirection vers votre profil...');
+            // window.location.href = 'dashboard.html';
+        });
+        
+        // Forgot password modal (simplified)
+        const forgotPasswordLink = document.querySelector('.forgot-password');
+        forgotPasswordLink.addEventListener('click', function(e) {
+            e.preventDefault();
+            alert('Un lien de réinitialisation a été envoyé à votre adresse email (simulation)');
+            // In a real app, you would show a modal or redirect to a password reset page
+        });
+    </script>
+</body>
+</html>
