@@ -454,6 +454,34 @@ Pour confirmer que tout fonctionne correctement :
     ```
 4. Vous devriez voir le message apparaître dans le composant EchoTest
 
+## Débogage efficace
+
+Si les événements ne sont pas reçus:
+
+1. Ajoutez des logs dans la console pour vérifier:
+
+    ```javascript
+    console.log("Echo options:", window.Echo.options);
+    channel.listen(".TestEvent", (e) => {
+        console.log("📣 Event received:", e);
+    });
+    ```
+
+2. Utilisez l'option --debug avec Reverb:
+
+    ```bash
+    php artisan reverb:start --debug
+    ```
+
+3. Vérifiez le nom exact des événements avec:
+    ```php
+    // Dans TestEvent.php
+    public function broadcastAs()
+    {
+        return 'TestEvent';
+    }
+    ```
+
 ## Conclusion
 
 Vous avez maintenant configuré avec succès Laravel Echo et Laravel Reverb pour les WebSockets dans votre application Laravel 11. Cette configuration vous permet d'implémenter des fonctionnalités en temps réel comme les notifications, les chats, et les mises à jour en direct.

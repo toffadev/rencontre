@@ -103,21 +103,28 @@ const setupChannel = () => {
                     },
                 },
             });
+        
+            /* window.Echo = new Echo({
+                broadcaster: 'pusher',
+                key: import.meta.env.VITE_PUSHER_APP_KEY,
+                cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+                forceTLS: true
+            }); */
         }
 
         const channel = window.Echo.channel('test-channel');
 
         // Écouteur principal
-        /* channel.listen('TestEvent', (payload) => {
+        channel.listen('.TestEvent', (payload) => {
             console.log('🟢 Message reçu:', payload);
             lastMessage.value = payload.message;
             lastMessageTime.value = new Date().toLocaleTimeString();
             isConnected.value = true;
-        }); */
-
-        channel.listen('TestEvent', (e) => {
-            console.log('🚀 Événement TestEvent reçu directement :', e);
         });
+
+        /* channel.listen('.TestEvent', (e) => {
+            console.log('🚀 Événement TestEvent reçu directement :', e);
+        }); */
 
         channel.listenForWhisper('debug', (data) => {
             console.log('👀 Whisper reçu :', data);

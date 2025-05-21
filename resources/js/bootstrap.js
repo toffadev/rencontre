@@ -49,5 +49,17 @@ if (document.readyState === 'loading') {
     initEcho();
 }
 
+    /* window.Echo = new Echo({
+        broadcaster: 'pusher',
+        key: import.meta.env.VITE_PUSHER_APP_KEY,
+        cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER,
+        forceTLS: true
+    });
+
+    console.log('Echo initialized with Pusher:', {
+        key: import.meta.env.VITE_PUSHER_APP_KEY,
+        cluster: import.meta.env.VITE_PUSHER_APP_CLUSTER
+    }); */
+
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';

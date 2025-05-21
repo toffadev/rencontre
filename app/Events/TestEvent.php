@@ -37,6 +37,11 @@ class TestEvent implements ShouldBroadcastNow
         ];
     }
 
+    public function broadcastAs()
+    {
+        return 'TestEvent';
+    }
+
     public function broadcastWith(): array
     {
         return [
