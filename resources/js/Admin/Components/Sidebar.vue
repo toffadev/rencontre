@@ -15,51 +15,22 @@
           <p class="text-xs uppercase text-gray-500 font-semibold tracking-wider md:hidden lg:block">Menu Principal</p>
         </div>
         <Link href="/admin"
-          :class="['flex items-center space-x-3 p-3 rounded-lg', 
-                      $page.component === 'Admin/Pages/Dashboard' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+          :class="['flex items-center space-x-3 p-3 rounded-lg',
+            $page.component === 'Admin/Pages/Dashboard' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tachometer-alt"></i>
         <span class="md:hidden lg:block">Tableau de bord</span>
         </Link>
 
-        <Link href="/admin/music-releases"
-          :class="['flex items-center space-x-3 p-3 rounded-lg',
-            $page.component === 'Admin/Pages/MusicReleases' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <Link href="/admin/profiles" :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/Profiles' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Musiques</span>
-        </Link>
-
-        <Link href="/admin/new-project"
-          :class="['flex items-center space-x-3 p-3 rounded-lg',
-            $page.component === 'Admin/Pages/NewProjects' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
-        <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Nouveautés</span>
-        </Link>
-
-        <Link href="/admin/actualities"
-          :class="['flex items-center space-x-3 p-3 rounded-lg',
-            $page.component === 'Admin/Pages/Actualities' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
-        <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Actualités</span>
-        </Link>
-
-        <Link href="/admin/comedy-shows"
-          :class="['flex items-center space-x-3 p-3 rounded-lg',
-            $page.component === 'Admin/Pages/ComedyShows' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
-        <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Comédie</span>
+        <span class="md:hidden lg:block">Profil</span>
         </Link>
 
         <Link href="/admin/events" :class="['flex items-center space-x-3 p-3 rounded-lg',
-            $page.component === 'Admin/Pages/Events' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+          $page.component === 'Admin/Pages/Events' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tags"></i>
         <span class="md:hidden lg:block">Événements</span>
-        </Link>
-
-        <Link href="/admin/media-gallery"
-          :class="['flex items-center space-x-3 p-3 rounded-lg',
-          $page.component === 'Admin/Pages/MediaGallery' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
-        <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Médias</span>
         </Link>
 
         <!-- Autres liens du menu -->
@@ -72,8 +43,7 @@
             class="w-10 h-10 rounded-full">
           <div class="md:hidden lg:block">
             <p class="font-medium text-dark">{{ $page.props.auth.user.name }}</p>
-            <Link :href="route('admin.logout')" method="post" as="button"
-              class="text-xs text-gray-500 hover:text-amber-600">
+            <Link :href="route('logout')" method="post" as="button" class="text-xs text-gray-500 hover:text-amber-600">
             Déconnexion
             </Link>
           </div>
@@ -94,4 +64,4 @@ const page = usePage()
 .sidebar {
   transition: all 0.3s ease;
 }
-</style> 
+</style>

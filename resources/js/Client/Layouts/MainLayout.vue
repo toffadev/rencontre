@@ -16,11 +16,9 @@ import Footer from '@client/Components/Footer.vue';
 </script>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-
-body {
-    font-family: 'Poppins', sans-serif;
-    background-color: #fdf2f8;
+/* Styles spécifiques à la partie client */
+.gradient-bg {
+    background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
 }
 
 .profile-card:hover {
@@ -30,6 +28,28 @@ body {
 
 .chat-container {
     height: calc(100vh - 200px);
+}
+
+.online-dot {
+    width: 12px;
+    height: 12px;
+    background-color: #10b981;
+    border-radius: 50%;
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    border: 2px solid white;
+}
+
+.message-in {
+    background-color: #f3f4f6;
+    border-radius: 18px 18px 18px 0;
+}
+
+.message-out {
+    background-color: #f472b6;
+    color: white;
+    border-radius: 18px 18px 0 18px;
 }
 
 @media (max-width: 768px) {

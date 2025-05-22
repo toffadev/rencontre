@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\Admin\ProfileController as AdminProfileController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use App\Events\TestEvent;
@@ -55,8 +56,16 @@ Route::middleware('auth')->group(function () {
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
     Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard');
+        return Inertia::render('Dashboard');
     })->name('dashboard');
+
+    // Profile management routes
+    Route::get('/profiles', [AdminProfileController::class, 'index'])->name('profiles.index');
+    Route::post('/profiles', [AdminProfileController::class, 'store'])->name('profiles.store');
+    Route::put('/profiles/{profile}', [AdminProfileController::class, 'update'])->name('profiles.update');
+    Route::delete('/profiles/{profile}', [AdminProfileController::class, 'destroy'])->name('profiles.destroy');
+    Route::put('/profiles/{profile}/main-photo', [AdminProfileController::class, 'setMainPhoto'])->name('profiles.main-photo');
+    Route::delete('/profile-photos', [AdminProfileController::class, 'deletePhoto'])->name('profile-photos.destroy');
 
     // Admin management routes will go here
 });

@@ -2,7 +2,11 @@
     "compilerOptions": {
         "baseUrl": ".",
         "paths": {
-            "@/*": ["resources/js/*"]
+            "@/*": ["resources/js/*"],
+            "@client/*": ["resources/js/Client/*"],
+            "@admin/*": ["resources/js/Admin/*"],
+            "ziggy-js": ["./vendor/tightenco/ziggy"]
         }
-    }
-} 
+    },
+    "exclude": ["node_modules", "public"]
+}

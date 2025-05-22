@@ -85,18 +85,5 @@ const logout = () => {
 </script>
 
 <style scoped>
-.gradient-bg {
-    background: linear-gradient(135deg, #f9a8d4 0%, #f472b6 100%);
-}
-
-.online-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #10b981;
-    border-radius: 50%;
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    border: 2px solid white;
-}
+/* Les styles spécifiques au header ont été déplacés dans MainLayout.vue */
 </style>

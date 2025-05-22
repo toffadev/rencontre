@@ -203,25 +203,5 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.message-in {
-    background-color: #f3f4f6;
-    border-radius: 18px 18px 18px 0;
-}
-
-.message-out {
-    background-color: #f472b6;
-    color: white;
-    border-radius: 18px 18px 0 18px;
-}
-
-.online-dot {
-    width: 12px;
-    height: 12px;
-    background-color: #10b981;
-    border-radius: 50%;
-    position: absolute;
-    bottom: 0;
-    right: 0;
-    border: 2px solid white;
-}
-</style> 
+/* Les styles sont maintenant gérés au niveau du MainLayout pour la cohérence dans toute l'application client */
+</style>
