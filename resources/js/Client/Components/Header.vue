@@ -27,7 +27,7 @@
                         </div>
                     </div>
                     <!-- Ajout du composant de test Echo -->
-                    <EchoTest />
+                    <!-- <EchoTest /> -->
                 </template>
                 <!-- Si utilisateur non connecté -->
                 <template v-else>

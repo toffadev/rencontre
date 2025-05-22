@@ -8,8 +8,10 @@ use App\Http\Controllers\Auth\ResetPasswordController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Admin\ProfileController as AdminProfileController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Events\TestEvent;
+use App\Http\Controllers\Client\HomeController;
 
 /*
 |--------------------------------------------------------------------------
@@ -17,9 +19,32 @@ use App\Events\TestEvent;
 |--------------------------------------------------------------------------
 */
 
+// Route principale qui redirige en fonction de l'authentification
 Route::get('/', function () {
-    return Inertia::render('Home');
+    if (Auth::check()) {
+        // Si l'utilisateur est connecté, afficher la page d'accueil client
+        // via le HomeController (qui vérifie déjà les permissions via middleware)
+        return app()->make(HomeController::class)->index();
+    } else {
+        // Si l'utilisateur n'est pas connecté, rediriger vers login
+        return redirect()->route('login');
+    }
 })->name('home');
+
+// Routes qui nécessitent une authentification client ou admin
+Route::middleware(['client_or_admin'])->group(function () {
+    // Page d'accueil client explicite (URL: /home)
+    Route::get('/home', [HomeController::class, 'index'])->name('client.home');
+
+    // Client area routes
+    Route::get('/profil', function () {
+        return Inertia::render('Profil/Show');
+    })->name('profile');
+
+    // Routes pour les messages du client
+    Route::get('/messages', [App\Http\Controllers\Client\MessageController::class, 'getMessages'])->name('client.messages');
+    Route::post('/send-message', [App\Http\Controllers\Client\MessageController::class, 'sendMessage'])->name('client.send-message');
+});
 
 // Guest routes
 Route::middleware('guest')->group(function () {
@@ -46,11 +71,6 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     // Logout Route
     Route::post('/logout', [LoginController::class, 'logout'])->name('logout');
-
-    // Client area routes
-    Route::get('/profil', function () {
-        return Inertia::render('Profile/Show');
-    })->name('profile');
 });
 
 // Admin routes
@@ -75,6 +95,15 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     Route::get('/dashboard', function () {
         return Inertia::render('Admin/Dashboard');
     })->name('dashboard');
+
+    // Page principale des modérateurs
+    Route::get('/chat', [App\Http\Controllers\Moderator\ModeratorController::class, 'index'])->name('chat');
+
+    // API pour les modérateurs
+    Route::get('/clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getClients'])->name('clients');
+    Route::get('/profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAssignedProfile'])->name('profile');
+    Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
+    Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])->name('send-message');
 
     // Moderator management routes will go here
 });
