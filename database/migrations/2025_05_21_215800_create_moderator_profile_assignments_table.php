@@ -16,14 +16,17 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('profile_id')->constrained()->onDelete('cascade');
             $table->boolean('is_active')->default(true);
+            $table->boolean('is_primary')->default(false);
+            $table->boolean('is_exclusive')->default(false);
             $table->timestamp('last_activity')->nullable();
             $table->timestamps();
 
-            // Un modérateur ne peut avoir qu'un profil actif à la fois
-            $table->unique(['user_id', 'is_active'], 'moderator_active_profile');
+            // Index pour l'optimisation des requêtes
+            $table->index(['user_id', 'is_active']);
+            $table->index(['profile_id', 'is_active']);
 
-            // Un profil ne peut être attribué activement qu'à un seul modérateur à la fois
-            $table->unique(['profile_id', 'is_active'], 'profile_active_moderator');
+            // La contrainte unique a été supprimée car elle est gérée de manière programmatique
+            // dans le modèle ModeratorProfileAssignment
         });
     }
 

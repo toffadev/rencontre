@@ -101,9 +101,12 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
 
     // API pour les modérateurs
     Route::get('/clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getClients'])->name('clients');
+    Route::get('/available-clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAvailableClients'])->name('available-clients');
+    Route::post('/start-conversation', [App\Http\Controllers\Moderator\ModeratorController::class, 'startConversation'])->name('start-conversation');
     Route::get('/profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAssignedProfile'])->name('profile');
     Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
     Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])->name('send-message');
+    Route::post('/set-primary-profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
 
     // Moderator management routes will go here
 });

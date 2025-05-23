@@ -28,4 +28,9 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
-    })->create();
+    })
+    ->withSchedule(function ($schedule) {
+        // Exécuter la commande de traitement des messages toutes les minutes
+        $schedule->command('messages:process')->everyMinute();
+    })
+    ->create();

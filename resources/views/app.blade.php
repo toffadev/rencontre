@@ -6,6 +6,14 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @auth
     <meta name="client-id" content="{{ auth()->id() }}">
+    <script>
+      window.Laravel = {
+        user: {
+          id: {{ auth()->id() }},
+          type: "{{ auth()->user()->type }}"
+        }
+      };
+    </script>
     @endauth
     <title>HeartMatch - Trouvez l'amour</title>
     

@@ -79,4 +79,14 @@ class User extends Authenticatable
     {
         return $this->type === 'client';
     }
+
+    /**
+     * Get messages associated with this user
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function messages()
+    {
+        return $this->hasMany(Message::class, 'client_id');
+    }
 }

@@ -12,7 +12,7 @@ use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
 
-class ProfileAssigned implements ShouldBroadcast
+class ClientAssigned implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
@@ -24,6 +24,13 @@ class ProfileAssigned implements ShouldBroadcast
     public $moderator;
 
     /**
+     * The client instance.
+     *
+     * @var \App\Models\User
+     */
+    public $client;
+
+    /**
      * The profile instance.
      *
      * @var \App\Models\Profile
@@ -33,9 +40,10 @@ class ProfileAssigned implements ShouldBroadcast
     /**
      * Create a new event instance.
      */
-    public function __construct(User $moderator, Profile $profile)
+    public function __construct(User $moderator, User $client, Profile $profile)
     {
         $this->moderator = $moderator;
+        $this->client = $client;
         $this->profile = $profile;
     }
 
@@ -58,7 +66,7 @@ class ProfileAssigned implements ShouldBroadcast
      */
     public function broadcastAs(): string
     {
-        return 'profile.assigned';
+        return 'client.assigned';
     }
 
     /**
@@ -69,11 +77,13 @@ class ProfileAssigned implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
+            'client' => [
+                'id' => $this->client->id,
+                'name' => $this->client->name,
+            ],
             'profile' => [
                 'id' => $this->profile->id,
                 'name' => $this->profile->name,
-                'gender' => $this->profile->gender,
-                'main_photo_path' => $this->profile->main_photo_path,
             ]
         ];
     }

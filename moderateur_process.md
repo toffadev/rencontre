@@ -6,8 +6,11 @@ Ce document explique le système de modération mis en place dans l'application 
 
 -   Les **modérateurs** sont des utilisateurs qui peuvent utiliser des **profils virtuels** pour discuter avec les **clients**.
 -   Les clients ne voient pas le modérateur mais uniquement le profil virtuel.
--   Un profil virtuel peut être utilisé par plusieurs modérateurs, mais jamais simultanément.
--   **Le système attribue automatiquement les profils ET les clients aux modérateurs disponibles**.
+-   **Chaque modérateur peut maintenant gérer PLUSIEURS profils virtuels simultanément** pour répondre efficacement aux messages des clients.
+-   **Un profil virtuel peut être utilisé par plusieurs modérateurs, mais les conversations sont distribuées équitablement**.
+-   **Le système attribue automatiquement les profils aux modérateurs disponibles**.
+-   **Le système attribue automatiquement les clients aux modérateurs selon une logique d'équilibrage de charge, en favorisant toujours le modérateur avec le moins de conversations en cours**.
+-   **Lorsqu'un client envoie un message, le système l'attribue automatiquement au modérateur le plus disponible ayant accès au profil concerné**.
 -   Les discussions entre les profils virtuels et les clients sont visibles par tous les modérateurs qui ont été attribués à ce profil.
 
 ## 2. Structure de la Base de Données
@@ -24,6 +27,8 @@ Nous avons créé deux nouveaux modèles principaux :
     -   `user_id`: ID du modérateur
     -   `profile_id`: ID du profil virtuel
     -   `is_active`: Indique si l'attribution est active
+    -   `is_primary`: **Indique si ce profil est le profil principal du modérateur**
+    -   `is_exclusive`: **Indique si ce profil est attribué exclusivement à ce modérateur**
     -   `last_activity`: Horodatage de la dernière activité du modérateur
 
 #### `Message`
@@ -40,9 +45,7 @@ Nous avons créé deux nouveaux modèles principaux :
 
 ### 2.2 Migrations
 
-Nous avons créé deux migrations pour ces tables :
-
-#### Migration pour `moderator_profile_assignments`
+Nous avons modifié la migration pour la table `moderator_profile_assignments` :
 
 ```php
 Schema::create('moderator_profile_assignments', function (Blueprint $table) {
@@ -50,146 +53,131 @@ Schema::create('moderator_profile_assignments', function (Blueprint $table) {
     $table->foreignId('user_id')->constrained()->onDelete('cascade');
     $table->foreignId('profile_id')->constrained()->onDelete('cascade');
     $table->boolean('is_active')->default(true);
+    $table->boolean('is_primary')->default(false); // Profil principal du modérateur
+    $table->boolean('is_exclusive')->default(false); // Attribution exclusive
     $table->timestamp('last_activity')->nullable();
     $table->timestamps();
 
-    // Un modérateur ne peut avoir qu'un profil actif à la fois
-    $table->unique(['user_id', 'is_active'], 'moderator_active_profile');
-
-    // Un profil ne peut être attribué activement qu'à un seul modérateur à la fois
-    $table->unique(['profile_id', 'is_active'], 'profile_active_moderator');
-});
-```
-
-#### Migration pour `messages`
-
-```php
-Schema::create('messages', function (Blueprint $table) {
-    $table->id();
-    $table->foreignId('client_id')->constrained('users')->onDelete('cascade');
-    $table->foreignId('profile_id')->constrained()->onDelete('cascade');
-    $table->foreignId('moderator_id')->nullable()->constrained('users')->onDelete('set null');
-    $table->text('content');
-    $table->boolean('is_from_client')->default(true);
-    $table->timestamp('read_at')->nullable();
-    $table->timestamps();
-
-    // Index pour la recherche rapide des conversations
-    $table->index(['client_id', 'profile_id']);
+    // Un modérateur ne peut avoir qu'un seul profil principal actif à la fois
+    $table->unique(['user_id', 'is_primary', 'is_active'], 'moderator_active_primary_profile');
 });
 ```
 
 **Points importants à noter :**
 
--   Les contraintes d'unicité garantissent qu'un modérateur ne peut avoir qu'un profil actif à la fois et qu'un profil ne peut être attribué activement qu'à un seul modérateur à la fois.
--   L'index sur `client_id` et `profile_id` permet de récupérer rapidement les conversations entre un client et un profil.
+-   La contrainte d'unicité sur `user_id`, `is_primary` et `is_active` garantit qu'un modérateur ne peut avoir qu'un seul profil principal actif à la fois.
+-   Le champ `is_primary` identifie le profil principal d'un modérateur (utilisé par défaut dans l'interface).
+-   Le champ `is_exclusive` permet d'attribuer un profil à un seul modérateur si nécessaire.
+-   Un modérateur peut maintenant avoir plusieurs attributions actives simultanément.
 
 ## 3. Le Service d'Attribution de Profils et Clients
 
-Nous avons créé un service dédié (`ModeratorAssignmentService`) pour gérer l'attribution des profils aux modérateurs et des clients aux modérateurs. Ce service centralise toute la logique d'attribution et offre plusieurs méthodes :
+Nous avons considérablement amélioré le service (`ModeratorAssignmentService`) pour gérer l'attribution équilibrée des profils et des clients aux modérateurs :
 
 ### 3.1 Méthodes principales
 
-#### `assignProfileToModerator(User $moderator, ?Profile $profile = null)`
+#### `assignProfileToModerator(User $moderator, ?Profile $profile = null, $makePrimary = true)`
 
 -   Attribue un profil à un modérateur.
 -   Si aucun profil n'est spécifié, le système en sélectionne un automatiquement.
--   Désactive les attributions précédentes du modérateur.
--   Vérifie si le profil est déjà utilisé par un autre modérateur.
+-   Le paramètre `$makePrimary` permet de définir si ce profil doit être le profil principal du modérateur.
 -   Déclenche l'événement `ProfileAssigned`.
 
-#### `assignClientToModerator(User $moderator, User $client = null)`
+#### `getAllAssignedProfiles(User $moderator)`
 
--   Attribue un client à un modérateur.
--   Si aucun client n'est spécifié, le système cherche un client qui a besoin d'une réponse.
--   Priorise les clients qui attendent une réponse depuis longtemps.
--   Assure qu'un client n'est pas attribué à plusieurs modérateurs simultanément.
+-   **NOUVEAU** : Récupère tous les profils actuellement attribués à un modérateur.
+-   Permet à l'interface utilisateur d'afficher les multiples profils disponibles pour le modérateur.
 
-#### `findAvailableProfile()`
+#### `findLeastBusyModerator($clientId, $profileId)`
 
--   Recherche un profil disponible (non attribué actuellement).
--   Sélectionne aléatoirement parmi les profils actifs non attribués.
+-   **NOUVEAU** : Trouve le modérateur avec la charge de travail la plus faible pour gérer un nouveau message client.
+-   Prend en compte le nombre de conversations actives pour chaque modérateur.
+-   Utilise les priorités suivantes :
+    1. Les modérateurs qui ont déjà ce profil attribué et sans conversations
+    2. Les modérateurs qui ont déjà ce profil attribué avec la plus faible charge
+    3. N'importe quel modérateur sans conversation en cours
+    4. Le modérateur avec la plus faible charge de travail
 
-#### `findClientNeedingResponse()`
+#### `assignClientToModerator($clientId, $profileId)`
 
--   Recherche un client qui a envoyé un message et attend une réponse.
--   Priorise les messages les plus anciens sans réponse.
+-   **NOUVEAU** : Attribue un client à un modérateur spécifique selon la charge de travail.
+-   Si le modérateur n'a pas encore le profil attribué, le système le lui attribue automatiquement.
+-   Déclenche l'événement `ClientAssigned` pour notifier le modérateur.
 
-#### `releaseProfile(User $moderator)`
+#### `updateLastActivity(User $moderator, $profileId = null)`
 
--   Libère le profil attribué à un modérateur.
+-   Mise à jour pour accepter un ID de profil spécifique.
+-   Permet de mettre à jour l'activité sur un profil particulier ou tous les profils.
 
-#### `getCurrentAssignedProfile(User $moderator)`
+#### `getClientsNeedingResponse()`
 
--   Récupère le profil actuellement attribué à un modérateur.
+-   **NOUVEAU** : Récupère tous les clients qui attendent une réponse, ordonnés par priorité.
+-   Se concentre sur les messages les plus anciens pour garantir que tous les clients reçoivent une réponse.
 
-#### `updateLastActivity(User $moderator)`
+#### `processUnassignedMessages()`
 
--   Met à jour l'horodatage de dernière activité d'un modérateur.
-
-#### `reassignInactiveProfiles(int $inactiveMinutes = 30)`
-
--   Libère les profils des modérateurs inactifs depuis un certain temps.
--   Permet de réattribuer ces profils à d'autres modérateurs.
+-   **NOUVEAU** : Traite tous les messages clients non attribués et les assigne automatiquement aux modérateurs selon la charge de travail.
+-   Exécuté régulièrement pour s'assurer qu'aucun client n'est laissé sans réponse.
 
 ## 4. Contrôleur pour les Modérateurs
 
-Le `ModeratorController` gère toutes les actions spécifiques aux modérateurs :
+Le `ModeratorController` a été considérablement amélioré pour prendre en charge les multiples profils et l'équilibrage de charge :
 
 ### 4.1 Routes
 
-Nous avons défini les routes suivantes dans `routes/web.php` :
+Nous avons ajouté une nouvelle route dans `routes/web.php` :
 
 ```php
-Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.')->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard');
-    })->name('dashboard');
-
-    // Page principale des modérateurs
-    Route::get('/chat', [App\Http\Controllers\Moderator\ModeratorController::class, 'index'])->name('chat');
-
-    // API pour les modérateurs
-    Route::get('/clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getClients'])->name('clients');
-    Route::get('/profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAssignedProfile'])->name('profile');
-    Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
-    Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])->name('send-message');
-});
+Route::post('/set-primary-profile', [ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
 ```
 
 ### 4.2 Méthodes du contrôleur
 
 #### `index()`
 
--   Affiche la page principale des modérateurs (interface de chat).
--   Vérifie si le modérateur a déjà un profil attribué et met à jour son activité.
--   **Si nécessaire, attribue automatiquement un profil et un client au modérateur.**
+-   Vérifie maintenant si le modérateur a des profils attribués (au pluriel).
+-   Exécute `processUnassignedMessages()` pour distribuer les messages non attribués aux modérateurs disponibles.
 
 #### `getClients()`
 
--   **Récupère le client actuellement attribué au modérateur.**
--   **Renvoie uniquement le client qui a été attribué par le système au modérateur.**
--   Inclut les informations sur le dernier message et le nombre de messages non lus.
+-   Complètement redessiné pour récupérer les clients associés à TOUS les profils attribués au modérateur.
+-   Renvoie pour chaque client des informations sur le profil concerné par la conversation.
+-   Les clients sont triés par ordre chronologique, les plus anciens messages apparaissant en premier.
 
 #### `getAssignedProfile()`
 
--   Récupère le profil actuellement attribué au modérateur.
--   Si aucun profil n'est attribué, tente d'en attribuer un automatiquement.
+-   Renommé mais conservé pour la compatibilité avec le frontend.
+-   Renvoie maintenant la liste de tous les profils attribués ainsi que le profil principal.
 
 #### `getMessages(Request $request)`
 
--   Récupère les messages échangés entre un client spécifique et le profil attribué.
--   Marque les messages non lus comme lus.
+-   Mis à jour pour exiger un `profile_id` spécifique dans la requête.
+-   Vérifie que le modérateur a bien accès au profil demandé.
 
 #### `sendMessage(Request $request)`
 
--   Envoie un message d'un modérateur (via le profil attribué) à un client.
--   Met à jour l'activité du modérateur.
--   Déclenche l'événement `MessageSent`.
+-   Mis à jour pour exiger un `profile_id` spécifique dans la requête.
+-   Vérifie que le modérateur a bien accès au profil demandé.
+-   Met à jour l'activité uniquement pour ce profil spécifique.
+
+#### `getAvailableClients()`
+
+-   Amélioré pour prendre en compte tous les profils attribués au modérateur.
+-   Pour chaque client, indique l'historique des conversations avec les différents profils du modérateur.
+
+#### `startConversation(Request $request)`
+
+-   Mis à jour pour exiger un `profile_id` spécifique.
+-   Si le modérateur n'a pas accès à ce profil, tente de le lui attribuer automatiquement.
+
+#### `setPrimaryProfile(Request $request)` **(NOUVEAU)**
+
+-   Permet à un modérateur de définir l'un de ses profils attribués comme profil principal.
+-   Le profil principal est utilisé par défaut dans l'interface utilisateur.
 
 ## 5. Système d'Événements en Temps Réel
 
-Pour permettre la communication en temps réel, nous utilisons Laravel Echo et Pusher. Deux événements principaux ont été créés :
+Pour permettre la communication en temps réel et la notification des nouveaux messages, nous utilisons Laravel Echo et Pusher. Trois événements principaux ont été créés :
 
 ### 5.1 Événement `MessageSent`
 
@@ -205,80 +193,229 @@ Pour permettre la communication en temps réel, nous utilisons Laravel Echo et P
 -   Diffuse sur le canal privé du modérateur : `moderator.{moderator_id}`
 -   Les données diffusées incluent les détails du profil attribué.
 
-### 5.3 Événement `ClientAssigned`
+### 5.3 Événement `ClientAssigned` **(NOUVEAU)**
 
 -   Déclenché lorsqu'un client est attribué à un modérateur.
 -   Diffuse sur le canal privé du modérateur : `moderator.{moderator_id}`
--   Les données diffusées incluent les détails du client attribué et la conversation associée.
+-   Les données diffusées incluent les détails du client attribué et du profil concerné.
 
-## 6. Interface Utilisateur du Modérateur
+### 5.4 Listener `MessageListener` **(NOUVEAU)**
 
-L'interface utilisateur des modérateurs est définie dans le fichier `resources/js/Client/Pages/Moderator.vue`. Cette interface comprend :
+-   Écoute l'événement `MessageSent` pour les messages envoyés par les clients.
+-   Utilise le service d'attribution pour assigner automatiquement le message au modérateur le plus approprié.
+-   Assure qu'aucun message client ne reste sans attribution à un modérateur.
 
-### 6.1 Structure générale
+## 6. Équilibrage de Charge des Messages
 
--   Un en-tête indiquant qu'il s'agit de l'espace modérateur.
--   Une section d'attente si aucun profil n'est attribué.
--   Une disposition en deux colonnes :
-    -   **Colonne de gauche : affichage du client attribué par le système.**
-    -   Colonne de droite :
-        -   En haut : informations sur le profil attribué.
-        -   En bas : interface de chat avec le client attribué.
+L'un des points forts du nouveau système est l'équilibrage intelligent des messages clients entre les modérateurs disponibles :
 
-### 6.2 Fonctionnalités principales
+### 6.1 Critères d'attribution
 
--   **Affichage du client actuellement attribué par le système.**
--   Affichage du nombre de messages non lus.
--   Interface de chat avec le client attribué.
--   Envoi de messages au client.
--   Affichage en temps réel des nouveaux messages.
+Le système attribue les messages selon ces critères (par ordre de priorité) :
 
-### 6.3 Intégration avec Laravel Echo
+1. **Modérateurs déjà assignés au profil** : Le système privilégie les modérateurs qui ont déjà le profil concerné, pour assurer la continuité des conversations.
+2. **Modérateurs avec moins de charge de travail** : Entre deux modérateurs ayant le même profil, celui qui gère le moins de conversations est privilégié.
+3. **Modérateurs sans conversation** : Un modérateur sans aucune conversation en cours sera privilégié par rapport à un modérateur déjà occupé.
+4. **Distribution équitable** : Le système compte le nombre de clients uniques avec lesquels chaque modérateur discute activement.
 
-Le composant Vue est configuré pour écouter les événements en temps réel via Laravel Echo. Cela permet :
+### 6.2 Processus d'attribution
 
--   De recevoir automatiquement les nouveaux messages.
--   D'être notifié lorsqu'un profil est attribué.
--   **D'être notifié lorsqu'un client est attribué.**
--   De mettre à jour l'interface sans rechargement de page.
+1. Quand un client envoie un message à un profil :
 
-## 7. Flux de Travail Global
+    - L'événement `MessageSent` est capturé par `MessageListener`
+    - Le listener appelle `assignClientToModerator`
+    - Le service trouve le modérateur le plus approprié selon les critères ci-dessus
+    - Si nécessaire, le profil est automatiquement attribué au modérateur sélectionné
+    - Un événement `ClientAssigned` est envoyé au modérateur pour le notifier
 
-Voici comment fonctionne le système dans son ensemble :
+2. Le modérateur est notifié en temps réel et peut immédiatement voir le nouveau message dans son interface.
 
-1. Un modérateur se connecte et accède à la page de chat.
-2. Le système lui attribue automatiquement un profil disponible (ou utilise celui déjà attribué).
-3. **Le système attribue automatiquement un client au modérateur (généralement un client qui a besoin d'une réponse).**
-4. **Le modérateur voit uniquement le client qui lui a été attribué.**
-5. Le modérateur peut envoyer des messages au client (qui voit ces messages comme venant du profil virtuel).
-6. **Une fois la conversation terminée, le système peut attribuer un nouveau client au modérateur.**
-7. Si un client envoie un message, tous les modérateurs ayant accès au profil concerné peuvent le voir.
-8. Un profil ne peut être utilisé que par un seul modérateur à la fois.
-9. Si un modérateur devient inactif, son profil peut être réattribué à un autre modérateur.
+## 7. Interface Utilisateur du Modérateur
 
-## 8. Prochaines Étapes
+L'interface utilisateur des modérateurs devra être mise à jour pour prendre en compte ces nouvelles fonctionnalités :
+
+### 7.1 Structure générale
+
+-   **Sélecteur de profils** : Permet au modérateur de basculer entre les différents profils qui lui sont attribués.
+-   **Liste des clients** : Affiche tous les clients qui attendent une réponse, avec le profil concerné clairement indiqué.
+-   **Vue de conversation** : Affiche la conversation actuelle avec contexte du profil utilisé.
+
+### 7.2 Fonctionnalités principales
+
+-   **Gestion multi-profils** : Le modérateur peut facilement changer de profil selon les besoins des conversations.
+-   **Indicateurs de charge** : Affichage du nombre de conversations en cours et du nombre de messages non lus.
+-   **Notifications en temps réel** : Le modérateur est notifié immédiatement lorsqu'un nouveau client lui est attribué.
+-   **Priorisation des clients** : Les clients qui attendent depuis le plus longtemps sont mis en évidence.
+
+## 8. Flux de Travail Global
+
+Voici comment fonctionne le système amélioré :
+
+1. **Attribution des profils** :
+
+    - Lorsqu'un modérateur se connecte, le système vérifie s'il a déjà des profils attribués
+    - Si non, le système lui attribue automatiquement un profil disponible
+
+2. **Réception des messages clients** :
+
+    - Quand un client envoie un message à un profil, le système :
+        - Recherche le modérateur le plus approprié selon la charge de travail
+        - Attribue automatiquement le profil au modérateur si nécessaire
+        - Notifie le modérateur du nouveau message
+
+3. **Travail du modérateur** :
+
+    - Le modérateur voit tous les clients qui attendent une réponse
+    - Il peut basculer entre plusieurs profils pour répondre aux différents clients
+    - Il peut choisir de définir un profil comme principal pour y accéder plus facilement
+
+4. **Équilibrage automatique** :
+
+    - Si un modérateur devient surchargé (trop de clients), le système répartit les nouveaux messages vers d'autres modérateurs
+    - Si un modérateur est inactif, le système réattribue ses clients à d'autres modérateurs disponibles
+
+5. **Continuité des conversations** :
+    - Le système privilégie toujours l'attribution des messages au même modérateur pour maintenir la continuité des conversations
+    - Si le modérateur habituel n'est pas disponible, un autre modérateur peut prendre le relais
+
+## 9. Planification des Tâches avec Laravel 11
+
+Nous avons implémenté un système automatisé pour traiter les messages clients non assignés et équilibrer la charge de travail entre les modérateurs. Ce système utilise la nouvelle architecture de tâches planifiées de Laravel 11.
+
+### 9.1 Structure des Tâches dans Laravel 11
+
+Contrairement aux versions précédentes de Laravel qui utilisaient `app/Console/Kernel.php` pour définir les tâches planifiées, Laravel 11 introduit un nouveau système basé sur des classes dédiées dans le dossier `app/Tasks`.
+
+#### `ProcessUnassignedMessagesTask`
+
+Cette classe représente notre tâche principale pour traiter les messages non assignés :
+
+```php
+<?php
+
+namespace App\Tasks;
+
+use App\Services\ModeratorAssignmentService;
+use Illuminate\Support\Facades\Log;
+
+class ProcessUnassignedMessagesTask
+{
+    protected $assignmentService;
+
+    public function __construct(ModeratorAssignmentService $assignmentService)
+    {
+        $this->assignmentService = $assignmentService;
+    }
+
+    // Définit quand la tâche s'exécute (toutes les 2 minutes)
+    public function schedule(): string
+    {
+        return '*/2 * * * *'; // Format cron
+    }
+
+    // Code exécuté lors de chaque lancement de la tâche
+    public function __invoke(): void
+    {
+        // Libère d'abord les profils des modérateurs inactifs
+        $releasedCount = $this->assignmentService->reassignInactiveProfiles(30);
+
+        // Traite les messages non assignés
+        $assignedCount = $this->assignmentService->processUnassignedMessages();
+
+        Log::info("{$assignedCount} client(s) assigné(s) à des modérateurs.");
+    }
+}
+```
+
+Cette tâche effectue deux actions importantes :
+
+1. **Libération des profils inactifs** : Si un modérateur est inactif pendant plus de 30 minutes, ses profils sont libérés.
+2. **Attribution des messages** : Les messages clients non attribués sont assignés aux modérateurs selon leur charge de travail.
+
+### 9.2 Enregistrement des Tâches
+
+Pour que Laravel 11 reconnaisse et exécute notre tâche, nous l'avons enregistrée dans le fichier `bootstrap/tasks.php` :
+
+```php
+<?php
+
+use App\Tasks\ProcessUnassignedMessagesTask;
+
+return [
+    // Autres tâches déjà enregistrées
+
+    // Notre tâche pour traiter les messages non assignés
+    ProcessUnassignedMessagesTask::class,
+];
+```
+
+### 9.3 Commande Artisan Manuelle
+
+En plus de la tâche planifiée automatique, nous avons créé une commande Artisan qui permet d'exécuter manuellement le traitement des messages :
+
+```php
+// Dans routes/console.php
+Artisan::command('messages:process', function (ModeratorAssignmentService $assignmentService) {
+    $this->info('Traitement des messages non assignés...');
+
+    $releasedCount = $assignmentService->reassignInactiveProfiles(30);
+    $assignedCount = $assignmentService->processUnassignedMessages();
+
+    $this->info("{$assignedCount} client(s) assigné(s) à des modérateurs.");
+})->purpose('Traiter manuellement les messages non assignés');
+```
+
+Cette commande peut être exécutée avec :
+
+```bash
+php artisan messages:process
+```
+
+### 9.4 Fonctionnement Global du Système de Planification
+
+1. **Exécution périodique** : La tâche s'exécute automatiquement toutes les 2 minutes.
+2. **Traitement des profils inactifs** : Libère les profils des modérateurs qui n'ont pas été actifs depuis 30 minutes.
+3. **Distribution des messages** :
+    - Identifie tous les messages clients qui n'ont pas reçu de réponse
+    - Pour chaque message, trouve le modérateur le plus approprié selon les critères d'équilibrage
+    - Assigne le message au modérateur sélectionné
+    - Si nécessaire, attribue automatiquement le profil au modérateur
+4. **Notification** : Le modérateur est notifié en temps réel de la nouvelle attribution.
+
+### 9.5 Mise en Production
+
+Pour que le système fonctionne en production, vous devez :
+
+1. Configurer un planificateur de tâches (Cron) pour exécuter `php artisan schedule:run` chaque minute
+2. Ou, pour les environnements de développement, exécuter `php artisan schedule:work` qui lance un processus en arrière-plan
+
+Cette approche garantit que :
+
+-   Les clients reçoivent toujours des réponses, même si certains modérateurs sont absents
+-   La charge de travail est distribuée équitablement entre tous les modérateurs disponibles
+-   Le système s'adapte dynamiquement aux fluctuations d'activité des modérateurs
+
+## 10. Prochaines Étapes
 
 Pour finaliser l'implémentation, il faudra :
 
-1. Exécuter les migrations pour créer les tables nécessaires.
-2. Configurer Laravel Echo côté client pour gérer les événements en temps réel.
-3. Compléter l'interface Vue pour qu'elle utilise les API réelles au lieu des données simulées.
-4. Créer une interface d'administration pour gérer les profils virtuels.
-5. Mettre en place un système de notification pour alerter les modérateurs des nouveaux messages.
-6. **Implémenter un algorithme de répartition pour attribuer équitablement les clients aux modérateurs disponibles.**
-7. **Mettre en place un système de file d'attente pour les clients en attente de réponse.**
+1. Mettre à jour l'interface utilisateur pour prendre en charge la gestion multi-profils
+2. ~~Implémenter une tâche planifiée pour exécuter régulièrement `processUnassignedMessages()`~~ ✓ (Implémenté)
+3. Ajouter des statistiques sur la charge de travail des modérateurs pour l'administration
+4. Mettre en place des tests automatisés pour vérifier l'équilibrage de charge
+5. Développer une fonction de transfert manuel de conversations entre modérateurs
 
-## 9. Considérations de Sécurité
+## 11. Considérations de Sécurité
 
--   Assurez-vous que les canaux de diffusion sont correctement protégés.
--   Vérifiez toujours les autorisations dans les contrôleurs (un modérateur ne doit accéder qu'aux conversations liées au profil qui lui est attribué).
--   Protégez les données sensibles des clients.
--   Mettez en place une politique de modération claire pour les modérateurs.
+-   Assurez-vous que les canaux de diffusion sont correctement protégés
+-   Vérifiez les autorisations dans les contrôleurs (un modérateur ne doit accéder qu'aux conversations liées aux profils qui lui sont attribués)
+-   Protégez les données sensibles des clients
+-   Mettez en place des logs d'activité pour auditer les actions des modérateurs
 
-## 10. Conclusion
+## 12. Conclusion
 
-Ce système permet une gestion efficace des conversations entre clients et profils virtuels, tout en offrant une expérience transparente pour les clients. La flexibilité du système permet d'attribuer dynamiquement des profils et des clients aux modérateurs, optimisant ainsi l'utilisation des ressources humaines et assurant que tous les clients reçoivent une réponse.
+Ce système amélioré permet une gestion beaucoup plus efficace des conversations entre clients et profils virtuels, avec une distribution équilibrée du travail entre les modérateurs. La possibilité pour un modérateur de gérer plusieurs profils simultanément augmente considérablement la flexibilité et l'efficacité du système, tout en garantissant que les clients reçoivent des réponses rapides à leurs messages.
 
 ---
 
-Cette documentation devrait vous aider à comprendre la structure et le fonctionnement du système de modération. N'hésitez pas à la compléter au fur et à mesure que vous ajoutez de nouvelles fonctionnalités.
+Cette documentation a été mise à jour pour refléter les nouvelles fonctionnalités d'attribution équilibrée des messages et de gestion multi-profils pour les modérateurs.

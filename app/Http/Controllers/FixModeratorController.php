@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers\Moderator;
+namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Message;
@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
-class ModeratorController extends Controller
+class FixModeratorController extends Controller
 {
     /**
      * Le service d'attribution de profils.
@@ -171,91 +171,27 @@ class ModeratorController extends Controller
      */
     public function getAssignedProfile()
     {
-        $moderator = Auth::user();
-
-        Log::info("[DEBUG] Récupération du profil pour le modérateur", [
-            'moderator_id' => $moderator->id,
-            'moderator_name' => $moderator->name,
-            'moderator_type' => $moderator->type,
-        ]);
-
         // Récupérer tous les profils attribués
-        $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
-
-        Log::info("[DEBUG] Profils attribués récupérés", [
-            'profiles_count' => $profiles->count(),
-            'profiles_ids' => $profiles->pluck('id')->toArray(),
-        ]);
+        $profiles = $this->assignmentService->getAllAssignedProfiles(Auth::user());
 
         // Trouver le profil principal (si existe)
-        $primaryAssignment = ModeratorProfileAssignment::where('user_id', $moderator->id)
+        $primaryAssignment = ModeratorProfileAssignment::where('user_id', Auth::id())
             ->where('is_active', true)
             ->where('is_primary', true)
             ->first();
 
         $primaryProfileId = $primaryAssignment ? $primaryAssignment->profile_id : null;
 
-        Log::info("[DEBUG] Recherche du profil principal", [
-            'primary_profile_id' => $primaryProfileId,
-            'primary_assignment_found' => $primaryAssignment ? true : false
-        ]);
-
-        // Si aucun profil principal n'est défini mais des profils sont attribués, en définir un comme principal
-        if (!$primaryAssignment && $profiles->isNotEmpty()) {
-            Log::info("[DEBUG] Aucun profil principal défini mais des profils sont attribués");
-
-            // Prendre le premier profil disponible et le définir comme principal
-            $firstProfileId = $profiles->first()->id;
-
-            try {
-                DB::transaction(function () use ($moderator, $firstProfileId) {
-                    // Désactiver tous les profils principaux existants (pour être sûr)
-                    ModeratorProfileAssignment::where('user_id', $moderator->id)
-                        ->where('is_primary', true)
-                        ->update(['is_primary' => false]);
-
-                    // Définir ce profil comme principal
-                    ModeratorProfileAssignment::where('user_id', $moderator->id)
-                        ->where('profile_id', $firstProfileId)
-                        ->where('is_active', true)
-                        ->update(['is_primary' => true]);
-                });
-
-                $primaryProfileId = $firstProfileId;
-
-                Log::info("[DEBUG] Profil défini comme principal", [
-                    'profile_id' => $primaryProfileId
-                ]);
-            } catch (\Exception $e) {
-                Log::error("[DEBUG] Erreur lors de la définition du profil principal", [
-                    'error' => $e->getMessage()
-                ]);
-            }
-
-            // Rafraîchir la liste des profils après cette modification
-            $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
-        }
-
-        // Si aucun profil n'est attribué, en attribuer un automatiquement et le définir comme principal
+        // Si aucun profil n'est attribué, en attribuer un automatiquement
         if ($profiles->isEmpty()) {
-            Log::info("[DEBUG] Aucun profil attribué, tentative d'attribution automatique");
-
-            $assignment = $this->assignmentService->assignProfileToModerator($moderator, null, true);
-
+            $assignment = $this->assignmentService->assignProfileToModerator(Auth::user());
             if ($assignment) {
-                Log::info("[DEBUG] Profil attribué automatiquement", [
-                    'assignment_id' => $assignment->id,
-                    'profile_id' => $assignment->profile_id
-                ]);
-
-                $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
+                $profiles = $this->assignmentService->getAllAssignedProfiles(Auth::user());
                 $primaryProfileId = $assignment->profile_id;
-            } else {
-                Log::warning("[DEBUG] Échec de l'attribution automatique d'un profil");
             }
         } else {
             // Mettre à jour la dernière activité
-            $this->assignmentService->updateLastActivity($moderator);
+            $this->assignmentService->updateLastActivity(Auth::user());
         }
 
         // Préparer les données pour la réponse
@@ -273,8 +209,9 @@ class ModeratorController extends Controller
 
         $primaryProfile = $profiles->firstWhere('id', $primaryProfileId);
 
-        // Log final
-        Log::info("[DEBUG] Résultat final de getAssignedProfile", [
+        // Log pour debugging
+        Log::info("[DEBUG] Profils attribués au modérateur", [
+            'moderator_id' => Auth::id(),
             'profiles_count' => $profiles->count(),
             'primary_profile_id' => $primaryProfileId,
             'has_primary_profile' => $primaryProfile ? true : false
@@ -603,48 +540,20 @@ class ModeratorController extends Controller
             ], 400);
         }
 
-        try {
-            DB::transaction(function () use ($currentModeratorId, $request) {
-                // Récupérer l'assignation actuelle qui est primaire
-                $currentPrimary = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
-                    ->where('is_active', true)
-                    ->where('is_primary', true)
-                    ->first();
+        // Réinitialiser tous les profils à non-primaire
+        ModeratorProfileAssignment::where('user_id', $currentModeratorId)
+            ->where('is_active', true)
+            ->update(['is_primary' => false]);
 
-                // Si elle existe, la mettre à false
-                if ($currentPrimary) {
-                    $currentPrimary->is_primary = false;
-                    $currentPrimary->save();
-                }
+        // Définir ce profil comme primaire
+        ModeratorProfileAssignment::where('user_id', $currentModeratorId)
+            ->where('profile_id', $request->profile_id)
+            ->where('is_active', true)
+            ->update(['is_primary' => true]);
 
-                // Trouver l'assignation à mettre à jour
-                $newPrimary = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
-                    ->where('profile_id', $request->profile_id)
-                    ->where('is_active', true)
-                    ->first();
-
-                // La définir comme primaire
-                if ($newPrimary) {
-                    $newPrimary->is_primary = true;
-                    $newPrimary->save();
-                }
-            });
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Profil principal mis à jour avec succès'
-            ]);
-        } catch (\Exception $e) {
-            Log::error('Erreur lors de la définition du profil principal', [
-                'moderator_id' => $currentModeratorId,
-                'profile_id' => $request->profile_id,
-                'error' => $e->getMessage()
-            ]);
-
-            return response()->json([
-                'success' => false,
-                'message' => 'Une erreur est survenue lors de la mise à jour du profil principal'
-            ], 500);
-        }
+        return response()->json([
+            'success' => true,
+            'message' => 'Profil principal mis à jour avec succès'
+        ]);
     }
 }
