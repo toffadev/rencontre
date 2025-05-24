@@ -23,7 +23,7 @@
 
         <div class="flex flex-col lg:flex-row gap-6">
             <!-- Clients Section (à gauche) -->
-            <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-md overflow-hidden">
+            <div class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden">
                 <!-- Tabs -->
                 <div class="flex border-b border-gray-200">
                     <button 
@@ -142,8 +142,8 @@
                 </div>
             </div>
             
-            <!-- Chat Section (à droite) -->
-            <div class="w-full lg:w-2/3 flex flex-col">
+            <!-- Chat Section (au centre) -->
+            <div class="w-full lg:w-2/4 flex flex-col">
                 <!-- Profil attribué (en haut) -->
                 <div class="bg-white rounded-xl shadow-md p-4 mb-4">
                     <div class="flex items-center space-x-4">
@@ -171,7 +171,7 @@
                     </div>
                 </div>
 
-                <!-- Zone de chat (en bas) -->
+                <!-- Zone de chat -->
                 <div class="bg-white rounded-xl shadow-md overflow-hidden flex-1" v-if="selectedClient">
                     <!-- Chat Header -->
                     <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
@@ -265,6 +265,14 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Informations client (à droite) -->
+            <div class="w-full lg:w-1/4">
+                <ClientInfoPanel 
+                    v-if="selectedClient"
+                    :client-id="selectedClient.id"
+                />
+            </div>
         </div>
     </MainLayout>
 </template>
@@ -274,6 +282,7 @@ import { ref, onMounted, watch, computed, nextTick } from 'vue';
 import MainLayout from '@client/Layouts/MainLayout.vue';
 import axios from 'axios';
 import Echo from 'laravel-echo';
+import ClientInfoPanel from '@client/Components/ClientInfoPanel.vue';
 
 // État des données
 const currentAssignedProfile = ref(null);

@@ -1,6 +1,23 @@
 <template>
     <MainLayout>
         <div class="flex flex-col lg:flex-row gap-6">
+            <!-- Points Alert -->
+            <div v-if="showPointsAlert" class="fixed top-4 right-4 bg-pink-100 border border-pink-400 text-pink-700 px-4 py-3 rounded-lg shadow-lg z-50">
+                <div class="flex items-center">
+                    <div class="py-1"><svg class="fill-current h-6 w-6 text-pink-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/></svg></div>
+                    <div>
+                        <p class="font-bold">Points insuffisants</p>
+                        <p class="text-sm">Vous n'avez plus assez de points pour envoyer des messages.</p>
+                        <button @click="redirectToProfile" class="mt-2 bg-pink-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-pink-600 transition">
+                            Acheter des points
+                        </button>
+                    </div>
+                    <button @click="showPointsAlert = false" class="ml-4">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+            </div>
+
             <!-- Profiles Section -->
             <div
                 class="w-full lg:w-1/3 bg-white rounded-xl shadow-md overflow-hidden p-4"
@@ -17,6 +34,19 @@
                             class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
                         >
                             <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Points Display -->
+                <div class="mb-4 p-3 bg-pink-50 rounded-lg">
+                    <div class="flex justify-between items-center">
+                        <div>
+                            <p class="text-sm text-pink-600">Points disponibles</p>
+                            <p class="text-2xl font-bold text-pink-700">{{ remainingPoints }}</p>
+                        </div>
+                        <button @click="redirectToProfile" class="text-pink-600 hover:text-pink-700">
+                            <i class="fas fa-plus-circle text-xl"></i>
                         </button>
                     </div>
                 </div>
@@ -277,6 +307,7 @@ import { ref, onMounted, watch, computed, nextTick } from "vue";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
 import Echo from "laravel-echo";
+import { router } from '@inertiajs/vue3';
 
 const props = defineProps({
     profiles: {
@@ -285,12 +316,13 @@ const props = defineProps({
     },
 });
 
-// État des données
 const selectedProfile = ref(null);
 const newMessage = ref("");
 const messagesMap = ref({}); // Map des messages par profileId
 const chatContainer = ref(null);
 const loading = ref(false);
+const remainingPoints = ref(0);
+const showPointsAlert = ref(false);
 
 // Messages pour la conversation courante
 const currentMessages = computed(() => {
@@ -388,7 +420,12 @@ async function loadMessages(profileId) {
     }
 }
 
-// Envoyer un message
+// Fonction pour rediriger vers la page de profil
+function redirectToProfile() {
+    router.visit('/profil');
+}
+
+// Modifier la fonction sendMessage pour gérer les points
 async function sendMessage() {
     if (newMessage.value.trim() === "" || !selectedProfile.value) return;
 
@@ -408,11 +445,10 @@ async function sendMessage() {
         pending: true,
     };
 
-    // Ajouter le message localement pour une réponse immédiate
+    // Ajouter le message localement
     if (!messagesMap.value[profileId]) {
         messagesMap.value[profileId] = [];
     }
-
     messagesMap.value[profileId].push(localMessage);
 
     // Faire défiler le chat vers le bas immédiatement
@@ -429,9 +465,13 @@ async function sendMessage() {
             content: messageContent,
         });
 
+        // Mettre à jour les points restants
+        if (response.data.remaining_points !== undefined) {
+            remainingPoints.value = response.data.remaining_points;
+        }
+
         // Si le message est envoyé avec succès, remplacer le message temporaire
         if (response.data.success) {
-            // Remplacer le message temporaire par le message réel avec ID du serveur
             const index = messagesMap.value[profileId].findIndex(
                 (msg) => msg.id === localMessage.id
             );
@@ -441,6 +481,12 @@ async function sendMessage() {
         }
     } catch (error) {
         console.error("Erreur lors de l'envoi du message:", error);
+        
+        // Si l'erreur est due aux points insuffisants
+        if (error.response?.status === 403) {
+            showPointsAlert.value = true;
+        }
+
         // Marquer le message comme échoué
         const index = messagesMap.value[profileId].findIndex(
             (msg) => msg.id === localMessage.id
@@ -519,6 +565,9 @@ onMounted(() => {
     nextTick(() => {
         scrollToBottom();
     });
+
+    // Charger les points au montage du composant
+    loadPoints();
 });
 
 // Observer les changements de sélection de profil
@@ -529,6 +578,16 @@ watch(selectedProfile, (newProfile, oldProfile) => {
         });
     }
 });
+
+// Charger les points au montage du composant
+async function loadPoints() {
+    try {
+        const response = await axios.get('/points/data');
+        remainingPoints.value = response.data.points;
+    } catch (error) {
+        console.error('Erreur lors du chargement des points:', error);
+    }
+}
 </script>
 
 <style scoped>
@@ -571,5 +630,16 @@ watch(selectedProfile, (newProfile, oldProfile) => {
     background-color: #10b981;
     border-radius: 50%;
     border: 2px solid white;
+}
+
+.points-alert-enter-active,
+.points-alert-leave-active {
+    transition: all 0.3s ease;
+}
+
+.points-alert-enter-from,
+.points-alert-leave-to {
+    transform: translateY(-20px);
+    opacity: 0;
 }
 </style>

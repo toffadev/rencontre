@@ -12,12 +12,26 @@ use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use App\Events\TestEvent;
 use App\Http\Controllers\Client\HomeController;
+use Illuminate\Support\Facades\Redis;
+use Illuminate\Support\Facades\Log;
+use App\Http\Controllers\Admin\UserController;
 
 /*
 |--------------------------------------------------------------------------
 | Web Routes
 |--------------------------------------------------------------------------
 */
+
+Route::get('/test-redis', function () {
+    try {
+        Redis::set('hello', 'Redis fonctionne !');
+        $value = Redis::get('hello');
+        return "Test Redis réussi : " . $value;
+    } catch (\Exception $e) {
+        Log::error('Erreur Redis : ' . $e->getMessage());
+        return "Erreur Redis : " . $e->getMessage();
+    }
+});
 
 // Route principale qui redirige en fonction de l'authentification
 Route::get('/', function () {
@@ -44,6 +58,19 @@ Route::middleware(['client_or_admin'])->group(function () {
     // Routes pour les messages du client
     Route::get('/messages', [App\Http\Controllers\Client\MessageController::class, 'getMessages'])->name('client.messages');
     Route::post('/send-message', [App\Http\Controllers\Client\MessageController::class, 'sendMessage'])->name('client.send-message');
+
+    // Routes pour la gestion des points
+    Route::get('/points/data', [App\Http\Controllers\Client\PointController::class, 'getPointsData'])->name('client.points.data');
+    Route::post('/points/checkout', [App\Http\Controllers\Client\PointController::class, 'createCheckoutSession'])->name('client.points.checkout');
+    Route::get('/points/success', [App\Http\Controllers\Client\PointController::class, 'success'])->name('client.points.success');
+});
+
+// Routes pour les points
+Route::middleware(['auth'])->group(function () {
+    Route::get('/points/data', [App\Http\Controllers\Client\PointController::class, 'getPointsData'])->name('points.data');
+    Route::post('/points/checkout', [App\Http\Controllers\Client\PointController::class, 'createCheckoutSession'])->name('points.checkout');
+    Route::get('/points/success', [App\Http\Controllers\Client\PointController::class, 'success'])->name('client.points.success');
+    Route::post('/stripe/webhook', [App\Http\Controllers\Client\PointController::class, 'handleWebhook'])->name('stripe.webhook')->withoutMiddleware(['csrf']);
 });
 
 // Guest routes
@@ -87,14 +114,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('/profiles/{profile}/main-photo', [AdminProfileController::class, 'setMainPhoto'])->name('profiles.main-photo');
     Route::delete('/profile-photos', [AdminProfileController::class, 'deletePhoto'])->name('profile-photos.destroy');
 
+    // User management routes
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::post('/users', [UserController::class, 'store'])->name('users.store');
+    Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
+    Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
+
     // Admin management routes will go here
 });
 
 // Moderator routes
 Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.')->group(function () {
-    Route::get('/dashboard', function () {
+    /* Route::get('/dashboard', function () {
         return Inertia::render('Admin/Dashboard');
-    })->name('dashboard');
+    })->name('dashboard'); */
 
     // Page principale des modérateurs
     Route::get('/chat', [App\Http\Controllers\Moderator\ModeratorController::class, 'index'])->name('chat');
@@ -107,6 +140,12 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
     Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])->name('send-message');
     Route::post('/set-primary-profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
+
+    // Routes pour les informations client
+    Route::get('/clients/{client}/info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'getClientInfo'])->name('client.info');
+    Route::post('/clients/{client}/basic-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'updateBasicInfo'])->name('client.basic-info.update');
+    Route::post('/clients/{client}/custom-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'addCustomInfo'])->name('client.custom-info.add');
+    Route::delete('/custom-info/{customInfo}', [App\Http\Controllers\Moderator\ClientInfoController::class, 'deleteCustomInfo'])->name('client.custom-info.delete');
 
     // Moderator management routes will go here
 });

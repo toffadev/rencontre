@@ -8,6 +8,8 @@ use Illuminate\Foundation\Support\Providers\EventServiceProvider as ServiceProvi
 use Illuminate\Support\Facades\Event;
 use App\Events\MessageSent;
 use App\Listeners\MessageListener;
+use App\Events\NewClientMessage;
+use App\Listeners\ProcessNewClientMessage;
 
 class EventServiceProvider extends ServiceProvider
 {
@@ -22,6 +24,9 @@ class EventServiceProvider extends ServiceProvider
         ],
         MessageSent::class => [
             MessageListener::class,
+        ],
+        NewClientMessage::class => [
+            ProcessNewClientMessage::class,
         ],
     ];
 

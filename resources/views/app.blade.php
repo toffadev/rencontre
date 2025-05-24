@@ -37,6 +37,9 @@
         @vite(['resources/js/client.js'])
     @endif
         
+    <!-- Stripe.js -->
+    <script src="https://js.stripe.com/v3/"></script>
+    
     @inertiaHead
   </head>
   <body class="font-sans antialiased">

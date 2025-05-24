@@ -89,4 +89,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(Message::class, 'client_id');
     }
+
+    /**
+     * Get the basic information for this client
+     */
+    public function clientInfo()
+    {
+        return $this->hasOne(ClientInfo::class);
+    }
+
+    /**
+     * Get all custom information for this client
+     */
+    public function customInfos()
+    {
+        return $this->hasMany(ClientCustomInfo::class);
+    }
 }

@@ -3,7 +3,11 @@
     "type": "module",
     "scripts": {
         "build": "vite build",
-        "dev": "vite"
+        "dev": "vite",
+        "serve": "php artisan serve",
+        "schedule": "php artisan schedule:work",
+        "queue": "php artisan queue:work --daemon",
+        "start": "concurrently -n \"SERVER,VITE,SCHEDULE,QUEUE\" -c \"bgBlue.bold,bgGreen.bold,bgYellow.bold,bgMagenta.bold\" \"npm run serve\" \"npm run dev\" \"npm run schedule\" \"npm run queue\""
     },
     "devDependencies": {
         "@laravel/echo-vue": "^2.1.4",

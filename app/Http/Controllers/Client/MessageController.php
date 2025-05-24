@@ -6,12 +6,22 @@ use App\Http\Controllers\Controller;
 use App\Models\Message;
 use App\Models\Profile;
 use App\Events\MessageSent;
+use App\Events\NewClientMessage;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Services\PointService;
+use Exception;
 
 class MessageController extends Controller
 {
+    protected $pointService;
+
+    public function __construct(PointService $pointService)
+    {
+        $this->pointService = $pointService;
+    }
+
     /**
      * Récupère les messages entre le client authentifié et un profil spécifique
      *
@@ -74,46 +84,72 @@ class MessageController extends Controller
     public function sendMessage(Request $request)
     {
         $request->validate([
-            'profile_id' => 'required|integer|exists:profiles,id',
-            'content' => 'required|string|max:1000',
+            'profile_id' => 'required|exists:users,id',
+            'content' => 'required|string|max:1000'
         ]);
 
-        $clientId = Auth::id();
+        $user = Auth::user();
+        $clientId = $user->id;
         $profileId = $request->profile_id;
 
-        // Créer le nouveau message
-        $message = Message::create([
-            'client_id' => $clientId,
-            'profile_id' => $profileId,
-            'moderator_id' => null, // Pas de modérateur car vient du client
-            'content' => $request->content,
-            'is_from_client' => true,
-        ]);
+        try {
+            // Créer le nouveau message
+            $message = Message::create([
+                'client_id' => $clientId,
+                'profile_id' => $profileId,
+                'moderator_id' => null, // Pas de modérateur car vient du client
+                'content' => $request->content,
+                'is_from_client' => true,
+            ]);
 
-        // Log pour le débogage
-        Log::info("[DEBUG] Message client envoyé", [
-            'client_id' => $clientId,
-            'profile_id' => $profileId,
-            'message_id' => $message->id,
-            'content' => $message->content
-        ]);
+            // Déduire les points après la création du message pour pouvoir le lier
+            if (!$this->pointService->deductPoints($user, 'message_sent', PointService::POINTS_PER_MESSAGE, $message)) {
+                // Si la déduction échoue, supprimer le message et retourner une erreur
+                $message->delete();
+                return response()->json([
+                    'error' => 'Points insuffisants pour envoyer un message',
+                    'remaining_points' => $user->points
+                ], 403);
+            }
 
-        // Diffuser l'événement de message
-        event(new MessageSent($message));
-
-        // Log après l'événement
-        Log::info("[DEBUG] Événement MessageSent émis");
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Message envoyé avec succès',
-            'messageData' => [
-                'id' => $message->id,
+            // Log pour le débogage
+            Log::info("[DEBUG] Message client envoyé", [
+                'client_id' => $clientId,
+                'profile_id' => $profileId,
+                'message_id' => $message->id,
                 'content' => $message->content,
-                'isOutgoing' => true,
-                'time' => $message->created_at->format('H:i'),
-                'date' => $message->created_at->format('Y-m-d'),
-            ]
-        ]);
+                'points_remaining' => $user->points
+            ]);
+
+            // Diffuser l'événement de message
+            broadcast(new MessageSent($message))->toOthers();
+
+            // Déclencher l'événement NewClientMessage pour la gestion des attributions
+            event(new NewClientMessage($message));
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Message envoyé avec succès',
+                'messageData' => [
+                    'id' => $message->id,
+                    'content' => $message->content,
+                    'isOutgoing' => true,
+                    'time' => $message->created_at->format('H:i'),
+                    'date' => $message->created_at->format('Y-m-d'),
+                ],
+                'remaining_points' => $user->points
+            ]);
+        } catch (Exception $e) {
+            Log::error('Erreur lors de l\'envoi du message:', [
+                'error' => $e->getMessage(),
+                'user_id' => $user->id,
+                'profile_id' => $profileId
+            ]);
+
+            return response()->json([
+                'error' => 'Une erreur est survenue lors de l\'envoi du message',
+                'details' => $e->getMessage()
+            ], 500);
+        }
     }
 }

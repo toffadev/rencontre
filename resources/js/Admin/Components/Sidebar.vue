@@ -27,6 +27,12 @@
         <span class="md:hidden lg:block">Profil</span>
         </Link>
 
+        <Link href="/admin/users" :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/Users' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-tags"></i>
+        <span class="md:hidden lg:block">Utilisateurs</span>
+        </Link>
+
         <Link href="/admin/events" :class="['flex items-center space-x-3 p-3 rounded-lg',
           $page.component === 'Admin/Pages/Events' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tags"></i>
