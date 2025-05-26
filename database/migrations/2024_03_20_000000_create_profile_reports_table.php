@@ -11,15 +11,16 @@ return new class extends Migration
         Schema::create('profile_reports', function (Blueprint $table) {
             $table->id();
             $table->foreignId('reporter_id')->constrained('users')->onDelete('cascade');
-            $table->foreignId('reported_user_id')->constrained('users')->onDelete('cascade');
+            $table->foreignId('reported_user_id')->nullable()->constrained('users')->onDelete('set null');
+            $table->foreignId('reported_profile_id')->constrained('profiles')->onDelete('cascade');
             $table->string('reason');
             $table->text('description')->nullable();
-            $table->enum('status', ['pending', 'reviewed', 'dismissed'])->default('pending');
+            $table->enum('status', ['pending', 'accepted', 'dismissed'])->default('pending');
             $table->timestamp('reviewed_at')->nullable();
             $table->timestamps();
 
             // Un utilisateur ne peut signaler un même profil qu'une seule fois
-            $table->unique(['reporter_id', 'reported_user_id']);
+            $table->unique(['reporter_id', 'reported_profile_id']);
         });
     }
 

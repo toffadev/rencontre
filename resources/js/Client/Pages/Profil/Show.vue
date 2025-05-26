@@ -1,17 +1,25 @@
 <template>
     <MainLayout>
+        <!-- Loader -->
+        <div v-if="isLoading" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white p-6 rounded-lg shadow-xl text-center">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500 mx-auto mb-4"></div>
+                <p class="text-gray-700">Redirection vers la page de paiement...</p>
+            </div>
+        </div>
+
         <div class="flex flex-col lg:flex-row gap-8">
             <!-- Profile Section -->
             <div class="w-full lg:w-1/3">
                 <div class="bg-white rounded-xl profile-card p-6 mb-6">
                     <div class="flex flex-col items-center">
                         <img
-                            src="https://randomuser.me/api/portraits/women/44.jpg"
-                            alt="Profil"
+                            :src="auth?.user?.profile_photo_url || 'https://randomuser.me/api/portraits/women/44.jpg'"
+                            :alt="auth?.user?.name"
                             class="w-24 h-24 rounded-full border-4 border-pink-100 mb-4"
                         />
-                        <h2 class="text-xl font-bold">Romeo Martin</h2>
-                        <p class="text-gray-500 text-sm mb-4">Paris, France</p>
+                        <h2 class="text-xl font-bold">{{ auth?.user?.name }}</h2>
+                        <p class="text-gray-500 text-sm mb-4">{{ auth?.user?.location || 'Paris, France' }}</p>
                         <div class="flex space-x-2 mb-6">
                             <span
                                 class="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded"
@@ -48,6 +56,12 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Bouton retour -->
+                <button @click="goToHome" class="w-full bg-gray-100 text-gray-700 py-2 px-4 rounded-lg mb-4 hover:bg-gray-200 transition flex items-center justify-center">
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    Retour à l'accueil
+                </button>
 
                 <!-- Premium Banner -->
                 <div
@@ -119,6 +133,53 @@
                             Depuis votre inscription
                         </p>
                     </div>
+                </div>
+
+                <!-- Buy Points Section -->
+                <div class="bg-white rounded-xl p-6 mb-6">
+                    <h3 class="font-bold text-lg mb-4">Acheter des points</h3>
+                    <p class="text-gray-600 mb-6">
+                        Chaque message envoyé coûte 5 points. Achetez des points
+                        pour continuer à discuter avec vos matches.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div
+                            v-for="(plan, index) in pointsPlans"
+                            :key="index"
+                            :class="[
+                                'relative rounded-lg p-4 cursor-pointer transition',
+                                plan.popular
+                                    ? 'border-2 border-pink-400 bg-pink-50'
+                                    : 'border border-gray-200 hover:border-pink-300',
+                            ]"
+                            @click="selectPlan(plan)"
+                        >
+                            <div
+                                v-if="plan.popular"
+                                class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs px-2 py-1 rounded-full"
+                            >
+                                Populaire
+                            </div>
+                            <h4 class="font-bold text-lg text-center mb-2">
+                                {{ plan.points }} points
+                            </h4>
+                            <p class="text-pink-500 font-bold text-center mb-2">
+                                {{ plan.price }}
+                            </p>
+                            <p class="text-gray-500 text-sm text-center">
+                                {{ plan.messages }} messages
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        @click="buyPoints"
+                        class="btn-premium w-full text-white font-medium py-3 px-4 rounded-lg transition duration-300"
+                    >
+                        Acheter des points
+                        <i class="fas fa-arrow-right ml-1"></i>
+                    </button>
                 </div>
 
                 <!-- Tabs Navigation -->
@@ -375,53 +436,6 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Buy Points Section -->
-                <div class="bg-white rounded-xl p-6">
-                    <h3 class="font-bold text-lg mb-4">Acheter des points</h3>
-                    <p class="text-gray-600 mb-6">
-                        Chaque message envoyé coûte 5 points. Achetez des points
-                        pour continuer à discuter avec vos matches.
-                    </p>
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div
-                            v-for="(plan, index) in pointsPlans"
-                            :key="index"
-                            :class="[
-                                'relative rounded-lg p-4 cursor-pointer transition',
-                                plan.popular
-                                    ? 'border-2 border-pink-400 bg-pink-50'
-                                    : 'border border-gray-200 hover:border-pink-300',
-                            ]"
-                            @click="selectPlan(plan)"
-                        >
-                            <div
-                                v-if="plan.popular"
-                                class="absolute -top-2 -right-2 bg-pink-500 text-white text-xs px-2 py-1 rounded-full"
-                            >
-                                Populaire
-                            </div>
-                            <h4 class="font-bold text-lg text-center mb-2">
-                                {{ plan.points }} points
-                            </h4>
-                            <p class="text-pink-500 font-bold text-center mb-2">
-                                {{ plan.price }}
-                            </p>
-                            <p class="text-gray-500 text-sm text-center">
-                                {{ plan.messages }} messages
-                            </p>
-                        </div>
-                    </div>
-
-                    <button
-                        @click="buyPoints"
-                        class="btn-premium w-full text-white font-medium py-3 px-4 rounded-lg transition duration-300"
-                    >
-                        Acheter des points
-                        <i class="fas fa-arrow-right ml-1"></i>
-                    </button>
-                </div>
             </div>
         </div>
     </MainLayout>
@@ -432,6 +446,13 @@ import { ref, computed, onMounted } from "vue";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
 import { router } from "@inertiajs/vue3";
+
+const props = defineProps({
+    auth: {
+        type: Object,
+        required: true
+    }
+});
 
 // Points data
 const totalPoints = ref(0);
@@ -555,7 +576,15 @@ async function loadPointsData() {
     }
 }
 
-// Sélectionner et acheter un pack de points
+// Ajouter l'état du loader
+const isLoading = ref(false);
+
+// Fonction de navigation vers la page d'accueil
+function goToHome() {
+    router.visit('/');
+}
+
+// Modifier la fonction selectPlan pour inclure le loader
 async function selectPlan(plan) {
     if (!stripe) {
         console.error("Stripe n'est pas initialisé");
@@ -564,6 +593,7 @@ async function selectPlan(plan) {
     }
 
     try {
+        isLoading.value = true;
         const response = await axios.post("/points/checkout", {
             pack: plan.points.toString(),
         });
@@ -585,6 +615,8 @@ async function selectPlan(plan) {
             error.response?.data?.error ||
                 "Une erreur est survenue lors de l'achat. Veuillez réessayer."
         );
+    } finally {
+        isLoading.value = false;
     }
 }
 
@@ -641,5 +673,19 @@ function confirmDeleteAccount() {
     border-bottom: 3px solid #f472b6;
     color: #f472b6;
     font-weight: 600;
+}
+
+/* Ajouter des styles pour le loader */
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
 }
 </style>

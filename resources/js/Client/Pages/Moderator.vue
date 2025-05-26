@@ -42,7 +42,7 @@
                 <div v-if="activeTab === 'assigned'" class="p-4">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-semibold">Client attribué</h2>
-                        <div v-if="assignedClient" class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
+                        <div v-if="assignedClient.length > 0" class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
                             En attente de réponse
                         </div>
                         <div v-else class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm">
@@ -51,31 +51,42 @@
                     </div>
                     
                     <div class="space-y-4">
-                        <!-- Client attribué -->
-                        <div v-if="assignedClient" class="client-card transition duration-300" @click="selectClient(assignedClient)">
-                            <div :class="['bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100', 
-                                        selectedClient && selectedClient.id === assignedClient.id ? 'border-l-4 border-pink-500' : '']">
-                                <div class="relative">
-                                    <img :src="assignedClient.avatar || 'https://via.placeholder.com/64'" 
-                                        :alt="assignedClient.name" 
-                                        class="w-12 h-12 rounded-full object-cover">
-                                    <div class="online-dot"></div>
-                                </div>
-                                <div class="flex-1 min-w-0">
-                                    <h3 class="font-semibold truncate">{{ assignedClient.name }}</h3>
-                                    <p class="text-sm text-gray-500">
-                                        <span v-if="assignedClient.lastMessage" class="truncate block">{{ assignedClient.lastMessage }}</span>
-                                        <span v-else class="text-gray-400 italic">Nouvelle conversation</span>
-                                    </p>
-                                </div>
-                                <div v-if="assignedClient.unreadCount" class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                    {{ assignedClient.unreadCount }}
+                        <!-- Liste des clients attribués -->
+                        <div v-if="assignedClient.length > 0" class="space-y-4">
+                            <div v-for="client in sortedAssignedClients" :key="client.id" 
+                                class="client-card transition duration-300" 
+                                @click="selectClient(client)">
+                                <div :class="['bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100', 
+                                            selectedClient && selectedClient.id === client.id ? 'border-l-4 border-pink-500' : '']">
+                                    <div class="relative">
+                                        <img :src="client.avatar || 'https://via.placeholder.com/64'" 
+                                            :alt="client.name" 
+                                            class="w-12 h-12 rounded-full object-cover">
+                                        <div class="online-dot"></div>
+                                    </div>
+                                    <div class="flex-1 min-w-0">
+                                        <div class="flex items-center justify-between">
+                                            <h3 class="font-semibold truncate">{{ client.name }}</h3>
+                                            <span class="text-xs text-gray-500">{{ formatTime(client.createdAt) }}</span>
+                                        </div>
+                                        <p class="text-sm text-gray-500">
+                                            <span v-if="client.lastMessage" class="truncate block">{{ client.lastMessage }}</span>
+                                            <span v-else class="text-gray-400 italic">Nouvelle conversation</span>
+                                        </p>
+                                        <div class="flex items-center mt-1 text-xs">
+                                            <img :src="client.profilePhoto" alt="Profile" class="w-4 h-4 rounded-full mr-1">
+                                            <span class="text-gray-600">{{ client.profileName }}</span>
+                                        </div>
+                                    </div>
+                                    <div v-if="client.unreadCount" class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                        {{ client.unreadCount }}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
                         <!-- État vide -->
-                        <div v-if="!assignedClient" class="text-center py-8">
+                        <div v-else class="text-center py-8">
                             <p class="text-gray-500">Aucun client ne vous a été attribué pour le moment.</p>
                             <p class="text-gray-400 text-sm mt-2">Le système vous attribuera automatiquement un client qui attend une réponse, ou consultez les clients disponibles.</p>
                         </div>
@@ -286,7 +297,7 @@ import ClientInfoPanel from '@client/Components/ClientInfoPanel.vue';
 
 // État des données
 const currentAssignedProfile = ref(null);
-const assignedClient = ref(null);
+const assignedClient = ref([]);
 const selectedClient = ref(null);
 const availableClients = ref([]);
 const newMessage = ref('');
@@ -299,6 +310,16 @@ const activeTab = ref('assigned');
 const currentChatMessages = computed(() => {
     if (!selectedClient.value) return [];
     return chatMessages.value[selectedClient.value.id] || [];
+});
+
+// Clients triés par date de dernier message
+const sortedAssignedClients = computed(() => {
+    if (!assignedClient.value) return [];
+    return [...assignedClient.value].sort((a, b) => {
+        const dateA = new Date(a.createdAt);
+        const dateB = new Date(b.createdAt);
+        return dateB - dateA; // Tri décroissant (plus récent au plus ancien)
+    });
 });
 
 // Charger les données réelles depuis l'API (profil et client attribués)
@@ -319,27 +340,27 @@ const loadAssignedData = async () => {
             console.log('Réponse des clients:', clientsResponse.data);
             
             if (clientsResponse.data.clients && clientsResponse.data.clients.length > 0) {
-                assignedClient.value = clientsResponse.data.clients[0]; // On prend le premier client attribué
+                // Au lieu de prendre juste le premier client, on garde tous les clients
+                const newClients = clientsResponse.data.clients;
                 
-                // Vérifier si c'est le client actuellement sélectionné
-                if (!selectedClient.value || 
-                    (selectedClient.value && selectedClient.value.id === assignedClient.value.id)) {
-                    selectedClient.value = assignedClient.value; // Sélectionner le client attribué par défaut
+                // Mettre à jour la liste des clients attribués
+                assignedClient.value = newClients;
+                
+                // Si aucun client n'est sélectionné, sélectionner le plus récent
+                if (!selectedClient.value && newClients.length > 0) {
+                    selectedClient.value = newClients[0];
+                    await loadMessages(newClients[0].id);
                 }
                 
-                // Charger les messages de la conversation si c'est le client sélectionné
-                if (selectedClient.value === assignedClient.value) {
-                    await loadMessages(assignedClient.value.id);
-                }
-                
-                console.log('Client attribué:', assignedClient.value);
+                console.log('Clients attribués:', newClients);
             } else {
                 console.log('Aucun client attribué');
-                assignedClient.value = null;
+                assignedClient.value = [];
             }
         } else {
             console.log('Aucun profil attribué');
             currentAssignedProfile.value = null;
+            assignedClient.value = [];
         }
         
         // Charger les clients disponibles
@@ -455,7 +476,8 @@ const loadMessages = async (clientId) => {
         
         if (response.data.messages) {
             console.log(`${response.data.messages.length} messages chargés`);
-            chatMessages.value[clientId] = response.data.messages;
+            // Utiliser Vue.set pour assurer la réactivité
+            chatMessages.value[clientId] = [...response.data.messages];
             
             // Faire défiler jusqu'au bas de la conversation
             nextTick(() => {
@@ -465,6 +487,8 @@ const loadMessages = async (clientId) => {
             });
         } else {
             console.log('Aucun message trouvé');
+            // Initialiser avec un tableau vide pour éviter les problèmes de réactivité
+            chatMessages.value[clientId] = [];
         }
     } catch (error) {
         console.error('Erreur lors du chargement des messages:', error);
@@ -472,45 +496,92 @@ const loadMessages = async (clientId) => {
             status: error.response?.status,
             data: error.response?.data
         });
+        // Initialiser avec un tableau vide en cas d'erreur
+        chatMessages.value[clientId] = [];
     }
 };
 
 // Configurer l'application et charger les données initiales
 onMounted(async () => {
-    // Charger les données depuis l'API
-    await loadAssignedData();
+    try {
+        // Charger les données depuis l'API
+        await loadAssignedData();
 
-    // Configurer Laravel Echo pour les communications en temps réel
-    if (window.Echo) {
-        console.log('Configuration de Laravel Echo pour recevoir les notifications en temps réel');
-        
-        const moderatorId = window.clientId;
-        console.log(`ID du modérateur connecté: ${moderatorId}`);
-        
-        // Écouter les notifications d'attribution de profil
-        console.log(`Souscription au canal: moderator.${moderatorId}`);
-        
-        window.Echo.private(`moderator.${moderatorId}`)
-            .listen('.profile.assigned', (data) => {
-                console.log('Événement profile.assigned reçu:', data);
-                // Recharger les données après l'attribution d'un profil
-                loadAssignedData();
-            })
-            .listen('.client.assigned', (data) => {
-                console.log('Événement client.assigned reçu:', data);
-                // Recharger les clients après l'attribution d'un client
-                loadAssignedData();
-            })
-            .error((error) => {
-                console.error(`Erreur sur le canal moderator.${moderatorId}:`, error);
-            });
-        
-        // Si un profil est déjà attribué, écouter les messages sur son canal
-        if (currentAssignedProfile.value) {
-            listenToProfileMessages(currentAssignedProfile.value.id);
+        // Configurer Laravel Echo pour les communications en temps réel
+        if (window.Echo) {
+            console.log('Configuration de Laravel Echo pour recevoir les notifications en temps réel');
+            
+            // Récupérer l'ID du modérateur depuis l'API
+            const userResponse = await axios.get('/api/user');
+            const moderatorId = userResponse.data.id;
+            
+            if (!moderatorId) {
+                console.error('ID du modérateur non disponible');
+                return;
+            }
+
+            console.log(`ID du modérateur connecté: ${moderatorId}`);
+            
+            // Écouter les notifications d'attribution de profil
+            console.log(`Souscription au canal: moderator.${moderatorId}`);
+            
+            window.Echo.private(`moderator.${moderatorId}`)
+                .listen('.profile.assigned', async (data) => {
+                    console.log('Événement profile.assigned reçu:', data);
+                    // Recharger les données après l'attribution d'un profil
+                    await loadAssignedData();
+                    
+                    // Si le profil attribué est différent du profil actuel et qu'il est principal,
+                    // on charge la conversation associée
+                    if (data.profile && data.profile.id !== currentAssignedProfile.value?.id && data.is_primary) {
+                        currentAssignedProfile.value = data.profile;
+                        // Si un client est associé à ce changement de profil, on le charge
+                        if (data.client_id) {
+                            const clientResponse = await axios.get('/moderateur/messages', {
+                                params: {
+                                    client_id: data.client_id,
+                                    profile_id: data.profile.id
+                                }
+                            });
+                            if (clientResponse.data.messages) {
+                                chatMessages.value[data.client_id] = clientResponse.data.messages;
+                                // Sélectionner ce client
+                                const clientInfo = assignedClient.value.find(c => c.id === data.client_id);
+                                if (clientInfo) {
+                                    selectedClient.value = clientInfo;
+                                }
+                            }
+                        }
+                    }
+                })
+                .listen('.client.assigned', async (data) => {
+                    console.log('Événement client.assigned reçu:', data);
+                    // Recharger les données après l'attribution d'un client
+                    await loadAssignedData();
+                    
+                    // Si c'est un nouveau client et qu'il n'y a pas de client sélectionné,
+                    // on le sélectionne automatiquement
+                    if (!selectedClient.value && data.client) {
+                        const clientInfo = assignedClient.value.find(c => c.id === data.client.id);
+                        if (clientInfo) {
+                            selectedClient.value = clientInfo;
+                            await loadMessages(clientInfo.id);
+                        }
+                    }
+                })
+                .error((error) => {
+                    console.error(`Erreur sur le canal moderator.${moderatorId}:`, error);
+                });
+            
+            // Si un profil est déjà attribué, écouter les messages sur son canal
+            if (currentAssignedProfile.value) {
+                listenToProfileMessages(currentAssignedProfile.value.id);
+            }
+        } else {
+            console.error('Laravel Echo n\'est pas disponible, les notifications en temps réel ne fonctionneront pas');
         }
-    } else {
-        console.error('Laravel Echo n\'est pas disponible, les notifications en temps réel ne fonctionneront pas');
+    } catch (error) {
+        console.error('Erreur lors de l\'initialisation:', error);
     }
 });
 
@@ -520,7 +591,7 @@ const listenToProfileMessages = (profileId) => {
     console.log(`Souscription au canal: profile.${profileId}`);
     
     window.Echo.private(`profile.${profileId}`)
-        .listen('.message.sent', (data) => {
+        .listen('.message.sent', async (data) => {
             console.log('Nouveau message reçu sur le canal profile:', data);
             // Ajouter le nouveau message à la conversation
             if (data.is_from_client) {
@@ -533,26 +604,41 @@ const listenToProfileMessages = (profileId) => {
                     isFromClient: true,
                     time: new Date(data.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
                 };
-                
-                // Ajouter à la conversation
-                if (!chatMessages.value[clientId]) {
-                    chatMessages.value[clientId] = [];
-                    console.log(`Initialisation d'une nouvelle conversation pour le client ${clientId}`);
-                }
-                
-                chatMessages.value[clientId].push(message);
-                console.log(`Message ajouté à la conversation du client ${clientId}`);
-                
-                // Mettre à jour la liste des clients (peut-être un nouveau client)
-                loadAssignedData();
-                
-                // Faire défiler si c'est la conversation actuelle
-                if (selectedClient.value && selectedClient.value.id === clientId) {
-                    nextTick(() => {
-                        if (chatContainer.value) {
-                            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+
+                try {
+                    // D'abord, mettre à jour la liste des clients
+                    await loadAssignedData();
+
+                    // Ensuite, s'assurer que nous avons les messages complets pour ce client
+                    if (clientId) {
+                        const messageResponse = await axios.get('/moderateur/messages', {
+                            params: {
+                                client_id: clientId,
+                                profile_id: profileId
+                            }
+                        });
+
+                        if (messageResponse.data.messages) {
+                            chatMessages.value[clientId] = messageResponse.data.messages;
+                            console.log(`Messages mis à jour pour le client ${clientId}`);
                         }
-                    });
+                    }
+
+                    // Faire défiler si c'est la conversation actuelle
+                    if (selectedClient.value && selectedClient.value.id === clientId) {
+                        nextTick(() => {
+                            if (chatContainer.value) {
+                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                            }
+                        });
+                    }
+                } catch (error) {
+                    console.error('Erreur lors de la mise à jour des messages:', error);
+                    // En cas d'erreur, au moins ajouter le message reçu
+                    if (!chatMessages.value[clientId]) {
+                        chatMessages.value[clientId] = [];
+                    }
+                    chatMessages.value[clientId].push(message);
                 }
             } else {
                 console.log('Message ignoré car non provenant d\'un client');
@@ -596,8 +682,8 @@ async function sendMessage() {
     chatMessages.value[selectedClient.value.id].push(localMessage);
     
     // Mettre à jour le dernier message s'il s'agit du client attribué
-    if (assignedClient.value && assignedClient.value.id === selectedClient.value.id) {
-        assignedClient.value.lastMessage = newMessage.value;
+    if (assignedClient.value.length > 0 && assignedClient.value[0].id === selectedClient.value.id) {
+        assignedClient.value[0].lastMessage = newMessage.value;
     }
     
     // Vider le champ de texte
@@ -665,6 +751,12 @@ watch(currentChatMessages, () => {
         }
     });
 });
+
+// Ajouter cette fonction dans la partie script
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 </script>
 
 <style scoped>

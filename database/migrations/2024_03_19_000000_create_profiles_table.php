@@ -18,6 +18,8 @@ return new class extends Migration
             $table->text('bio')->nullable();
             $table->string('main_photo_path')->nullable();
             $table->string('status')->default('active');
+            $table->foreignId('user_id')->nullable()->constrained('users')->onDelete('set null');
+
             $table->timestamps();
         });
     }

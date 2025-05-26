@@ -10,9 +10,11 @@ class ProfileReport extends Model
     protected $fillable = [
         'reporter_id',
         'reported_user_id',
+        'reported_profile_id',
         'reason',
         'description',
         'status',
+        'reviewed_at'
     ];
 
     protected $casts = [
@@ -27,5 +29,10 @@ class ProfileReport extends Model
     public function reportedUser(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reported_user_id');
+    }
+
+    public function reportedProfile(): BelongsTo
+    {
+        return $this->belongsTo(Profile::class, 'reported_profile_id');
     }
 }

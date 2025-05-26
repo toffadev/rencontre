@@ -177,7 +177,7 @@ Route::post('/set-primary-profile', [ModeratorController::class, 'setPrimaryProf
 
 ## 5. Système d'Événements en Temps Réel
 
-Pour permettre la communication en temps réel et la notification des nouveaux messages, nous utilisons Laravel Echo et Pusher. Trois événements principaux ont été créés :
+Pour permettre la communication en temps réel et la notification des nouveaux messages, nous utilisons Laravel Echo et Pusher. Les événements suivants ont été optimisés :
 
 ### 5.1 Événement `MessageSent`
 
@@ -185,25 +185,44 @@ Pour permettre la communication en temps réel et la notification des nouveaux m
 -   Diffuse le message sur deux canaux :
     -   Canal privé du client : `client.{client_id}`
     -   Canal privé du profil : `profile.{profile_id}`
--   Les données diffusées incluent le contenu du message, les IDs du client et du profil, etc.
+-   Les données diffusées incluent :
+    -   Le contenu du message
+    -   Les IDs du client et du profil
+    -   L'horodatage du message
+    -   Les informations du client (nom, avatar)
+    -   Le statut du message (lu/non lu)
 
 ### 5.2 Événement `ProfileAssigned`
 
 -   Déclenché lorsqu'un profil est attribué à un modérateur.
 -   Diffuse sur le canal privé du modérateur : `moderator.{moderator_id}`
--   Les données diffusées incluent les détails du profil attribué.
+-   Les données diffusées incluent :
+    -   Les détails du profil attribué
+    -   L'historique des conversations associées au profil
+    -   Le statut d'activité du profil
 
-### 5.3 Événement `ClientAssigned` **(NOUVEAU)**
+### 5.3 Événement `ClientAssigned`
 
 -   Déclenché lorsqu'un client est attribué à un modérateur.
 -   Diffuse sur le canal privé du modérateur : `moderator.{moderator_id}`
--   Les données diffusées incluent les détails du client attribué et du profil concerné.
+-   Les données diffusées incluent :
+    -   Les détails du client attribué
+    -   Le profil concerné par la conversation
+    -   L'historique des messages récents
+    -   Le statut de la conversation
 
-### 5.4 Listener `MessageListener` **(NOUVEAU)**
+### 5.4 Gestion des Notifications
 
--   Écoute l'événement `MessageSent` pour les messages envoyés par les clients.
--   Utilise le service d'attribution pour assigner automatiquement le message au modérateur le plus approprié.
--   Assure qu'aucun message client ne reste sans attribution à un modérateur.
+-   Les notifications sont gérées de manière cumulative :
+    -   Chaque nouveau message crée une nouvelle notification
+    -   Les notifications sont stockées dans l'ordre chronologique inverse
+    -   Les anciennes notifications restent accessibles
+    -   Le modérateur peut naviguer dans l'historique des notifications
+-   L'interface affiche :
+    -   Le nom du client
+    -   Le contenu du message
+    -   L'horodatage
+    -   Le profil concerné
 
 ## 6. Équilibrage de Charge des Messages
 
@@ -232,20 +251,62 @@ Le système attribue les messages selon ces critères (par ordre de priorité) :
 
 ## 7. Interface Utilisateur du Modérateur
 
-L'interface utilisateur des modérateurs devra être mise à jour pour prendre en compte ces nouvelles fonctionnalités :
+L'interface utilisateur des modérateurs a été optimisée pour une meilleure gestion des conversations et des notifications :
 
 ### 7.1 Structure générale
 
--   **Sélecteur de profils** : Permet au modérateur de basculer entre les différents profils qui lui sont attribués.
--   **Liste des clients** : Affiche tous les clients qui attendent une réponse, avec le profil concerné clairement indiqué.
--   **Vue de conversation** : Affiche la conversation actuelle avec contexte du profil utilisé.
+L'interface est divisée en trois sections principales :
+
+1. **Section Clients (à gauche)**
+
+    - Onglet "Client attribué" :
+        - Liste des clients en attente de réponse
+        - Notifications triées du plus récent au plus ancien
+        - Indicateur de statut pour chaque client
+    - Onglet "Clients disponibles" :
+        - Liste des clients non attribués
+        - Bouton de rafraîchissement
+        - Statut de disponibilité
+
+2. **Section Chat (au centre)**
+
+    - En-tête avec les informations du profil actif
+    - Zone de conversation avec messages horodatés
+    - Zone de saisie avec indicateurs de statut
+    - Chargement instantané des conversations
+
+3. **Section Informations (à droite)**
+    - Informations détaillées sur le client sélectionné
+    - Historique des interactions
+    - Options de gestion
 
 ### 7.2 Fonctionnalités principales
 
--   **Gestion multi-profils** : Le modérateur peut facilement changer de profil selon les besoins des conversations.
--   **Indicateurs de charge** : Affichage du nombre de conversations en cours et du nombre de messages non lus.
--   **Notifications en temps réel** : Le modérateur est notifié immédiatement lorsqu'un nouveau client lui est attribué.
--   **Priorisation des clients** : Les clients qui attendent depuis le plus longtemps sont mis en évidence.
+-   **Gestion multi-profils** :
+
+    -   Affichage clair du profil actif
+    -   Changement instantané entre les profils
+    -   Indicateur visuel du profil principal
+
+-   **Système de notifications** :
+
+    -   Accumulation des notifications par ordre chronologique inverse
+    -   Affichage du nom du client et du contenu du message
+    -   Indicateurs visuels pour les nouveaux messages
+    -   Navigation facile dans l'historique des notifications
+
+-   **Gestion des conversations** :
+
+    -   Chargement instantané lors du changement de client
+    -   Affichage chronologique des messages
+    -   Indicateurs de statut (lu/non lu)
+    -   Réponse possible sans attendre les messages précédents
+
+-   **Interface réactive** :
+    -   Mise à jour en temps réel des notifications
+    -   Changement fluide entre les conversations
+    -   Indicateurs de chargement pour les actions longues
+    -   Gestion optimisée de la mémoire
 
 ## 8. Flux de Travail Global
 
@@ -255,28 +316,23 @@ Voici comment fonctionne le système amélioré :
 
     - Lorsqu'un modérateur se connecte, le système vérifie s'il a déjà des profils attribués
     - Si non, le système lui attribue automatiquement un profil disponible
+    - Le modérateur peut voir tous ses profils attribués et changer de profil actif selon les besoins
 
 2. **Réception des messages clients** :
 
-    - Quand un client envoie un message à un profil, le système :
-        - Recherche le modérateur le plus approprié selon la charge de travail
-        - Attribue automatiquement le profil au modérateur si nécessaire
-        - Notifie le modérateur du nouveau message
+    - Quand un client envoie un message à un profil :
+        - Une nouvelle notification est ajoutée à la liste des notifications (sans remplacer les précédentes)
+        - Les notifications sont triées du plus récent au plus ancien
+        - Le système recherche le modérateur le plus approprié selon la charge de travail
+        - Le profil est automatiquement attribué au modérateur si nécessaire
+        - La conversation complète est chargée instantanément lors de la sélection du client
+    - Les modérateurs peuvent répondre aux clients dans n'importe quel ordre, sans attendre une réponse précédente
 
 3. **Travail du modérateur** :
-
-    - Le modérateur voit tous les clients qui attendent une réponse
-    - Il peut basculer entre plusieurs profils pour répondre aux différents clients
-    - Il peut choisir de définir un profil comme principal pour y accéder plus facilement
-
-4. **Équilibrage automatique** :
-
-    - Si un modérateur devient surchargé (trop de clients), le système répartit les nouveaux messages vers d'autres modérateurs
-    - Si un modérateur est inactif, le système réattribue ses clients à d'autres modérateurs disponibles
-
-5. **Continuité des conversations** :
-    - Le système privilégie toujours l'attribution des messages au même modérateur pour maintenir la continuité des conversations
-    - Si le modérateur habituel n'est pas disponible, un autre modérateur peut prendre le relais
+    - Le modérateur voit toutes les notifications en attente, triées par ordre chronologique inverse
+    - Il peut sélectionner n'importe quelle notification pour répondre au client correspondant
+    - Le changement de conversation charge instantanément tous les messages associés
+    - Les réponses peuvent être envoyées indépendamment de l'état des autres conversations
 
 ## 9. Planification des Tâches avec Laravel 11
 

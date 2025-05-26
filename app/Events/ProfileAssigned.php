@@ -30,13 +30,18 @@ class ProfileAssigned implements ShouldBroadcast
      */
     public $profile;
 
+    public $isPrimary;
+    public $clientId;
+
     /**
      * Create a new event instance.
      */
-    public function __construct(User $moderator, Profile $profile)
+    public function __construct(User $moderator, Profile $profile, bool $isPrimary = false, ?int $clientId = null)
     {
         $this->moderator = $moderator;
         $this->profile = $profile;
+        $this->isPrimary = $isPrimary;
+        $this->clientId = $clientId;
     }
 
     /**
@@ -69,12 +74,9 @@ class ProfileAssigned implements ShouldBroadcast
     public function broadcastWith(): array
     {
         return [
-            'profile' => [
-                'id' => $this->profile->id,
-                'name' => $this->profile->name,
-                'gender' => $this->profile->gender,
-                'main_photo_path' => $this->profile->main_photo_path,
-            ]
+            'profile' => $this->profile,
+            'is_primary' => $this->isPrimary,
+            'client_id' => $this->clientId,
         ];
     }
 }

@@ -113,8 +113,8 @@ class ModeratorAssignmentService
                     ]);
                 }
 
-                // Déclencher l'événement d'attribution
-                event(new ProfileAssigned($moderator, $profile));
+                // Déclencher l'événement d'attribution avec les informations complètes
+                event(new ProfileAssigned($moderator, $profile, $makePrimary, $clientId ?? null));
 
                 Log::info("[DEBUG] Attribution de profil terminée avec succès", [
                     'assignment_id' => $assignment->id
@@ -445,17 +445,29 @@ class ModeratorAssignmentService
             'moderator_name' => $moderator->name
         ]);
 
+        // Check if any moderator already has this profile assigned
+        $currentAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->first();
+
+        // If another moderator has this profile, we need to transfer it
+        if ($currentAssignment && $currentAssignment->user_id !== $moderator->id) {
+            Log::info("[DEBUG] Transfert du profil d'un autre modérateur", [
+                'from_moderator' => $currentAssignment->user_id,
+                'to_moderator' => $moderator->id
+            ]);
+
+            // Désactiver l'attribution actuelle
+            $currentAssignment->is_active = false;
+            $currentAssignment->save();
+        }
+
         // Check if the moderator already has this profile assigned
         $hasProfile = ModeratorProfileAssignment::where('user_id', $moderator->id)
             ->where('profile_id', $profileId)
             ->where('is_active', true)
             ->exists();
 
-        Log::info("[DEBUG] Le modérateur a-t-il déjà ce profil ?", [
-            'has_profile' => $hasProfile ? 'Oui' : 'Non'
-        ]);
-
-        // If not, assign the profile to them
         if (!$hasProfile) {
             $profile = Profile::find($profileId);
             if (!$profile) {
@@ -465,8 +477,13 @@ class ModeratorAssignmentService
                 return null;
             }
 
-            // Assign as a secondary profile (not primary)
-            $assignment = $this->assignProfileToModerator($moderator, $profile, true);
+            // Assign as a primary profile if the moderator has no other active profiles
+            $hasPrimaryProfile = ModeratorProfileAssignment::where('user_id', $moderator->id)
+                ->where('is_active', true)
+                ->where('is_primary', true)
+                ->exists();
+
+            $assignment = $this->assignProfileToModerator($moderator, $profile, !$hasPrimaryProfile);
 
             if (!$assignment) {
                 Log::error("[DEBUG] Échec de l'attribution du profil au modérateur");
@@ -474,7 +491,8 @@ class ModeratorAssignmentService
             }
 
             Log::info("[DEBUG] Profil attribué au modérateur", [
-                'assignment_id' => $assignment->id
+                'assignment_id' => $assignment->id,
+                'is_primary' => $assignment->is_primary
             ]);
         }
 

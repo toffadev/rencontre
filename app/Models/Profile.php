@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Profile extends Model
 {
@@ -14,6 +15,7 @@ class Profile extends Model
         'bio',
         'main_photo_path',
         'status',
+        'user_id',
     ];
 
     public function photos(): HasMany
@@ -28,5 +30,10 @@ class Profile extends Model
             ->orWhere(function ($query) {
                 $query->orderBy('order')->limit(1);
             });
+    }
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

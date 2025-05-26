@@ -11,23 +11,50 @@
                     <button class="p-2 rounded-full bg-white bg-opacity-20 hover:bg-opacity-30 transition">
                         <i class="fas fa-bell text-black"></i>
                     </button>
-                    <div class="relative">
-                        <img ref="profileRef" @click="toggleDropdown" src="https://randomuser.me/api/portraits/women/44.jpg" alt="Profile"
-                            class="w-10 h-10 rounded-full object-cover border-2 border-white cursor-pointer" />
-                        <div class="online-dot"></div>
+                    <div class="relative group">
+                        <div class="flex items-center space-x-3 cursor-pointer" @click="toggleDropdown" ref="profileRef">
+                            <div class="flex flex-col items-end">
+                                <span class="text-sm font-medium">{{ $page.props.auth.user.name }}</span>
+                                <span class="text-xs text-gray-200">En ligne</span>
+                            </div>
+                            <div class="relative">
+                                <div v-if="!$page.props.auth.user.profile_photo_url" 
+                                    class="w-10 h-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center">
+                                    <i class="fas fa-user text-white text-xl"></i>
+                                </div>
+                                <img v-else
+                                    :src="$page.props.auth.user.profile_photo_url"
+                                    :alt="$page.props.auth.user.name"
+                                    class="w-10 h-10 rounded-full object-cover border-2 border-white"
+                                />
+                                <div class="online-dot"></div>
+                            </div>
+                        </div>
                         
                         <!-- Profile Dropdown Menu -->
-                        <div ref="dropdownRef" v-if="showDropdown" class="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
-                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Profil</a>
-                            <a href="#" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Paramètres</a>
+                        <div ref="dropdownRef" 
+                            v-if="showDropdown" 
+                            class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 transform transition-all duration-200 ease-out"
+                        >
+                            <div class="px-4 py-2 border-b border-gray-100">
+                                <p class="text-sm font-medium text-gray-900">{{ $page.props.auth.user.name }}</p>
+                                <p class="text-xs text-gray-500">{{ $page.props.auth.user.email }}</p>
+                            </div>
+                            <Link :href="route('profile')" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                <i class="fas fa-user-circle w-5 text-gray-400"></i>
+                                <span>Profil</span>
+                            </Link>
+                            <a href="#" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
+                                <i class="fas fa-cog w-5 text-gray-400"></i>
+                                <span>Paramètres</span>
+                            </a>
                             <hr class="my-1">
-                            <button @click="logout" class="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100">
-                                Déconnexion
+                            <button @click="logout" class="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-50 transition">
+                                <i class="fas fa-sign-out-alt w-5"></i>
+                                <span>Déconnexion</span>
                             </button>
                         </div>
                     </div>
-                    <!-- Ajout du composant de test Echo -->
-                    <!-- <EchoTest /> -->
                 </template>
                 <!-- Si utilisateur non connecté -->
                 <template v-else>
@@ -58,7 +85,6 @@ const toggleDropdown = (e) => {
 
 // Close dropdown when clicking outside
 const closeDropdown = (e) => {
-    // Don't close if clicking on the profile image or inside the dropdown
     if (profileRef.value && profileRef.value.contains(e.target)) {
         return;
     }
@@ -68,22 +94,32 @@ const closeDropdown = (e) => {
     }
 };
 
-// Add event listener when component is mounted
 onMounted(() => {
     document.addEventListener('click', closeDropdown);
 });
 
-// Remove event listener when component is unmounted
 onBeforeUnmount(() => {
     document.removeEventListener('click', closeDropdown);
 });
 
-// Logout function
 const logout = () => {
     router.post(route('logout'));
 };
 </script>
 
 <style scoped>
-/* Les styles spécifiques au header ont été déplacés dans MainLayout.vue */
+.online-dot {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 10px;
+    height: 10px;
+    background-color: #10B981;
+    border-radius: 50%;
+    border: 2px solid white;
+}
+
+.gradient-bg {
+    background: linear-gradient(to right, #EC4899, #D946EF);
+}
 </style>

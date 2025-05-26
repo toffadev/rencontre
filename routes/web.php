@@ -16,6 +16,7 @@ use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Client\ProfileReportController;
+use App\Http\Controllers\Client\ProfileDiscussionController;
 
 /*
 |--------------------------------------------------------------------------
@@ -154,3 +155,6 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
 
     // Moderator management routes will go here
 });
+
+Route::get('/check-active-discussion/{profileId}', [ProfileDiscussionController::class, 'checkActiveDiscussion'])
+    ->name('profile.check-discussion');

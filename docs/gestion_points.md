@@ -210,7 +210,7 @@ const pointsPlans = [
 
 ## Système de Signalement des Profils
 
-Le système de signalement permet aux utilisateurs de signaler des profils problématiques. Une fois un profil signalé, il ne sera plus visible pour l'utilisateur qui l'a signalé jusqu'à ce que l'administration traite le signalement.
+Le système de signalement permet aux utilisateurs de signaler des profils problématiques. Les profils peuvent être signalés avec ou sans modérateur assigné, selon qu'ils sont en discussion active ou non.
 
 ### Structure de la Base de Données
 
@@ -220,28 +220,16 @@ Le système de signalement permet aux utilisateurs de signaler des profils probl
 Schema::create('profile_reports', function (Blueprint $table) {
     $table->id();
     $table->foreignId('reporter_id')->constrained('users')->onDelete('cascade');
-    $table->foreignId('reported_user_id')->constrained('users')->onDelete('cascade');
+    $table->foreignId('reported_user_id')->nullable()->constrained('users')->onDelete('set null');
+    $table->foreignId('reported_profile_id')->constrained('profiles')->onDelete('cascade');
     $table->string('reason');
     $table->text('description')->nullable();
-    $table->enum('status', ['pending', 'reviewed', 'dismissed'])->default('pending');
+    $table->enum('status', ['pending', 'accepted', 'dismissed'])->default('pending');
     $table->timestamp('reviewed_at')->nullable();
     $table->timestamps();
 
     // Un utilisateur ne peut signaler un même profil qu'une seule fois
-    $table->unique(['reporter_id', 'reported_user_id']);
-});
-```
-
-#### Table `notifications`
-
-```php
-Schema::create('notifications', function (Blueprint $table) {
-    $table->uuid('id')->primary();
-    $table->string('type');
-    $table->morphs('notifiable');
-    $table->text('data');
-    $table->timestamp('read_at')->nullable();
-    $table->timestamps();
+    $table->unique(['reporter_id', 'reported_profile_id']);
 });
 ```
 
@@ -250,17 +238,23 @@ Schema::create('notifications', function (Blueprint $table) {
 1. **Signalement de profil**
 
     - Les utilisateurs peuvent signaler un profil une seule fois
+    - Le système vérifie si le profil est en discussion active avec un modérateur
+    - Le modérateur de la dernière discussion est automatiquement associé au signalement
+    - Les profils peuvent être signalés même sans modérateur assigné
     - Plusieurs raisons de signalement prédéfinies sont disponibles
     - Une description optionnelle peut être ajoutée
 
-2. **Filtrage des profils**
+2. **Gestion des profils signalés**
 
-    - Les profils signalés sont automatiquement masqués pour l'utilisateur qui les a signalés
-    - L'état des signalements peut être consulté via l'API
+    - Les profils signalés sont marqués visuellement dans l'interface
+    - Un indicateur "Signalé" apparaît sur les profils déjà signalés
+    - Le statut du signalement (pending/accepted/dismissed) est suivi
+    - Les profils restent visibles pendant le traitement du signalement
 
-3. **Notifications**
-    - Les administrateurs reçoivent une notification par email et dans l'interface d'administration
-    - Les notifications incluent les détails du signalement et des liens directs vers les profils concernés
+3. **Vérification des discussions actives**
+    - Avant chaque signalement, le système vérifie si le profil est en discussion active
+    - Si une discussion active existe, le modérateur associé est lié au signalement
+    - Si aucune discussion active n'existe, le signalement est créé sans modérateur
 
 ### Routes API
 
@@ -268,60 +262,49 @@ Schema::create('notifications', function (Blueprint $table) {
 Route::middleware(['auth'])->group(function () {
     Route::post('/profile-reports', [ProfileReportController::class, 'store']);
     Route::get('/blocked-profiles', [ProfileReportController::class, 'getBlockedProfiles']);
+    Route::get('/check-active-discussion/{profile}', [ProfileController::class, 'checkActiveDiscussion']);
 });
 ```
 
 ### Intégration dans l'Interface Client
 
-Le système de signalement est intégré directement dans la page d'accueil des clients (`resources/js/Client/Pages/Home.vue`). Chaque carte de profil inclut un bouton de signalement qui, lorsqu'il est cliqué, ouvre un modal permettant de soumettre un signalement.
+Le système de signalement est intégré dans la page d'accueil (`resources/js/Client/Pages/Home.vue`).
 
 #### Composants Frontend
 
-1. **Bouton de signalement**
+1. **Indicateur de signalement**
 
 ```vue
-<button
-    @click.stop="showReportModal(profile)"
-    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-    title="Signaler ce profil"
->
-    <i class="fas fa-flag"></i>
-</button>
+<div v-if="profile.isReported" class="absolute top-2 right-2">
+    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+        <i class="fas fa-flag mr-1"></i> Signalé
+    </span>
+</div>
 ```
 
 2. **Modal de signalement**
 
 ```vue
 <ProfileReportModal
+    v-if="showReportModalFlag && selectedProfileForReport"
     :show="showReportModalFlag"
-    :user-id="selectedProfileForReport"
+    :user-id="selectedProfileForReport.userId"
+    :profile-id="selectedProfileForReport.profileId"
     @close="closeReportModal"
     @reported="handleReported"
 />
 ```
 
-### Gestion des Profils Bloqués
-
-Le système maintient une liste des profils bloqués pour chaque utilisateur :
-
-```javascript
-// Filtrer les profils bloqués
-const filteredProfiles = computed(() => {
-    return profiles.filter(
-        (profile) => !blockedProfileIds.value.includes(profile.id)
-    );
-});
-```
-
 ### Workflow de Signalement
 
 1. L'utilisateur clique sur le bouton de signalement d'un profil
-2. Le modal de signalement s'ouvre
-3. L'utilisateur sélectionne une raison et ajoute optionnellement une description
-4. Le signalement est envoyé au serveur
-5. Le profil est masqué pour l'utilisateur
-6. Les administrateurs reçoivent une notification
-7. Le profil reste masqué jusqu'à ce que l'administration traite le signalement
+2. Le système vérifie si une discussion active existe avec un modérateur
+3. Le modal de signalement s'ouvre avec les informations appropriées
+4. L'utilisateur sélectionne une raison et ajoute optionnellement une description
+5. Le signalement est envoyé au serveur avec ou sans modérateur associé
+6. Le profil est marqué comme signalé dans l'interface
+7. Le système met à jour la liste des profils signalés
+8. Les administrateurs sont notifiés pour traitement
 
 ## Gestion des Erreurs
 
