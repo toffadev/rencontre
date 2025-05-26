@@ -14,6 +14,7 @@ use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use App\Models\ModeratorStatistic;
 
 class ModeratorController extends Controller
 {
@@ -356,52 +357,107 @@ class ModeratorController extends Controller
     public function sendMessage(Request $request)
     {
         $request->validate([
-            'client_id' => 'required|integer|exists:users,id',
-            'profile_id' => 'required|integer|exists:profiles,id',
-            'content' => 'required|string|max:1000',
+            'client_id' => 'required|exists:users,id',
+            'profile_id' => 'required|exists:profiles,id',
+            'content' => 'required|string'
         ]);
 
-        $currentModeratorId = Auth::id();
+        try {
+            DB::beginTransaction();
 
-        // Vérifier que ce modérateur a bien accès à ce profil
-        $hasAccess = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
-            ->where('profile_id', $request->profile_id)
-            ->where('is_active', true)
-            ->exists();
+            Log::info('Début de l\'envoi du message', [
+                'moderator_id' => Auth::id(),
+                'client_id' => $request->client_id,
+                'profile_id' => $request->profile_id,
+                'content_length' => strlen($request->content)
+            ]);
 
-        if (!$hasAccess) {
+            // Créer le message
+            $message = Message::create([
+                'client_id' => $request->client_id,
+                'profile_id' => $request->profile_id,
+                'moderator_id' => Auth::id(),
+                'content' => $request->content,
+                'is_from_client' => false
+            ]);
+
+            Log::info('Message créé avec succès', [
+                'message_id' => $message->id
+            ]);
+
+            // Mettre à jour les statistiques en temps réel
+            $isLong = strlen($request->content) >= 10;
+            $earnings = $isLong ? 50 : 25;
+
+            try {
+                $stats = ModeratorStatistic::firstOrCreate(
+                    [
+                        'user_id' => Auth::id(),
+                        'profile_id' => $request->profile_id,
+                        'stats_date' => now()->format('Y-m-d')
+                    ],
+                    [
+                        'short_messages_count' => 0,
+                        'long_messages_count' => 0,
+                        'points_received' => 0,
+                        'earnings' => 0
+                    ]
+                );
+
+                Log::info('Statistiques créées/récupérées', [
+                    'stats_id' => $stats->id,
+                    'is_new_record' => $stats->wasRecentlyCreated
+                ]);
+
+                if ($isLong) {
+                    $stats->increment('long_messages_count');
+                } else {
+                    $stats->increment('short_messages_count');
+                }
+                $stats->increment('earnings', $earnings);
+
+                $stats->refresh();
+                Log::info('Statistiques mises à jour avec succès', [
+                    'stats_id' => $stats->id,
+                    'short_messages' => $stats->short_messages_count,
+                    'long_messages' => $stats->long_messages_count,
+                    'earnings' => $stats->earnings
+                ]);
+            } catch (\Exception $e) {
+                Log::error('Erreur lors de la mise à jour des statistiques', [
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString()
+                ]);
+                throw $e;
+            }
+
+            DB::commit();
+
+            Log::info('Transaction validée avec succès', [
+                'message_id' => $message->id,
+                'stats_id' => $stats->id,
+                'stats_date' => $stats->stats_date
+            ]);
+
+            // Diffuser l'événement
+            broadcast(new MessageSent($message))->toOthers();
+
             return response()->json([
-                'success' => false,
-                'message' => 'Accès non autorisé à ce profil'
-            ], 403);
+                'message' => $message,
+                'success' => true
+            ]);
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Erreur lors de l\'envoi du message:', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'message' => 'Erreur lors de l\'envoi du message',
+                'error' => $e->getMessage()
+            ], 500);
         }
-
-        // Mettre à jour la dernière activité pour ce profil spécifique
-        $this->assignmentService->updateLastActivity(Auth::user(), $request->profile_id);
-
-        // Créer le nouveau message
-        $message = Message::create([
-            'client_id' => $request->client_id,
-            'profile_id' => $request->profile_id,
-            'moderator_id' => Auth::id(),
-            'content' => $request->content,
-            'is_from_client' => false,
-        ]);
-
-        // Diffuser l'événement de message
-        event(new MessageSent($message));
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Message envoyé avec succès',
-            'messageData' => [
-                'id' => $message->id,
-                'content' => $message->content,
-                'isFromClient' => false,
-                'time' => $message->created_at->format('H:i'),
-                'date' => $message->created_at->format('Y-m-d'),
-            ]
-        ]);
     }
 
     /**

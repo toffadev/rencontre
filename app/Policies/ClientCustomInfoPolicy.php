@@ -4,20 +4,18 @@ namespace App\Policies;
 
 use App\Models\User;
 use App\Models\ClientCustomInfo;
+use Illuminate\Auth\Access\HandlesAuthorization;
 
 class ClientCustomInfoPolicy
 {
+    use HandlesAuthorization;
+
     /**
-     * Determine if the user can delete the custom info.
+     * Determine whether the user can delete the model.
      */
     public function delete(User $user, ClientCustomInfo $customInfo): bool
     {
-        // Un modérateur peut supprimer une info s'il l'a ajoutée lui-même
-        if ($user->type === 'moderateur' && $customInfo->added_by === $user->id) {
-            return true;
-        }
-
-        // Un admin peut supprimer n'importe quelle info
-        return $user->type === 'admin';
+        // N'importe quel modérateur peut supprimer une information
+        return $user->type === 'moderateur';
     }
 }

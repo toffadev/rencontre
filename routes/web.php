@@ -17,6 +17,7 @@ use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Client\ProfileReportController;
 use App\Http\Controllers\Client\ProfileDiscussionController;
+use App\Models\Profile;
 
 /*
 |--------------------------------------------------------------------------
@@ -57,6 +58,14 @@ Route::middleware(['client_or_admin'])->group(function () {
         return Inertia::render('Profil/Show');
     })->name('profile');
 
+    // Route pour la page des points d'un profil
+    Route::get('/profile/{profile}/points', function (Profile $profile) {
+        return Inertia::render('Profile/Points', [
+            'profile' => $profile,
+            'stripeKey' => config('services.stripe.key')
+        ]);
+    })->name('client.profile.points');
+
     // Routes pour les messages du client
     Route::get('/messages', [App\Http\Controllers\Client\MessageController::class, 'getMessages'])->name('client.messages');
     Route::post('/send-message', [App\Http\Controllers\Client\MessageController::class, 'sendMessage'])->name('client.send-message');
@@ -65,6 +74,14 @@ Route::middleware(['client_or_admin'])->group(function () {
     Route::get('/points/data', [App\Http\Controllers\Client\PointController::class, 'getPointsData'])->name('client.points.data');
     Route::post('/points/checkout', [App\Http\Controllers\Client\PointController::class, 'createCheckoutSession'])->name('client.points.checkout');
     Route::get('/points/success', [App\Http\Controllers\Client\PointController::class, 'success'])->name('client.points.success');
+
+    // Routes pour les points des profils
+    Route::prefix('profile-points')->name('profile.points.')->group(function () {
+        Route::post('/checkout', [App\Http\Controllers\Client\ProfilePointController::class, 'createCheckoutSession'])->name('checkout');
+        Route::get('/success', [App\Http\Controllers\Client\ProfilePointController::class, 'success'])->name('success');
+        Route::get('/transactions/profile/{profile}', [App\Http\Controllers\Client\ProfilePointController::class, 'getProfileTransactionHistory'])->name('transactions.profile');
+        Route::get('/transactions/client', [App\Http\Controllers\Client\ProfilePointController::class, 'getClientTransactionHistory'])->name('transactions.client');
+    });
 });
 
 // Routes pour les points
@@ -152,6 +169,12 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     Route::post('/clients/{client}/basic-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'updateBasicInfo'])->name('client.basic-info.update');
     Route::post('/clients/{client}/custom-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'addCustomInfo'])->name('client.custom-info.add');
     Route::delete('/custom-info/{customInfo}', [App\Http\Controllers\Moderator\ClientInfoController::class, 'deleteCustomInfo'])->name('client.custom-info.delete');
+
+    // Nouvelles routes pour le profil modérateur
+    Route::get('/profile-stats', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'index'])->name('profile.stats');
+    Route::get('/profile/statistics', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getStatistics'])->name('profile.statistics');
+    Route::get('/profile/messages', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getMessageHistory'])->name('profile.messages');
+    Route::get('/profile/points', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getPointsReceived'])->name('profile.points');
 
     // Moderator management routes will go here
 });

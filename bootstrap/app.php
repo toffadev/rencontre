@@ -33,4 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // Exécuter la commande de traitement des messages toutes les minutes
         $schedule->command('messages:process')->everyMinute();
     })
+    ->withCommands([
+        \App\Console\Commands\UpdateModeratorStatistics::class,
+    ])
     ->create();

@@ -27,6 +27,28 @@
     
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            maxWidth: {
+              '6xl': '72rem',
+              '7xl': '80rem',
+            },
+            fontFamily: {
+              sans: ['Poppins', 'sans-serif'],
+            },
+            colors: {
+              primary: '#4f46e5',
+              secondary: '#10b981',
+              danger: '#ef4444',
+              dark: '#1f2937',
+              light: '#f9fafb',
+            }
+          }
+        }
+      }
+    </script>
     
     <!-- Scripts and Styles -->
     @routes

@@ -2,13 +2,32 @@
     <MainLayout>
         <div class="flex flex-col lg:flex-row gap-6">
             <!-- Points Alert -->
-            <div v-if="showPointsAlert" class="fixed top-4 right-4 bg-pink-100 border border-pink-400 text-pink-700 px-4 py-3 rounded-lg shadow-lg z-50">
+            <div
+                v-if="showPointsAlert"
+                class="fixed top-4 right-4 bg-pink-100 border border-pink-400 text-pink-700 px-4 py-3 rounded-lg shadow-lg z-50"
+            >
                 <div class="flex items-center">
-                    <div class="py-1"><svg class="fill-current h-6 w-6 text-pink-500 mr-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"/></svg></div>
+                    <div class="py-1">
+                        <svg
+                            class="fill-current h-6 w-6 text-pink-500 mr-4"
+                            xmlns="http://www.w3.org/2000/svg"
+                            viewBox="0 0 20 20"
+                        >
+                            <path
+                                d="M2.93 17.07A10 10 0 1 1 17.07 2.93 10 10 0 0 1 2.93 17.07zm12.73-1.41A8 8 0 1 0 4.34 4.34a8 8 0 0 0 11.32 11.32zM9 11V9h2v6H9v-4zm0-6h2v2H9V5z"
+                            />
+                        </svg>
+                    </div>
                     <div>
                         <p class="font-bold">Points insuffisants</p>
-                        <p class="text-sm">Vous n'avez plus assez de points pour envoyer des messages.</p>
-                        <button @click="redirectToProfile" class="mt-2 bg-pink-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-pink-600 transition">
+                        <p class="text-sm">
+                            Vous n'avez plus assez de points pour envoyer des
+                            messages.
+                        </p>
+                        <button
+                            @click="redirectToProfile"
+                            class="mt-2 bg-pink-500 text-white px-4 py-2 rounded-lg text-sm hover:bg-pink-600 transition"
+                        >
                             Acheter des points
                         </button>
                     </div>
@@ -25,10 +44,14 @@
                 <div class="flex justify-between items-center mb-4">
                     <h2 class="text-xl font-semibold">Profils à proximité</h2>
                     <div class="flex space-x-2">
-                        <button class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
+                        <button
+                            class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
+                        >
                             <i class="fas fa-sliders-h"></i>
                         </button>
-                        <button class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
+                        <button
+                            class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
+                        >
                             <i class="fas fa-search"></i>
                         </button>
                     </div>
@@ -36,14 +59,49 @@
 
                 <!-- Points Display -->
                 <div class="mb-4 p-3 bg-pink-50 rounded-lg">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <p class="text-sm text-pink-600">Points disponibles</p>
-                            <p class="text-2xl font-bold text-pink-700">{{ remainingPoints }}</p>
+                    <div class="flex flex-col space-y-3">
+                        <!-- Points disponibles -->
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm text-pink-600">
+                                    Points disponibles
+                                </p>
+                                <p class="text-2xl font-bold text-pink-700">
+                                    {{ remainingPoints }}
+                                </p>
+                            </div>
+                            <button
+                                @click="redirectToProfile"
+                                class="text-pink-600 hover:text-pink-700 flex items-center"
+                                title="Acheter des points pour vous"
+                            >
+                                <i class="fas fa-plus-circle text-xl"></i>
+                            </button>
                         </div>
-                        <button @click="redirectToProfile" class="text-pink-600 hover:text-pink-700">
-                            <i class="fas fa-plus-circle text-xl"></i>
-                        </button>
+
+                        <!-- Acheter des points pour le profil -->
+                        <div
+                            v-if="selectedProfile"
+                            class="border-t border-pink-100 pt-3"
+                        >
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="text-sm text-pink-600">
+                                        Points pour {{ selectedProfile.name }}
+                                    </p>
+                                    <p class="text-xs text-gray-500">
+                                        Offrez des points à votre interlocuteur
+                                    </p>
+                                </div>
+                                <button
+                                    @click="buyPointsForProfile"
+                                    class="flex items-center px-3 py-1.5 bg-pink-500 text-white rounded-lg text-sm hover:bg-pink-600 transition"
+                                >
+                                    <i class="fas fa-gift mr-2"></i>
+                                    Offrir
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -111,8 +169,13 @@
                                     <i class="fas fa-flag"></i>
                                 </button>
                             </div>
-                            <div v-if="profile.isReported" class="absolute top-2 right-2">
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            <div
+                                v-if="profile.isReported"
+                                class="absolute top-2 right-2"
+                            >
+                                <span
+                                    class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800"
+                                >
                                     <i class="fas fa-flag mr-1"></i> Signalé
                                 </span>
                             </div>
@@ -162,8 +225,18 @@
                             <h3 class="font-semibold">
                                 {{ selectedProfile?.name }}
                             </h3>
-                            <p class="text-sm text-gray-500">En ligne maintenant</p>
+                            <p class="text-sm text-gray-500">
+                                En ligne maintenant
+                            </p>
                         </div>
+                        <!-- Ajout du bouton d'achat de points -->
+                        <button
+                            @click="buyPointsForProfile"
+                            class="ml-4 px-4 py-2 bg-pink-500 text-white rounded-lg text-sm hover:bg-pink-600 transition flex items-center"
+                        >
+                            <i class="fas fa-coins mr-2"></i>
+                            Acheter des points a votre interlocuteur
+                        </button>
                     </div>
 
                     <!-- Right side - Current User Info and Actions -->
@@ -171,8 +244,12 @@
                         <!-- Current User Info -->
                         <div class="flex items-center">
                             <div class="text-right mr-3">
-                                <p class="font-semibold">{{ auth?.user?.name }}</p>
-                                <p class="text-xs text-gray-500">{{ remainingPoints }} points disponibles</p>
+                                <p class="font-semibold">
+                                    {{ auth?.user?.name }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    {{ remainingPoints }} points disponibles
+                                </p>
                             </div>
                             <div class="relative">
                                 <img
@@ -181,7 +258,10 @@
                                     :alt="auth.user.name"
                                     class="w-10 h-10 rounded-full object-cover"
                                 />
-                                <div v-else class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                                <div
+                                    v-else
+                                    class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"
+                                >
                                     <i class="fas fa-user text-gray-400"></i>
                                 </div>
                             </div>
@@ -237,13 +317,23 @@
                             >
                                 <template v-if="!message.isOutgoing">
                                     <div class="relative">
-                                        <img v-if="selectedProfile.main_photo_path"
-                                            :src="selectedProfile.main_photo_path"
+                                        <img
+                                            v-if="
+                                                selectedProfile.main_photo_path
+                                            "
+                                            :src="
+                                                selectedProfile.main_photo_path
+                                            "
                                             :alt="selectedProfile.name"
                                             class="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                         />
-                                        <div v-else class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                            <i class="fas fa-user text-gray-400"></i>
+                                        <div
+                                            v-else
+                                            class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                                        >
+                                            <i
+                                                class="fas fa-user text-gray-400"
+                                            ></i>
                                         </div>
                                     </div>
                                 </template>
@@ -269,20 +359,35 @@
                                             >❌</span
                                         >
                                     </div>
-                                    <div class="flex items-center mt-1 text-xs text-gray-500" :class="{'justify-end': message.isOutgoing}">
-                                        <span class="font-medium mr-2">{{ message.isOutgoing ? (auth?.user?.name || 'Vous') : selectedProfile.name }}</span>
+                                    <div
+                                        class="flex items-center mt-1 text-xs text-gray-500"
+                                        :class="{
+                                            'justify-end': message.isOutgoing,
+                                        }"
+                                    >
+                                        <span class="font-medium mr-2">{{
+                                            message.isOutgoing
+                                                ? auth?.user?.name || "Vous"
+                                                : selectedProfile.name
+                                        }}</span>
                                         <span>{{ message.time }}</span>
                                     </div>
                                 </div>
                                 <template v-if="message.isOutgoing">
                                     <div class="relative">
-                                        <img v-if="auth?.user?.profile_photo_url"
+                                        <img
+                                            v-if="auth?.user?.profile_photo_url"
                                             :src="auth.user.profile_photo_url"
                                             :alt="auth.user.name"
                                             class="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                         />
-                                        <div v-else class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                                            <i class="fas fa-user text-gray-400"></i>
+                                        <div
+                                            v-else
+                                            class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                                        >
+                                            <i
+                                                class="fas fa-user text-gray-400"
+                                            ></i>
                                         </div>
                                     </div>
                                 </template>
@@ -302,7 +407,10 @@
                 </div>
 
                 <!-- Ajouter un indicateur de frappe -->
-                <div v-if="isTyping" class="text-xs text-gray-500 italic px-4 py-2">
+                <div
+                    v-if="isTyping"
+                    class="text-xs text-gray-500 italic px-4 py-2"
+                >
                     {{ selectedProfile?.name }} est en train d'écrire...
                 </div>
 
@@ -325,22 +433,37 @@
                                     @keyup.enter="sendMessage"
                                     maxlength="500"
                                 />
-                                <span class="absolute right-3 bottom-2 text-xs text-gray-400">
+                                <span
+                                    class="absolute right-3 bottom-2 text-xs text-gray-400"
+                                >
                                     {{ newMessage.length }}/500
                                 </span>
                             </div>
                             <button
                                 class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                 @click="sendMessage"
-                                :disabled="!newMessage.trim() || remainingPoints < 5"
-                                :title="remainingPoints < 5 ? 'Points insuffisants' : 'Envoyer le message'"
+                                :disabled="
+                                    !newMessage.trim() || remainingPoints < 5
+                                "
+                                :title="
+                                    remainingPoints < 5
+                                        ? 'Points insuffisants'
+                                        : 'Envoyer le message'
+                                "
                             >
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
-                        <div v-if="remainingPoints < 5" class="text-xs text-red-500 text-center">
-                            Points insuffisants pour envoyer un message. 
-                            <a @click="redirectToProfile" class="text-pink-600 cursor-pointer hover:underline">Acheter des points</a>
+                        <div
+                            v-if="remainingPoints < 5"
+                            class="text-xs text-red-500 text-center"
+                        >
+                            Points insuffisants pour envoyer un message.
+                            <a
+                                @click="redirectToProfile"
+                                class="text-pink-600 cursor-pointer hover:underline"
+                                >Acheter des points</a
+                            >
                         </div>
                     </div>
                 </div>
@@ -359,7 +482,8 @@
                         Bienvenue, {{ auth?.user?.name }} !
                     </h3>
                     <p class="text-gray-500 mt-2">
-                        Sélectionnez un profil dans la liste pour commencer une conversation
+                        Sélectionnez un profil dans la liste pour commencer une
+                        conversation
                     </p>
                     <p class="text-sm text-pink-600 mt-4">
                         Vous avez {{ remainingPoints }} points disponibles
@@ -385,8 +509,8 @@ import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
 import Echo from "laravel-echo";
-import { router } from '@inertiajs/vue3';
-import ProfileReportModal from '@/Components/ProfileReportModal.vue';
+import { router } from "@inertiajs/vue3";
+import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 
 const props = defineProps({
     profiles: {
@@ -395,8 +519,8 @@ const props = defineProps({
     },
     auth: {
         type: Object,
-        required: true
-    }
+        required: true,
+    },
 });
 
 const selectedProfile = ref(null);
@@ -493,12 +617,14 @@ async function loadMessages(profileId) {
                 `Messages reçus pour le profil ${profileId}:`,
                 response.data.messages
             );
-            messagesMap.value[profileId] = response.data.messages;
+            // Réaffecter complètement le tableau des messages pour ce profil
+            messagesMap.value[profileId] = [...response.data.messages];
 
             // Vérification après chargement
             console.log(`MessagesMap après chargement:`, messagesMap.value);
         } else {
             console.log(`Aucun message reçu pour le profil ${profileId}`);
+            messagesMap.value[profileId] = [];
         }
     } catch (error) {
         console.error("Erreur lors du chargement des messages:", error);
@@ -509,7 +635,7 @@ async function loadMessages(profileId) {
 
 // Fonction pour rediriger vers la page de profil
 function redirectToProfile() {
-    router.visit('/profil');
+    router.visit("/profil");
 }
 
 // Modifier la fonction sendMessage pour gérer les points
@@ -568,7 +694,7 @@ async function sendMessage() {
         }
     } catch (error) {
         console.error("Erreur lors de l'envoi du message:", error);
-        
+
         // Si l'erreur est due aux points insuffisants
         if (error.response?.status === 403) {
             showPointsAlert.value = true;
@@ -609,14 +735,18 @@ function formatLocation(profile) {
 
 // Filtrer les profils bloqués et ajouter l'indicateur de signalement
 const filteredProfiles = computed(() => {
-    return props.profiles.map(profile => {
-        const reportedProfile = reportedProfiles.value.find(rp => rp.profile_id === profile.id);
-        return {
-            ...profile,
-            isReported: !!reportedProfile,
-            reportStatus: reportedProfile?.status
-        };
-    }).filter(profile => !blockedProfileIds.value.includes(profile.id));
+    return props.profiles
+        .map((profile) => {
+            const reportedProfile = reportedProfiles.value.find(
+                (rp) => rp.profile_id === profile.id
+            );
+            return {
+                ...profile,
+                isReported: !!reportedProfile,
+                reportStatus: reportedProfile?.status,
+            };
+        })
+        .filter((profile) => !blockedProfileIds.value.includes(profile.id));
 });
 
 // Configuration de Laravel Echo
@@ -629,26 +759,11 @@ onMounted(async () => {
         // Écouter les messages entrants sur le canal privé du client
         window.Echo.private(`client.${window.clientId}`).listen(
             ".message.sent",
-            (data) => {
+            async (data) => {
                 const profileId = data.profile_id;
 
-                // Formater le message reçu
-                const message = {
-                    id: data.id,
-                    content: data.content,
-                    isOutgoing: data.is_from_client,
-                    time: new Date(data.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                    }),
-                };
-
-                // Ajouter le message à la conversation
-                if (!messagesMap.value[profileId]) {
-                    messagesMap.value[profileId] = [];
-                }
-
-                messagesMap.value[profileId].push(message);
+                // Recharger tous les messages pour assurer la synchronisation
+                await loadMessages(profileId);
 
                 // Si c'est la conversation actuelle, faire défiler
                 if (
@@ -684,35 +799,43 @@ watch(selectedProfile, (newProfile, oldProfile) => {
 // Charger les points au montage du composant
 async function loadPoints() {
     try {
-        const response = await axios.get('/points/data');
+        const response = await axios.get("/points/data");
         remainingPoints.value = response.data.points;
     } catch (error) {
-        console.error('Erreur lors du chargement des points:', error);
+        console.error("Erreur lors du chargement des points:", error);
     }
 }
 
 // Fonctions pour le système de signalement
 const showReportModal = async (profile) => {
-    console.log('Profile complet:', profile);
-    
+    console.log("Profile complet:", profile);
+
     try {
         // Vérifier si le profil est en discussion active
-        const response = await axios.get(`/check-active-discussion/${profile.id}`);
+        const response = await axios.get(
+            `/check-active-discussion/${profile.id}`
+        );
         const moderatorId = response.data.moderator_id; // Peut être null
-        
+
         selectedProfileForReport.value = {
             userId: moderatorId, // Peut être null si pas de modérateur
-            profileId: profile.id
+            profileId: profile.id,
         };
-        
-        console.log('selectedProfileForReport:', selectedProfileForReport.value);
+
+        console.log(
+            "selectedProfileForReport:",
+            selectedProfileForReport.value
+        );
         showReportModalFlag.value = true;
     } catch (error) {
-        console.error('Erreur lors de la vérification de la discussion:', error);
+        console.error(
+            "Erreur lors de la vérification de la discussion:",
+            error
+        );
         // On permet quand même le signalement, même en cas d'erreur
         selectedProfileForReport.value = {
             userId: null,
-            profileId: profile.id
+            profileId: profile.id,
         };
         showReportModalFlag.value = true;
     }
@@ -727,7 +850,7 @@ const handleReported = (profileId) => {
     // Mettre à jour la liste des profils signalés
     reportedProfiles.value.push({
         profile_id: profileId,
-        status: 'pending'
+        status: "pending",
     });
 };
 
@@ -744,7 +867,7 @@ async function loadBlockedProfiles() {
 
 // Ajouter le nom du client connecté dans la section chat
 const currentUserName = computed(() => {
-    return props.auth?.user?.name || 'Vous';
+    return props.auth?.user?.name || "Vous";
 });
 
 // Ajouter l'état de frappe
@@ -766,6 +889,13 @@ watch(newMessage, (val) => {
 onUnmounted(() => {
     clearTimeout(typingTimeout);
 });
+
+// Ajouter la fonction buyPointsForProfile
+function buyPointsForProfile() {
+    if (selectedProfile.value) {
+        router.visit(`/profile/${selectedProfile.value.id}/points`);
+    }
+}
 </script>
 
 <style scoped>
@@ -831,7 +961,8 @@ onUnmounted(() => {
 }
 
 /* Ajouter des styles pour les icônes d'avatar */
-.fas.fa-male, .fas.fa-female {
+.fas.fa-male,
+.fas.fa-female {
     font-size: 1.5rem;
 }
 

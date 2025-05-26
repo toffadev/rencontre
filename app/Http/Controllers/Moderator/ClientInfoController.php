@@ -8,9 +8,12 @@ use App\Models\ClientInfo;
 use App\Models\ClientCustomInfo;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class ClientInfoController extends Controller
 {
+    use AuthorizesRequests;
+
     /**
      * Get all information for a specific client
      */
@@ -37,15 +40,23 @@ class ClientInfoController extends Controller
             'age' => 'nullable|integer|min:18|max:100',
             'ville' => 'nullable|string|max:100',
             'quartier' => 'nullable|string|max:100',
-            'orientation' => 'nullable|in:heterosexuel,homosexuel,bisexuel'
+            'profession' => 'nullable|string|max:100',
+            'celibataire' => 'nullable|boolean',
+            'situation_residence' => 'nullable|string|max:100',
+            'orientation' => 'nullable|in:heterosexuel,homosexuel,bisexuel',
+            'loisirs' => 'nullable|string',
+            'preference_negative' => 'nullable|string'
         ]);
 
-        $client->clientInfo()->updateOrCreate(
+        $clientInfo = $client->clientInfo()->updateOrCreate(
             ['user_id' => $client->id],
             $validated
         );
 
-        return response()->json(['message' => 'Informations mises à jour avec succès']);
+        return response()->json([
+            'message' => 'Informations mises à jour avec succès',
+            'client_info' => $clientInfo
+        ]);
     }
 
     /**
