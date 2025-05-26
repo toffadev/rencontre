@@ -7,7 +7,8 @@
 3. [Service de Gestion des Points](#service-de-gestion-des-points)
 4. [Intégration avec le Système de Messagerie](#intégration-avec-le-système-de-messagerie)
 5. [Intégration avec Stripe](#intégration-avec-stripe)
-6. [Gestion des Erreurs](#gestion-des-erreurs)
+6. [Système de Signalement des Profils](#système-de-signalement-des-profils)
+7. [Gestion des Erreurs](#gestion-des-erreurs)
 
 ## Introduction
 
@@ -206,6 +207,121 @@ const pointsPlans = [
 3. L'utilisateur est redirigé vers la page de paiement Stripe
 4. Après paiement réussi, les points sont crédités
 5. Une transaction est enregistrée
+
+## Système de Signalement des Profils
+
+Le système de signalement permet aux utilisateurs de signaler des profils problématiques. Une fois un profil signalé, il ne sera plus visible pour l'utilisateur qui l'a signalé jusqu'à ce que l'administration traite le signalement.
+
+### Structure de la Base de Données
+
+#### Table `profile_reports`
+
+```php
+Schema::create('profile_reports', function (Blueprint $table) {
+    $table->id();
+    $table->foreignId('reporter_id')->constrained('users')->onDelete('cascade');
+    $table->foreignId('reported_user_id')->constrained('users')->onDelete('cascade');
+    $table->string('reason');
+    $table->text('description')->nullable();
+    $table->enum('status', ['pending', 'reviewed', 'dismissed'])->default('pending');
+    $table->timestamp('reviewed_at')->nullable();
+    $table->timestamps();
+
+    // Un utilisateur ne peut signaler un même profil qu'une seule fois
+    $table->unique(['reporter_id', 'reported_user_id']);
+});
+```
+
+#### Table `notifications`
+
+```php
+Schema::create('notifications', function (Blueprint $table) {
+    $table->uuid('id')->primary();
+    $table->string('type');
+    $table->morphs('notifiable');
+    $table->text('data');
+    $table->timestamp('read_at')->nullable();
+    $table->timestamps();
+});
+```
+
+### Fonctionnalités
+
+1. **Signalement de profil**
+
+    - Les utilisateurs peuvent signaler un profil une seule fois
+    - Plusieurs raisons de signalement prédéfinies sont disponibles
+    - Une description optionnelle peut être ajoutée
+
+2. **Filtrage des profils**
+
+    - Les profils signalés sont automatiquement masqués pour l'utilisateur qui les a signalés
+    - L'état des signalements peut être consulté via l'API
+
+3. **Notifications**
+    - Les administrateurs reçoivent une notification par email et dans l'interface d'administration
+    - Les notifications incluent les détails du signalement et des liens directs vers les profils concernés
+
+### Routes API
+
+```php
+Route::middleware(['auth'])->group(function () {
+    Route::post('/profile-reports', [ProfileReportController::class, 'store']);
+    Route::get('/blocked-profiles', [ProfileReportController::class, 'getBlockedProfiles']);
+});
+```
+
+### Intégration dans l'Interface Client
+
+Le système de signalement est intégré directement dans la page d'accueil des clients (`resources/js/Client/Pages/Home.vue`). Chaque carte de profil inclut un bouton de signalement qui, lorsqu'il est cliqué, ouvre un modal permettant de soumettre un signalement.
+
+#### Composants Frontend
+
+1. **Bouton de signalement**
+
+```vue
+<button
+    @click.stop="showReportModal(profile)"
+    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+    title="Signaler ce profil"
+>
+    <i class="fas fa-flag"></i>
+</button>
+```
+
+2. **Modal de signalement**
+
+```vue
+<ProfileReportModal
+    :show="showReportModalFlag"
+    :user-id="selectedProfileForReport"
+    @close="closeReportModal"
+    @reported="handleReported"
+/>
+```
+
+### Gestion des Profils Bloqués
+
+Le système maintient une liste des profils bloqués pour chaque utilisateur :
+
+```javascript
+// Filtrer les profils bloqués
+const filteredProfiles = computed(() => {
+    return profiles.filter(
+        (profile) => !blockedProfileIds.value.includes(profile.id)
+    );
+});
+```
+
+### Workflow de Signalement
+
+1. L'utilisateur clique sur le bouton de signalement d'un profil
+2. Le modal de signalement s'ouvre
+3. L'utilisateur sélectionne une raison et ajoute optionnellement une description
+4. Le signalement est envoyé au serveur
+5. Le profil est masqué pour l'utilisateur
+6. Les administrateurs reçoivent une notification
+7. Le profil reste masqué jusqu'à ce que l'administration traite le signalement
 
 ## Gestion des Erreurs
 

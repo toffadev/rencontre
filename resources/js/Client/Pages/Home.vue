@@ -55,7 +55,7 @@
                     <!-- Dynamic Profile Cards -->
                     <div
                         v-if="profiles.length"
-                        v-for="profile in profiles"
+                        v-for="profile in filteredProfiles"
                         :key="profile.id"
                         class="profile-card transition duration-300 cursor-pointer"
                         @click="selectProfile(profile)"
@@ -100,11 +100,21 @@
                                     >
                                 </div>
                             </div>
-                            <button
-                                class="ml-auto p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
-                            >
-                                <i class="fas fa-comment-dots"></i>
-                            </button>
+                            <div class="ml-auto flex space-x-2">
+                                <button
+                                    class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
+                                    @click.stop="selectProfile(profile)"
+                                >
+                                    <i class="fas fa-comment-dots"></i>
+                                </button>
+                                <button
+                                    @click.stop="showReportModal(profile)"
+                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                                    title="Signaler ce profil"
+                                >
+                                    <i class="fas fa-flag"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -298,6 +308,14 @@
                     </p>
                 </div>
             </div>
+
+            <!-- Modal de signalement -->
+            <ProfileReportModal
+                :show="showReportModalFlag"
+                :user-id="selectedProfileForReport"
+                @close="closeReportModal"
+                @reported="handleReported"
+            />
         </div>
     </MainLayout>
 </template>
@@ -308,6 +326,7 @@ import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
 import Echo from "laravel-echo";
 import { router } from '@inertiajs/vue3';
+import ProfileReportModal from '@/Components/ProfileReportModal.vue';
 
 const props = defineProps({
     profiles: {
@@ -323,6 +342,9 @@ const chatContainer = ref(null);
 const loading = ref(false);
 const remainingPoints = ref(0);
 const showPointsAlert = ref(false);
+const showReportModalFlag = ref(false);
+const selectedProfileForReport = ref(null);
+const blockedProfileIds = ref([]);
 
 // Messages pour la conversation courante
 const currentMessages = computed(() => {
@@ -520,8 +542,16 @@ function formatLocation(profile) {
     return "À proximité";
 }
 
+// Filtrer les profils bloqués
+const filteredProfiles = computed(() => {
+    return props.profiles.filter(profile => !blockedProfileIds.value.includes(profile.id));
+});
+
 // Configuration de Laravel Echo
-onMounted(() => {
+onMounted(async () => {
+    // Charger les profils bloqués
+    await loadBlockedProfiles();
+
     // Vérifier que l'objet Echo est disponible globalement
     if (window.Echo) {
         // Écouter les messages entrants sur le canal privé du client
@@ -566,8 +596,8 @@ onMounted(() => {
         scrollToBottom();
     });
 
-    // Charger les points au montage du composant
-    loadPoints();
+    // Charger les points
+    await loadPoints();
 });
 
 // Observer les changements de sélection de profil
@@ -586,6 +616,31 @@ async function loadPoints() {
         remainingPoints.value = response.data.points;
     } catch (error) {
         console.error('Erreur lors du chargement des points:', error);
+    }
+}
+
+// Fonctions pour le système de signalement
+const showReportModal = (profile) => {
+    selectedProfileForReport.value = profile.id;
+    showReportModalFlag.value = true;
+};
+
+const closeReportModal = () => {
+    showReportModalFlag.value = false;
+    selectedProfileForReport.value = null;
+};
+
+const handleReported = (userId) => {
+    blockedProfileIds.value.push(userId);
+};
+
+// Charger les profils bloqués
+async function loadBlockedProfiles() {
+    try {
+        const response = await axios.get("/blocked-profiles");
+        blockedProfileIds.value = response.data.blocked_profiles;
+    } catch (error) {
+        console.error("Erreur lors du chargement des profils bloqués:", error);
     }
 }
 </script>
@@ -641,5 +696,10 @@ async function loadPoints() {
 .points-alert-leave-to {
     transform: translateY(-20px);
     opacity: 0;
+}
+
+/* Styles pour le bouton de signalement */
+.fa-flag {
+    font-size: 0.875rem;
 }
 </style>

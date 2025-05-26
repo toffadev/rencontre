@@ -10,7 +10,7 @@
                             alt="Profil"
                             class="w-24 h-24 rounded-full border-4 border-pink-100 mb-4"
                         />
-                        <h2 class="text-xl font-bold">Sophie Martin</h2>
+                        <h2 class="text-xl font-bold">Romeo Martin</h2>
                         <p class="text-gray-500 text-sm mb-4">Paris, France</p>
                         <div class="flex space-x-2 mb-6">
                             <span

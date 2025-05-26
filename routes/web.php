@@ -15,6 +15,7 @@ use App\Http\Controllers\Client\HomeController;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Log;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Client\ProfileReportController;
 
 /*
 |--------------------------------------------------------------------------
@@ -71,6 +72,10 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/points/checkout', [App\Http\Controllers\Client\PointController::class, 'createCheckoutSession'])->name('points.checkout');
     Route::get('/points/success', [App\Http\Controllers\Client\PointController::class, 'success'])->name('client.points.success');
     Route::post('/stripe/webhook', [App\Http\Controllers\Client\PointController::class, 'handleWebhook'])->name('stripe.webhook')->withoutMiddleware(['csrf']);
+
+    // Routes pour les signalements de profils
+    Route::post('/profile-reports', [ProfileReportController::class, 'store'])->name('profile-reports.store');
+    Route::get('/blocked-profiles', [ProfileReportController::class, 'getBlockedProfiles'])->name('profile-reports.blocked');
 });
 
 // Guest routes
