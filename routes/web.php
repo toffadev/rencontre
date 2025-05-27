@@ -69,6 +69,7 @@ Route::middleware(['client_or_admin'])->group(function () {
     // Routes pour les messages du client
     Route::get('/messages', [App\Http\Controllers\Client\MessageController::class, 'getMessages'])->name('client.messages');
     Route::post('/send-message', [App\Http\Controllers\Client\MessageController::class, 'sendMessage'])->name('client.send-message');
+    Route::get('/active-conversations', [App\Http\Controllers\Client\MessageController::class, 'getActiveConversations'])->name('client.active-conversations');
 
     // Routes pour la gestion des points
     Route::get('/points/data', [App\Http\Controllers\Client\PointController::class, 'getPointsData'])->name('client.points.data');

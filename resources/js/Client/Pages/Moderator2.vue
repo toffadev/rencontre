@@ -13,59 +13,20 @@
                             profil virtuel.
                         </p>
                     </div>
-                    <div class="flex items-center gap-4">
-                        <!-- Bouton de notifications -->
-                        <div class="relative">
-                            <button @click="showNotifications = !showNotifications"
-                                class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2">
-                                <i class="fas fa-bell"></i>
-                                <span v-if="notifications.filter(n => !n.read).length > 0"
-                                    class="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                    {{ notifications.filter(n => !n.read).length }}
-                                </span>
-                            </button>
-                            
-                            <!-- Panel de notifications -->
-                            <div v-if="showNotifications"
-                                class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
-                                <div class="p-4 border-b border-gray-100">
-                                    <h3 class="font-semibold text-gray-700">Notifications</h3>
-                                </div>
-                                <div v-if="notifications.length > 0" class="divide-y divide-gray-100">
-                                    <div v-for="notification in notifications" :key="notification.id"
-                                        @click="goToConversation(notification.clientId); markNotificationAsRead(notification.id); showNotifications = false"
-                                        class="p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
-                                        :class="{ 'bg-pink-50': !notification.read }">
-                                        <div class="flex items-start gap-3">
-                                            <div class="flex-1">
-                                                <p class="font-medium text-gray-800">{{ notification.clientName }}</p>
-                                                <p class="text-sm text-gray-600 truncate">{{ notification.message }}</p>
-                                                <p class="text-xs text-gray-400 mt-1">
-                                                    {{ new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
-                                                </p>
-                                            </div>
-                                            <div v-if="!notification.read"
-                                                class="w-2 h-2 bg-pink-500 rounded-full flex-shrink-0 mt-2">
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div v-else class="p-4 text-center text-gray-500">
-                                    Aucune notification
-                                </div>
-                            </div>
-                        </div>
-                        
-                        <Link href="/moderateur/profile-stats"
-                            class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2">
-                            <i class="fas fa-chart-line"></i>
-                            Mon profil
-                        </Link>
-                    </div>
+                    <Link
+                        href="/moderateur/profile-stats"
+                        class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2"
+                    >
+                        <i class="fas fa-chart-line"></i>
+                        Mon profil
+                    </Link>
                 </div>
             </div>
 
-            <div v-if="!currentAssignedProfile" class="bg-white p-6 rounded-xl shadow-md text-center">
+            <div
+                v-if="!currentAssignedProfile"
+                class="bg-white p-6 rounded-xl shadow-md text-center"
+            >
                 <div class="text-lg font-medium text-gray-700">
                     En attente d'attribution...
                 </div>
@@ -87,23 +48,31 @@
 
         <div class="flex flex-col lg:flex-row gap-6">
             <!-- Clients Section (à gauche) -->
-            <div class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden">
+            <div
+                class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden"
+            >
                 <!-- Tabs -->
                 <div class="flex border-b border-gray-200">
-                    <button @click="activeTab = 'assigned'" :class="[
-                        'flex-1 py-3 text-sm font-medium',
-                        activeTab === 'assigned'
-                            ? 'text-pink-600 border-b-2 border-pink-500'
-                            : 'text-gray-500 hover:text-gray-700',
-                    ]">
+                    <button
+                        @click="activeTab = 'assigned'"
+                        :class="[
+                            'flex-1 py-3 text-sm font-medium',
+                            activeTab === 'assigned'
+                                ? 'text-pink-600 border-b-2 border-pink-500'
+                                : 'text-gray-500 hover:text-gray-700',
+                        ]"
+                    >
                         Client attribué
                     </button>
-                    <button @click="activeTab = 'available'" :class="[
-                        'flex-1 py-3 text-sm font-medium',
-                        activeTab === 'available'
-                            ? 'text-pink-600 border-b-2 border-pink-500'
-                            : 'text-gray-500 hover:text-gray-700',
-                    ]">
+                    <button
+                        @click="activeTab = 'available'"
+                        :class="[
+                            'flex-1 py-3 text-sm font-medium',
+                            activeTab === 'available'
+                                ? 'text-pink-600 border-b-2 border-pink-500'
+                                : 'text-gray-500 hover:text-gray-700',
+                        ]"
+                    >
                         Clients disponibles
                     </button>
                 </div>
@@ -112,11 +81,16 @@
                 <div v-if="activeTab === 'assigned'" class="p-4">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-semibold">Client attribué</h2>
-                        <div v-if="assignedClient.length > 0"
-                            class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
+                        <div
+                            v-if="assignedClient.length > 0"
+                            class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm"
+                        >
                             En attente de réponse
                         </div>
-                        <div v-else class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm">
+                        <div
+                            v-else
+                            class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm"
+                        >
                             En attente d'attribution
                         </div>
                     </div>
@@ -124,45 +98,75 @@
                     <div class="space-y-4">
                         <!-- Liste des clients attribués -->
                         <div v-if="assignedClient.length > 0" class="space-y-4">
-                            <div v-for="client in sortedAssignedClients" :key="client.id"
-                                class="client-card transition duration-300" @click="selectClient(client)">
-                                <div :class="[
-                                    'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
-                                    selectedClient &&
+                            <div
+                                v-for="client in sortedAssignedClients"
+                                :key="client.id"
+                                class="client-card transition duration-300"
+                                @click="selectClient(client)"
+                            >
+                                <div
+                                    :class="[
+                                        'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
+                                        selectedClient &&
                                         selectedClient.id === client.id
-                                        ? 'border-l-4 border-pink-500'
-                                        : '',
-                                ]">
+                                            ? 'border-l-4 border-pink-500'
+                                            : '',
+                                    ]"
+                                >
                                     <div class="relative">
-                                        <img :src="client.avatar ||
-                                            'https://via.placeholder.com/64'
-                                            " :alt="client.name" class="w-12 h-12 rounded-full object-cover" />
+                                        <img
+                                            :src="
+                                                client.avatar ||
+                                                'https://via.placeholder.com/64'
+                                            "
+                                            :alt="client.name"
+                                            class="w-12 h-12 rounded-full object-cover"
+                                        />
                                         <div class="online-dot"></div>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <div class="flex items-center justify-between">
+                                        <div
+                                            class="flex items-center justify-between"
+                                        >
                                             <h3 class="font-semibold truncate">
                                                 {{ client.name }}
                                             </h3>
-                                            <span class="text-xs text-gray-500">{{
-                                                formatTime(client.createdAt)
-                                            }}</span>
+                                            <span
+                                                class="text-xs text-gray-500"
+                                                >{{
+                                                    formatTime(client.createdAt)
+                                                }}</span
+                                            >
                                         </div>
                                         <p class="text-sm text-gray-500">
-                                            <span v-if="client.lastMessage" class="truncate block">{{ client.lastMessage
-                                                }}</span>
-                                            <span v-else class="text-gray-400 italic">Nouvelle conversation</span>
+                                            <span
+                                                v-if="client.lastMessage"
+                                                class="truncate block"
+                                                >{{ client.lastMessage }}</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-gray-400 italic"
+                                                >Nouvelle conversation</span
+                                            >
                                         </p>
-                                        <div class="flex items-center mt-1 text-xs">
-                                            <img :src="client.profilePhoto" alt="Profile"
-                                                class="w-4 h-4 rounded-full mr-1" />
+                                        <div
+                                            class="flex items-center mt-1 text-xs"
+                                        >
+                                            <img
+                                                :src="client.profilePhoto"
+                                                alt="Profile"
+                                                class="w-4 h-4 rounded-full mr-1"
+                                            />
                                             <span class="text-gray-600">{{
                                                 client.profileName
-                                                }}</span>
+                                            }}</span>
                                         </div>
                                     </div>
-                                    <div v-if="client.unreadCount"
-                                        class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                    <div
+                                        v-if="client.unreadCount"
+                                        class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                                    >
                                         {{ client.unreadCount }}
                                     </div>
                                 </div>
@@ -190,8 +194,10 @@
                         <h2 class="text-xl font-semibold">
                             Clients disponibles
                         </h2>
-                        <button @click="loadAvailableClients"
-                            class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                        <button
+                            @click="loadAvailableClients"
+                            class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                        >
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
@@ -199,15 +205,24 @@
                     <div class="space-y-4">
                         <!-- Liste des clients disponibles -->
                         <div v-if="availableClients.length > 0">
-                            <div v-for="client in availableClients" :key="client.id"
+                            <div
+                                v-for="client in availableClients"
+                                :key="client.id"
                                 class="client-card transition duration-300 cursor-pointer"
-                                @click="startConversation(client)">
+                                @click="startConversation(client)"
+                            >
                                 <div
-                                    class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200">
+                                    class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200"
+                                >
                                     <div class="relative">
-                                        <img :src="client.avatar ||
-                                            'https://via.placeholder.com/64'
-                                            " :alt="client.name" class="w-12 h-12 rounded-full object-cover" />
+                                        <img
+                                            :src="
+                                                client.avatar ||
+                                                'https://via.placeholder.com/64'
+                                            "
+                                            :alt="client.name"
+                                            class="w-12 h-12 rounded-full object-cover"
+                                        />
                                         <div class="online-dot"></div>
                                     </div>
                                     <div class="flex-1 min-w-0">
@@ -215,18 +230,29 @@
                                             {{ client.name }}
                                         </h3>
                                         <p class="text-sm text-gray-500">
-                                            <span v-if="client.lastMessage" class="truncate block">{{ client.lastMessage
-                                                }}</span>
-                                            <span v-else-if="client.hasHistory"
-                                                class="text-gray-400 italic">Conversation précédente</span>
-                                            <span v-else class="text-green-500 italic">Nouveau client</span>
+                                            <span
+                                                v-if="client.lastMessage"
+                                                class="truncate block"
+                                                >{{ client.lastMessage }}</span
+                                            >
+                                            <span
+                                                v-else-if="client.hasHistory"
+                                                class="text-gray-400 italic"
+                                                >Conversation précédente</span
+                                            >
+                                            <span
+                                                v-else
+                                                class="text-green-500 italic"
+                                                >Nouveau client</span
+                                            >
                                         </p>
                                         <p class="text-xs text-gray-400 mt-1">
                                             {{ client.lastActivity }}
                                         </p>
                                     </div>
                                     <button
-                                        class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
+                                        class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
+                                    >
                                         <i class="fas fa-comments"></i>
                                     </button>
                                 </div>
@@ -235,11 +261,19 @@
 
                         <!-- État de chargement -->
                         <div v-else-if="loading" class="py-8">
-                            <div class="animate-pulse flex space-x-4 justify-center">
-                                <div class="rounded-full bg-pink-200 h-12 w-12"></div>
+                            <div
+                                class="animate-pulse flex space-x-4 justify-center"
+                            >
+                                <div
+                                    class="rounded-full bg-pink-200 h-12 w-12"
+                                ></div>
                                 <div class="flex-1 space-y-4 max-w-md">
-                                    <div class="h-4 bg-pink-200 rounded w-3/4"></div>
-                                    <div class="h-4 bg-pink-200 rounded w-1/2"></div>
+                                    <div
+                                        class="h-4 bg-pink-200 rounded w-3/4"
+                                    ></div>
+                                    <div
+                                        class="h-4 bg-pink-200 rounded w-1/2"
+                                    ></div>
                                 </div>
                             </div>
                         </div>
@@ -263,17 +297,26 @@
                 <!-- Profil attribué (en haut) -->
                 <div class="bg-white rounded-xl shadow-md p-4 mb-4">
                     <div class="flex items-center space-x-4">
-                        <div v-if="currentAssignedProfile" class="flex items-center space-x-4">
-                            <img :src="currentAssignedProfile.main_photo_path ||
-                                'https://via.placeholder.com/80'
-                                " :alt="currentAssignedProfile.name"
-                                class="w-16 h-16 rounded-full object-cover border-2 border-pink-500" />
+                        <div
+                            v-if="currentAssignedProfile"
+                            class="flex items-center space-x-4"
+                        >
+                            <img
+                                :src="
+                                    currentAssignedProfile.main_photo_path ||
+                                    'https://via.placeholder.com/80'
+                                "
+                                :alt="currentAssignedProfile.name"
+                                class="w-16 h-16 rounded-full object-cover border-2 border-pink-500"
+                            />
                             <div>
                                 <div class="flex items-center space-x-2">
                                     <h3 class="font-bold text-lg">
                                         {{ currentAssignedProfile.name }}
                                     </h3>
-                                    <span class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full">
+                                    <span
+                                        class="px-2 py-1 bg-pink-100 text-pink-600 text-xs rounded-full"
+                                    >
                                         {{
                                             formatGender(
                                                 currentAssignedProfile.gender
@@ -285,8 +328,12 @@
                                     Profil attribué actuellement
                                 </p>
                                 <div class="flex items-center mt-1">
-                                    <span class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"></span>
-                                    <span class="text-xs text-green-600">Profil actif</span>
+                                    <span
+                                        class="inline-block w-2 h-2 bg-green-500 rounded-full mr-2"
+                                    ></span>
+                                    <span class="text-xs text-green-600"
+                                        >Profil actif</span
+                                    >
                                 </div>
                             </div>
                         </div>
@@ -299,13 +346,23 @@
                 </div>
 
                 <!-- Zone de chat -->
-                <div class="bg-white rounded-xl shadow-md overflow-hidden flex-1" v-if="selectedClient">
+                <div
+                    class="bg-white rounded-xl shadow-md overflow-hidden flex-1"
+                    v-if="selectedClient"
+                >
                     <!-- Chat Header -->
-                    <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
+                    <div
+                        class="border-b border-gray-200 p-4 flex items-center space-x-3"
+                    >
                         <div class="relative">
-                            <img :src="selectedClient.avatar ||
-                                'https://via.placeholder.com/64'
-                                " alt="Client" class="w-12 h-12 rounded-full object-cover" />
+                            <img
+                                :src="
+                                    selectedClient.avatar ||
+                                    'https://via.placeholder.com/64'
+                                "
+                                alt="Client"
+                                class="w-12 h-12 rounded-full object-cover"
+                            />
                             <div class="online-dot"></div>
                         </div>
                         <div>
@@ -321,40 +378,49 @@
                                 <span class="font-medium">Client ID:</span>
                                 {{ selectedClient.id }}
                             </div>
-                            <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <button
+                                class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                            >
                                 <i class="fas fa-info-circle"></i>
                             </button>
                         </div>
                     </div>
 
                     <!-- Chat Messages -->
-                    <div class="chat-container overflow-y-auto p-4 space-y-3" ref="chatContainer" @scroll="handleScroll">
-                        <!-- Indicateur de chargement des messages plus anciens -->
-                        <div v-if="isLoadingMore" class="text-center py-2">
-                            <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent"></div>
-                            <span class="text-xs text-gray-500 ml-2">Chargement des messages...</span>
-                        </div>
-
-                        <!-- Indicateur de messages plus anciens disponibles -->
-                        <div v-if="hasMoreMessages && !isLoadingMore" class="text-center text-xs text-gray-500 my-2">
-                            Faites défiler vers le haut pour charger plus de messages
-                        </div>
-
+                    <div
+                        class="chat-container overflow-y-auto p-4 space-y-3"
+                        ref="chatContainer"
+                    >
                         <!-- Date -->
                         <div class="text-center text-xs text-gray-500 my-4">
                             Aujourd'hui
                         </div>
 
-                        <div v-for="(message, index) in currentChatMessages" :key="message.id || index" :class="`flex space-x-2 ${message.isFromClient ? '' : 'justify-end'}`">
+                        <div
+                            v-for="(message, index) in currentChatMessages"
+                            :key="index"
+                            :class="`flex space-x-2 ${
+                                message.isFromClient ? '' : 'justify-end'
+                            }`"
+                        >
                             <template v-if="message.isFromClient">
-                                <img :src="selectedClient.avatar ||
-                                    'https://via.placeholder.com/64'
-                                    " alt="Client" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                <img
+                                    :src="
+                                        selectedClient.avatar ||
+                                        'https://via.placeholder.com/64'
+                                    "
+                                    alt="Client"
+                                    class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                />
                                 <div>
-                                    <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
+                                    <div
+                                        class="message-in px-4 py-2 max-w-xs lg:max-w-md"
+                                    >
                                         {{ message.content }}
                                     </div>
-                                    <div class="flex items-center mt-1 text-xs text-gray-500">
+                                    <div
+                                        class="flex items-center mt-1 text-xs text-gray-500"
+                                    >
                                         <span>{{ message.time }}</span>
                                         <span class="mx-1">•</span>
                                         <span>{{ selectedClient.name }}</span>
@@ -363,10 +429,14 @@
                             </template>
                             <template v-else>
                                 <div>
-                                    <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
+                                    <div
+                                        class="message-out px-4 py-2 max-w-xs lg:max-w-md"
+                                    >
                                         {{ message.content }}
                                     </div>
-                                    <div class="flex items-center justify-end mt-1 text-xs text-gray-500">
+                                    <div
+                                        class="flex items-center justify-end mt-1 text-xs text-gray-500"
+                                    >
                                         <span>{{ message.time }}</span>
                                         <span class="mx-1">•</span>
                                         <span>{{
@@ -375,10 +445,16 @@
                                         }}</span>
                                     </div>
                                 </div>
-                                <img :src="currentAssignedProfile?.main_photo_path ||
-                                    'https://via.placeholder.com/64'
-                                    " :alt="currentAssignedProfile?.name || 'Profil'
-                                        " class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                <img
+                                    :src="
+                                        currentAssignedProfile?.main_photo_path ||
+                                        'https://via.placeholder.com/64'
+                                    "
+                                    :alt="
+                                        currentAssignedProfile?.name || 'Profil'
+                                    "
+                                    class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                />
                             </template>
                         </div>
                     </div>
@@ -386,19 +462,32 @@
                     <!-- Message Input -->
                     <div class="border-t border-gray-200 p-4">
                         <div class="flex items-center space-x-2">
-                            <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
+                            <button
+                                class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                            >
                                 <i class="fas fa-plus"></i>
                             </button>
-                            <input v-model="newMessage" type="text" placeholder="Écrire un message..."
+                            <input
+                                v-model="newMessage"
+                                type="text"
+                                placeholder="Écrire un message..."
                                 class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                @keyup.enter="sendMessage" />
-                            <button class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
-                                @click="sendMessage" :disabled="!currentAssignedProfile || !selectedClient
-                                    ">
+                                @keyup.enter="sendMessage"
+                            />
+                            <button
+                                class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
+                                @click="sendMessage"
+                                :disabled="
+                                    !currentAssignedProfile || !selectedClient
+                                "
+                            >
                                 <i class="fas fa-paper-plane"></i>
                             </button>
                         </div>
-                        <div v-if="!currentAssignedProfile" class="mt-2 text-center text-xs text-red-500">
+                        <div
+                            v-if="!currentAssignedProfile"
+                            class="mt-2 text-center text-xs text-red-500"
+                        >
                             Vous devez avoir un profil attribué pour envoyer des
                             messages
                         </div>
@@ -406,7 +495,10 @@
                 </div>
 
                 <!-- État vide pour le chat -->
-                <div v-else class="bg-white rounded-xl shadow-md p-8 flex-1 flex items-center justify-center">
+                <div
+                    v-else
+                    class="bg-white rounded-xl shadow-md p-8 flex-1 flex items-center justify-center"
+                >
                     <div class="text-center">
                         <div class="text-gray-400 mb-4">
                             <i class="fas fa-comments text-5xl"></i>
@@ -424,14 +516,17 @@
 
             <!-- Informations client (à droite) -->
             <div class="w-full lg:w-1/4">
-                <ClientInfoPanel v-if="selectedClient" :client-id="selectedClient.id" />
+                <ClientInfoPanel
+                    v-if="selectedClient"
+                    :client-id="selectedClient.id"
+                />
             </div>
         </div>
     </MainLayout>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
+import { ref, onMounted, watch, computed, nextTick } from "vue";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
 import Echo from "laravel-echo";
@@ -448,12 +543,6 @@ const chatMessages = ref({});
 const chatContainer = ref(null);
 const loading = ref(false);
 const activeTab = ref("assigned");
-const notifications = ref([]);
-const showNotifications = ref(false);
-const isLoadingMore = ref(false);
-const hasMoreMessages = ref(true);
-const currentPage = ref({});
-const messagesPerPage = 20;
 
 // Messages pour la conversation actuelle
 const currentChatMessages = computed(() => {
@@ -546,13 +635,21 @@ const loadAvailableClients = async () => {
 };
 
 // Sélectionner un client pour discussion
-const selectClient = async (client) => {
+const selectClient = (client) => {
     selectedClient.value = client;
-    hasMoreMessages.value = true; // Réinitialiser l'état de pagination
-    currentPage.value[client.id] = 1; // Réinitialiser la page courante
 
-    // Charger les messages initiaux
-    await loadMessages(client.id, 1, false);
+    // Charger les messages si nécessaire
+    if (!chatMessages.value[client.id]) {
+        loadMessages(client.id);
+    } else {
+        // Faire défiler vers le bas
+        nextTick(() => {
+            if (chatContainer.value) {
+                chatContainer.value.scrollTop =
+                    chatContainer.value.scrollHeight;
+            }
+        });
+    }
 };
 
 // Démarrer une conversation avec un client disponible
@@ -612,63 +709,44 @@ const startConversation = async (client) => {
 };
 
 // Charger les messages pour un client spécifique
-const loadMessages = async (clientId, page = 1, append = false) => {
+const loadMessages = async (clientId) => {
     try {
+        // Vérifier qu'un profil est bien attribué
         if (!currentAssignedProfile.value) {
-            console.error("Impossible de charger les messages: aucun profil attribué");
+            console.error(
+                "Impossible de charger les messages: aucun profil attribué"
+            );
             return;
         }
 
-        if (isLoadingMore.value) return;
-        isLoadingMore.value = true;
-
         const profileId = currentAssignedProfile.value.id;
-        console.log(`Chargement des messages pour client_id=${clientId} et profile_id=${profileId}, page=${page}`);
+        console.log(
+            `Chargement des messages pour client_id=${clientId} et profile_id=${profileId}`
+        );
 
         const response = await axios.get("/moderateur/messages", {
             params: {
                 client_id: clientId,
                 profile_id: profileId,
-                page: page,
-                per_page: messagesPerPage
             },
         });
 
         if (response.data.messages) {
             console.log(`${response.data.messages.length} messages chargés`);
-            
-            // Initialiser si nécessaire
-            if (!chatMessages.value[clientId]) {
-                chatMessages.value[clientId] = [];
-            }
-            if (!currentPage.value[clientId]) {
-                currentPage.value[clientId] = 1;
-            }
+            // Utiliser Vue.set pour assurer la réactivité
+            chatMessages.value[clientId] = [...response.data.messages];
 
-            // Mettre à jour les messages
-            if (append) {
-                // Ajouter au début pour les messages plus anciens
-                chatMessages.value[clientId] = [...response.data.messages, ...chatMessages.value[clientId]];
-            } else {
-                chatMessages.value[clientId] = response.data.messages;
-            }
-
-            // Mettre à jour la pagination
-            hasMoreMessages.value = response.data.messages.length >= messagesPerPage;
-            currentPage.value[clientId] = page;
-
-            // Faire défiler vers le bas seulement lors du chargement initial
-            if (!append) {
-                nextTick(() => {
-                    if (chatContainer.value) {
-                        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                    }
-                });
-            }
+            // Faire défiler jusqu'au bas de la conversation
+            nextTick(() => {
+                if (chatContainer.value) {
+                    chatContainer.value.scrollTop =
+                        chatContainer.value.scrollHeight;
+                }
+            });
         } else {
             console.log("Aucun message trouvé");
+            // Initialiser avec un tableau vide pour éviter les problèmes de réactivité
             chatMessages.value[clientId] = [];
-            hasMoreMessages.value = false;
         }
     } catch (error) {
         console.error("Erreur lors du chargement des messages:", error);
@@ -676,35 +754,8 @@ const loadMessages = async (clientId, page = 1, append = false) => {
             status: error.response?.status,
             data: error.response?.data,
         });
-    } finally {
-        isLoadingMore.value = false;
-    }
-};
-
-// Ajouter la fonction de chargement des messages plus anciens
-const loadMoreMessages = async (clientId) => {
-    if (!hasMoreMessages.value || isLoadingMore.value) return;
-    
-    const nextPage = (currentPage.value[clientId] || 1) + 1;
-    const previousScrollHeight = chatContainer.value?.scrollHeight;
-    const previousScrollTop = chatContainer.value?.scrollTop;
-    
-    await loadMessages(clientId, nextPage, true);
-
-    // Maintenir la position de défilement après le chargement
-    nextTick(() => {
-        if (chatContainer.value && previousScrollHeight) {
-            const newScrollHeight = chatContainer.value.scrollHeight;
-            chatContainer.value.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
-        }
-    });
-};
-
-// Ajouter la fonction de gestion du défilement
-const handleScroll = async (event) => {
-    const container = event.target;
-    if (container.scrollTop <= 100 && selectedClient.value) { // Déclencher quand on est proche du haut
-        await loadMoreMessages(selectedClient.value.id);
+        // Initialiser avec un tableau vide en cas d'erreur
+        chatMessages.value[clientId] = [];
     }
 };
 
@@ -811,49 +862,17 @@ onMounted(async () => {
     }
 });
 
-// Ajouter la fonction de gestion des notifications
-const addNotification = (message, clientId, clientName) => {
-    const notification = {
-        id: Date.now(),
-        message,
-        clientId,
-        clientName,
-        timestamp: new Date(),
-        read: false
-    };
-    notifications.value.unshift(notification);
-    // Limiter à 50 notifications maximum
-    if (notifications.value.length > 50) {
-        notifications.value = notifications.value.slice(0, 50);
-    }
-};
-
-// Modifier la fonction listenToProfileMessages pour ajouter la notification
+// Fonction pour configurer l'écoute des messages d'un profil spécifique
 const listenToProfileMessages = (profileId) => {
     console.log(`Écoute des messages pour le profil ${profileId}`);
     console.log(`Souscription au canal: profile.${profileId}`);
 
-    // Désabonner des anciens listeners s'ils existent pour éviter les doublons
-    if (window.Echo) {
-        window.Echo.leave(`profile.${profileId}`);
-    }
-
     window.Echo.private(`profile.${profileId}`)
         .listen(".message.sent", async (data) => {
             console.log("Nouveau message reçu sur le canal profile:", data);
-            // Ajouter la notification
+            // Ajouter le nouveau message à la conversation
             if (data.is_from_client) {
                 const clientId = data.client_id;
-
-                // Vérifier si le message n'existe pas déjà
-                if (chatMessages.value[clientId]?.some(msg => msg.id === data.id)) {
-                    console.log("Message déjà existant, ignoré");
-                    return;
-                }
-
-                // Ajouter la notification
-                const clientName = assignedClient.value.find(c => c.id === clientId)?.name || 'Client';
-                addNotification(data.content, clientId, clientName);
 
                 // Formater le message
                 const message = {
@@ -866,43 +885,53 @@ const listenToProfileMessages = (profileId) => {
                     }),
                 };
 
-                // Initialiser le tableau de messages si nécessaire
-                if (!chatMessages.value[clientId]) {
-                    chatMessages.value[clientId] = [];
-                }
-
-                // Ajouter directement le nouveau message
-                chatMessages.value[clientId].push(message);
-
                 try {
-                    // Mettre à jour la liste des clients en arrière-plan
-                    const clientExists = assignedClient.value.some(c => c.id === clientId);
-                    
-                    if (!clientExists) {
-                        await loadAssignedData();
-                    } else {
-                        // Mettre à jour le dernier message et le compteur dans la liste des clients
-                        const clientIndex = assignedClient.value.findIndex(c => c.id === clientId);
-                        if (clientIndex !== -1) {
-                            assignedClient.value[clientIndex] = {
-                                ...assignedClient.value[clientIndex],
-                                lastMessage: message.content,
-                                unreadCount: (assignedClient.value[clientIndex].unreadCount || 0) + 1,
-                                createdAt: new Date().toISOString() // Mettre à jour la date pour le tri
-                            };
+                    // D'abord, mettre à jour la liste des clients
+                    await loadAssignedData();
+
+                    // Ensuite, s'assurer que nous avons les messages complets pour ce client
+                    if (clientId) {
+                        const messageResponse = await axios.get(
+                            "/moderateur/messages",
+                            {
+                                params: {
+                                    client_id: clientId,
+                                    profile_id: profileId,
+                                },
+                            }
+                        );
+
+                        if (messageResponse.data.messages) {
+                            chatMessages.value[clientId] =
+                                messageResponse.data.messages;
+                            console.log(
+                                `Messages mis à jour pour le client ${clientId}`
+                            );
                         }
                     }
 
                     // Faire défiler si c'est la conversation actuelle
-                    if (selectedClient.value && selectedClient.value.id === clientId) {
+                    if (
+                        selectedClient.value &&
+                        selectedClient.value.id === clientId
+                    ) {
                         nextTick(() => {
                             if (chatContainer.value) {
-                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                                chatContainer.value.scrollTop =
+                                    chatContainer.value.scrollHeight;
                             }
                         });
                     }
                 } catch (error) {
-                    console.error("Erreur lors de la mise à jour des données:", error);
+                    console.error(
+                        "Erreur lors de la mise à jour des messages:",
+                        error
+                    );
+                    // En cas d'erreur, au moins ajouter le message reçu
+                    if (!chatMessages.value[clientId]) {
+                        chatMessages.value[clientId] = [];
+                    }
+                    chatMessages.value[clientId].push(message);
                 }
             } else {
                 console.log("Message ignoré car non provenant d'un client");
@@ -912,13 +941,6 @@ const listenToProfileMessages = (profileId) => {
             console.error(`Erreur sur le canal profile.${profileId}:`, error);
         });
 };
-
-// Nettoyer les listeners lors du démontage du composant
-onUnmounted(() => {
-    if (currentAssignedProfile.value && window.Echo) {
-        window.Echo.leave(`profile.${currentAssignedProfile.value.id}`);
-    }
-});
 
 // Surveiller les changements du profil pour reconfigurer l'écoute des messages
 watch(currentAssignedProfile, (newProfile) => {
@@ -1038,23 +1060,6 @@ function formatTime(timestamp) {
     const date = new Date(timestamp);
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
-
-// Ajouter la fonction pour marquer une notification comme lue
-const markNotificationAsRead = (notificationId) => {
-    const index = notifications.value.findIndex(n => n.id === notificationId);
-    if (index !== -1) {
-        notifications.value[index].read = true;
-    }
-};
-
-// Ajouter la fonction pour naviguer vers une conversation depuis une notification
-const goToConversation = (clientId) => {
-    const client = assignedClient.value.find(c => c.id === clientId);
-    if (client) {
-        selectClient(client);
-        activeTab.value = 'assigned';
-    }
-};
 </script>
 
 <style scoped>

@@ -152,4 +152,31 @@ class MessageController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Récupère toutes les conversations actives du client
+     */
+    public function getActiveConversations()
+    {
+        $clientId = Auth::id();
+
+        // Récupérer tous les profils avec qui le client a échangé des messages
+        $conversations = Message::where('client_id', $clientId)
+            ->select('profile_id')
+            ->distinct()
+            ->with(['profile' => function ($query) {
+                $query->select('id', 'name', 'main_photo_path', 'gender', 'created_at');
+            }])
+            ->get()
+            ->map(function ($message) {
+                return [
+                    'profile_id' => $message->profile_id,
+                    'profile' => $message->profile
+                ];
+            });
+
+        return response()->json([
+            'conversations' => $conversations
+        ]);
+    }
 }
