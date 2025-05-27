@@ -71,7 +71,7 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
-import EchoTest from '../../Components/EchoTest.vue';
+import EchoTest from './EchoTest.vue';
 
 const showDropdown = ref(false);
 const dropdownRef = ref(null);

@@ -106,4 +106,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(ClientCustomInfo::class);
     }
+
+    /**
+     * Get the point consumptions for this user
+     */
+    public function pointConsumptions()
+    {
+        return $this->hasMany(PointConsumption::class);
+    }
 }

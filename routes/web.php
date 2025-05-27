@@ -18,6 +18,8 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Client\ProfileReportController;
 use App\Http\Controllers\Client\ProfileDiscussionController;
 use App\Models\Profile;
+use App\Http\Controllers\Admin\ModeratorPerformanceController;
+use App\Models\User;
 
 /*
 |--------------------------------------------------------------------------
@@ -130,6 +132,14 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         return Inertia::render('Dashboard');
     })->name('dashboard');
 
+    // Conversation Viewer routes
+    Route::prefix('conversations')->name('conversations.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\ConversationController::class, 'index'])->name('index');
+        Route::get('/clients', [App\Http\Controllers\Admin\ConversationController::class, 'getClients'])->name('clients');
+        Route::get('/clients/{clientId}/profiles', [App\Http\Controllers\Admin\ConversationController::class, 'getClientProfiles'])->name('client.profiles');
+        Route::get('/conversation/{clientId}/{profileId}', [App\Http\Controllers\Admin\ConversationController::class, 'getConversation'])->name('get');
+    });
+
     // Profile management routes
     Route::get('/profiles', [AdminProfileController::class, 'index'])->name('profiles.index');
     Route::post('/profiles', [AdminProfileController::class, 'store'])->name('profiles.store');
@@ -144,7 +154,30 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
     Route::put('/users/{user}', [UserController::class, 'update'])->name('users.update');
     Route::delete('/users/{user}', [UserController::class, 'destroy'])->name('users.destroy');
 
-    // Admin management routes will go here
+    // Global message management routes
+    Route::prefix('messages')->name('messages.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\GlobalMessageController::class, 'index'])->name('index');
+        Route::get('/list', [App\Http\Controllers\Admin\GlobalMessageController::class, 'getMessages'])->name('list');
+        Route::get('/filters', [App\Http\Controllers\Admin\GlobalMessageController::class, 'getFilters'])->name('filters');
+        Route::post('/mark-as-read', [App\Http\Controllers\Admin\GlobalMessageController::class, 'markAsRead'])->name('mark-as-read');
+        Route::post('/mark-as-unread', [App\Http\Controllers\Admin\GlobalMessageController::class, 'markAsUnread'])->name('mark-as-unread');
+        Route::delete('/', [App\Http\Controllers\Admin\GlobalMessageController::class, 'destroy'])->name('destroy');
+    });
+
+    // Routes API pour les performances des modérateurs
+    Route::prefix('api')->group(function () {
+        Route::get('/moderators', [App\Http\Controllers\Admin\ModeratorController::class, 'index']);
+        Route::get('/profiles', [App\Http\Controllers\Admin\AdminProfileApiController::class, 'index']);
+    });
+
+    // Routes pour les performances des modérateurs
+    Route::prefix('moderator-performance')->group(function () {
+        Route::get('/', [ModeratorPerformanceController::class, 'index'])->name('moderator-performance.index');
+        Route::get('/data', [ModeratorPerformanceController::class, 'getData'])->name('moderator-performance.data');
+        Route::get('/export', [ModeratorPerformanceController::class, 'export'])->name('moderator-performance.export');
+        Route::get('/moderators', [App\Http\Controllers\Admin\ModeratorController::class, 'index'])->name('moderator-performance.moderators');
+        Route::get('/profiles', [App\Http\Controllers\Admin\AdminProfileApiController::class, 'index'])->name('moderator-performance.profiles');
+    });
 });
 
 // Moderator routes

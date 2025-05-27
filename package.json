@@ -26,6 +26,7 @@
     },
     "dependencies": {
         "@headlessui/vue": "^1.7.23",
+        "@heroicons/vue": "^2.2.0",
         "@inertiajs/progress": "^0.2.7",
         "@inertiajs/vue3": "^2.0.11",
         "@stripe/stripe-js": "^7.3.0",
