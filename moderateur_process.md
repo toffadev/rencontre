@@ -116,7 +116,7 @@ Nous avons considérablement amélioré le service (`ModeratorAssignmentService`
 
 #### `processUnassignedMessages()`
 
--   **NOUVEAU** : Traite tous les messages clients non attribués et les assigne automatiquement aux modérateurs selon la charge de travail.
+-   **NOUVEAU** : Traite tous les messages clients non attribués et les assigner automatiquement aux modérateurs selon la charge de travail.
 -   Exécuté régulièrement pour s'assurer qu'aucun client n'est laissé sans réponse.
 
 ## 4. Contrôleur pour les Modérateurs

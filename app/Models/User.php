@@ -114,4 +114,20 @@ class User extends Authenticatable
     {
         return $this->hasMany(PointConsumption::class);
     }
+
+    /**
+     * Get the moderator profile assignments for the user
+     */
+    public function moderatorProfileAssignments()
+    {
+        return $this->hasMany(ModeratorProfileAssignment::class);
+    }
+
+    /**
+     * Get the point transactions for this user
+     */
+    public function pointTransactions()
+    {
+        return $this->hasMany(PointTransaction::class);
+    }
 }

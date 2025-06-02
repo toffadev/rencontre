@@ -64,10 +64,9 @@
           class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
         >
           <option value="">Tous les niveaux</option>
-          <option value="excellent">Excellent</option>
-          <option value="bon">Bon</option>
-          <option value="moyen">Moyen</option>
-          <option value="faible">Faible</option>
+          <option value="top">Excellent</option>
+          <option value="average">Bon</option>
+          <option value="low">Moyen/Faible</option>
         </select>
       </div>
     </div>
@@ -153,12 +152,32 @@ watch(localPeriod, (newValue) => {
     localDateRange.value = { start: null, end: null }
   }
   emit('update:period', newValue)
+  if (newValue !== 'custom') {
+    emit('filter')
+  }
 })
 
-watch(localDateRange, (newValue) => emit('update:dateRange', newValue), { deep: true })
-watch(localModerator, (newValue) => emit('update:moderator', newValue))
-watch(localProfile, (newValue) => emit('update:profile', newValue))
-watch(localPerformanceLevel, (newValue) => emit('update:performanceLevel', newValue))
+watch(localDateRange, (newValue) => {
+  emit('update:dateRange', newValue)
+  if (localPeriod.value === 'custom' && newValue.start && newValue.end) {
+    emit('filter')
+  }
+}, { deep: true })
+
+watch(localModerator, (newValue) => {
+  emit('update:moderator', newValue)
+  emit('filter')
+})
+
+watch(localProfile, (newValue) => {
+  emit('update:profile', newValue)
+  emit('filter')
+})
+
+watch(localPerformanceLevel, (newValue) => {
+  emit('update:performanceLevel', newValue)
+  emit('filter')
+})
 
 const resetFilters = () => {
   localPeriod.value = 'week'

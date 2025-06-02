@@ -9,6 +9,7 @@ use App\Models\ModeratorProfileAssignment;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
 use Illuminate\Http\JsonResponse;
 
@@ -33,65 +34,95 @@ class ModeratorPerformanceController extends Controller
     public function getData(Request $request): JsonResponse
     {
         try {
-            // Définir la période par défaut si non spécifiée
-            if (!$request->has('start_date') && !$request->has('end_date')) {
-                if ($request->period === 'week') {
-                    $request->merge([
-                        'start_date' => now()->subWeek()->startOfDay()->format('Y-m-d'),
-                        'end_date' => now()->endOfDay()->format('Y-m-d')
-                    ]);
-                } elseif ($request->period === 'month') {
-                    $request->merge([
-                        'start_date' => now()->subMonth()->startOfDay()->format('Y-m-d'),
-                        'end_date' => now()->endOfDay()->format('Y-m-d')
-                    ]);
-                } else {
-                    $request->merge([
-                        'start_date' => now()->subDays(30)->startOfDay()->format('Y-m-d'),
-                        'end_date' => now()->endOfDay()->format('Y-m-d')
-                    ]);
-                }
+            // Définir la période en fonction du filtre
+            $startDate = now();
+            $endDate = now();
+
+            switch ($request->period) {
+                case 'today':
+                    $startDate = now()->startOfDay();
+                    $endDate = now()->endOfDay();
+                    break;
+                case 'yesterday':
+                    $startDate = now()->subDay()->startOfDay();
+                    $endDate = now()->subDay()->endOfDay();
+                    break;
+                case 'week':
+                    $startDate = now()->startOfWeek();
+                    $endDate = now()->endOfWeek();
+                    break;
+                case 'month':
+                    $startDate = now()->startOfMonth();
+                    $endDate = now()->endOfMonth();
+                    break;
+                case 'custom':
+                    // Si des dates personnalisées sont fournies
+                    if ($request->start_date && $request->end_date) {
+                        $startDate = Carbon::parse($request->start_date)->startOfDay();
+                        $endDate = Carbon::parse($request->end_date)->endOfDay();
+                    }
+                    break;
+                default:
+                    // Par défaut, on prend les 30 derniers jours
+                    $startDate = now()->subDays(30)->startOfDay();
+                    $endDate = now()->endOfDay();
             }
+
+            // Log pour le débogage
+            Log::debug('Période sélectionnée:', [
+                'period' => $request->period,
+                'start_date' => $startDate->format('Y-m-d H:i:s'),
+                'end_date' => $endDate->format('Y-m-d H:i:s')
+            ]);
 
             // Récupérer les données de performance
             $moderators = User::where('type', 'moderateur')
                 ->when($request->moderator_id, function ($query) use ($request) {
                     return $query->where('id', $request->moderator_id);
                 })
+                ->with(['moderatorProfileAssignments.profile'])
                 ->get();
 
             $totalMessages = 0;
             $totalPoints = 0;
             $totalEarnings = 0;
-            $avgResponseTimes = [];
             $formattedModerators = [];
 
             foreach ($moderators as $moderator) {
+                // Statistiques de base
                 $stats = ModeratorStatistic::where('user_id', $moderator->id)
-                    ->whereBetween('stats_date', [$request->start_date, $request->end_date])
+                    ->whereBetween('stats_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
                     ->when($request->profile_id, function ($query) use ($request) {
                         return $query->where('profile_id', $request->profile_id);
                     })
                     ->selectRaw('
-                        SUM(short_messages_count) as total_short_messages,
-                        SUM(long_messages_count) as total_long_messages,
-                        SUM(points_received) as total_points_received,
-                        SUM(earnings) as total_earnings,
-                        AVG(average_response_time) as avg_response_time
+                        COALESCE(SUM(short_messages_count), 0) as total_short_messages,
+                        COALESCE(SUM(long_messages_count), 0) as total_long_messages,
+                        COALESCE(SUM(points_received), 0) as total_points_received,
+                        COALESCE(SUM(earnings), 0) as total_earnings
                     ')
                     ->first();
+
+                // Calculer le temps de réponse moyen à partir de la table messages
+                $avgResponseTime = DB::table('messages as client_messages')
+                    ->join('messages as mod_messages', function ($join) use ($moderator) {
+                        $join->on('client_messages.client_id', '=', 'mod_messages.client_id')
+                            ->where('mod_messages.moderator_id', '=', $moderator->id)
+                            ->whereRaw('mod_messages.created_at > client_messages.created_at');
+                    })
+                    ->where('client_messages.is_from_client', true)
+                    ->where('mod_messages.is_from_client', false)
+                    ->whereBetween('client_messages.created_at', [$startDate, $endDate])
+                    ->avg(DB::raw('TIMESTAMPDIFF(SECOND, client_messages.created_at, mod_messages.created_at)')) ?? 0;
 
                 if ($stats) {
                     $totalMessages += ($stats->total_short_messages + $stats->total_long_messages);
                     $totalPoints += $stats->total_points_received;
                     $totalEarnings += $stats->total_earnings;
-                    if ($stats->avg_response_time) {
-                        $avgResponseTimes[] = $stats->avg_response_time;
-                    }
 
                     $moderatorStats = [
                         'messages' => (int)($stats->total_short_messages + $stats->total_long_messages),
-                        'avgResponseTime' => (int)$stats->avg_response_time,
+                        'avgResponseTime' => (int)$avgResponseTime,
                         'points' => (int)$stats->total_points_received,
                         'earnings' => (float)$stats->total_earnings,
                     ];
@@ -103,10 +134,21 @@ class ModeratorPerformanceController extends Controller
                         'name' => $moderator->name,
                         'email' => $moderator->email,
                         'avatar' => null,
-                        'stats' => $moderatorStats
+                        'stats' => $moderatorStats,
+                        'profiles' => $moderator->moderatorProfileAssignments->map(function ($assignment) {
+                            return [
+                                'id' => $assignment->profile->id,
+                                'name' => $assignment->profile->name,
+                                'photo' => $assignment->profile->main_photo_path,
+                                'is_primary' => $assignment->is_primary
+                            ];
+                        })
                     ];
                 }
             }
+
+            // Calculer la moyenne globale du temps de réponse
+            $globalAvgResponseTime = collect($formattedModerators)->avg('stats.avgResponseTime');
 
             // Filtrer par niveau de performance si demandé
             if ($request->performance_level) {
@@ -115,19 +157,16 @@ class ModeratorPerformanceController extends Controller
                 });
             }
 
-            // Calculer la moyenne du temps de réponse
-            $avgResponseTime = count($avgResponseTimes) > 0 ? array_sum($avgResponseTimes) / count($avgResponseTimes) : 0;
-
             return response()->json([
                 'stats' => [
                     'totalMessages' => (int)$totalMessages,
-                    'avgResponseTime' => (int)$avgResponseTime,
+                    'avgResponseTime' => (int)$globalAvgResponseTime,
                     'totalPoints' => (int)$totalPoints,
                     'totalEarnings' => (float)$totalEarnings
                 ],
                 'trends' => [
                     'messages' => $this->calculateTrend($totalMessages),
-                    'responseTime' => $this->calculateTrend($avgResponseTime),
+                    'responseTime' => $this->calculateTrend($globalAvgResponseTime),
                     'points' => $this->calculateTrend($totalPoints),
                     'earnings' => $this->calculateTrend($totalEarnings)
                 ],
@@ -141,8 +180,8 @@ class ModeratorPerformanceController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            \Log::error('Erreur dans getData: ' . $e->getMessage());
-            \Log::error($e->getTraceAsString());
+            Log::error('Erreur dans getData: ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
             return response()->json(['error' => 'Une erreur est survenue lors du chargement des données'], 500);
         }
     }

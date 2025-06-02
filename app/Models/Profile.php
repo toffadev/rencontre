@@ -42,6 +42,21 @@ class Profile extends Model
      */
     public function messages(): HasMany
     {
-        return $this->hasMany(Message::class);
+        return $this->hasMany(Message::class, 'profile_id');
+    }
+
+    public function receivedMessages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'profile_id')->where('is_from_client', true);
+    }
+
+    public function sentMessages(): HasMany
+    {
+        return $this->hasMany(Message::class, 'profile_id')->where('is_from_client', false);
+    }
+
+    public function moderatorProfileAssignments(): HasMany
+    {
+        return $this->hasMany(ModeratorProfileAssignment::class);
     }
 }

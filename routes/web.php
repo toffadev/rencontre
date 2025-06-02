@@ -19,6 +19,7 @@ use App\Http\Controllers\Client\ProfileReportController;
 use App\Http\Controllers\Client\ProfileDiscussionController;
 use App\Models\Profile;
 use App\Http\Controllers\Admin\ModeratorPerformanceController;
+use App\Http\Controllers\Admin\ProfilePerformanceController;
 use App\Models\User;
 
 /*
@@ -164,6 +165,13 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::delete('/', [App\Http\Controllers\Admin\GlobalMessageController::class, 'destroy'])->name('destroy');
     });
 
+    // Routes pour la gestion des clients
+    Route::prefix('clients')->name('clients.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\ClientManagementController::class, 'index'])->name('index');
+        Route::get('/{client}', [App\Http\Controllers\Admin\ClientManagementController::class, 'show'])->name('show');
+        Route::post('/{client}/points', [App\Http\Controllers\Admin\ClientManagementController::class, 'adjustPoints'])->name('adjust-points');
+    });
+
     // Routes API pour les performances des modérateurs
     Route::prefix('api')->group(function () {
         Route::get('/moderators', [App\Http\Controllers\Admin\ModeratorController::class, 'index']);
@@ -177,6 +185,49 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/export', [ModeratorPerformanceController::class, 'export'])->name('moderator-performance.export');
         Route::get('/moderators', [App\Http\Controllers\Admin\ModeratorController::class, 'index'])->name('moderator-performance.moderators');
         Route::get('/profiles', [App\Http\Controllers\Admin\AdminProfileApiController::class, 'index'])->name('moderator-performance.profiles');
+    });
+
+    // Routes pour la gestion des messages des modérateurs
+    Route::prefix('moderators')->name('moderators.')->group(function () {
+        Route::get('/messages', function () {
+            return Inertia::render('ModeratorMessagesList');
+        })->name('messages.list');
+        Route::get('/{moderator_id}/messages', [App\Http\Controllers\Admin\ModeratorMessageController::class, 'index'])->name('messages.index');
+        Route::get('/{moderator_id}/messages/data', [App\Http\Controllers\Admin\ModeratorMessageController::class, 'getMessages'])->name('messages.data');
+        Route::get('/conversation', [App\Http\Controllers\Admin\ModeratorMessageController::class, 'getConversation'])->name('messages.conversation');
+    });
+
+    // Routes pour les transactions financières
+    Route::prefix('transactions')->name('transactions.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\FinancialTransactionController::class, 'index'])->name('index');
+        Route::get('/stats', [App\Http\Controllers\Admin\FinancialTransactionController::class, 'getStats'])->name('stats');
+        Route::get('/export', [App\Http\Controllers\Admin\FinancialTransactionController::class, 'export'])->name('export');
+    });
+
+    // Routes pour l'attribution des points aux modérateurs
+    Route::prefix('moderator-points')->name('moderator-points.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\ModeratorPointsController::class, 'index'])->name('index');
+        Route::get('/{moderator}/stats', [App\Http\Controllers\Admin\ModeratorPointsController::class, 'getModeratorStats'])->name('stats');
+        Route::post('/bonus', [App\Http\Controllers\Admin\ModeratorPointsController::class, 'addBonus'])->name('bonus.add');
+        Route::get('/export', [App\Http\Controllers\Admin\ModeratorPointsController::class, 'export'])->name('export');
+    });
+
+    // Routes pour les performances des profils
+    Route::prefix('profile-performance')->name('profile-performance.')->group(function () {
+        // Vue d'ensemble des performances
+        Route::get('/', [ProfilePerformanceController::class, 'index'])->name('index');
+        Route::get('/data', [ProfilePerformanceController::class, 'getData'])->name('data');
+
+        // Détails d'un profil spécifique
+        Route::get('/{profile}/messages', [ProfilePerformanceController::class, 'getMessages'])->name('messages');
+        Route::get('/{profile}/charts', [ProfilePerformanceController::class, 'getCharts'])->name('charts');
+        Route::get('/{profile}/top-clients', [ProfilePerformanceController::class, 'getTopClients'])->name('top-clients');
+
+        // Actions sur les profils
+        Route::post('/{profile}/assign-moderator', [ProfilePerformanceController::class, 'assignModerator'])->name('assign-moderator');
+
+        // Export des données
+        Route::get('/export', [ProfilePerformanceController::class, 'export'])->name('export');
     });
 });
 

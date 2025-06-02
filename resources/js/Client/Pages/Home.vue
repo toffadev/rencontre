@@ -402,6 +402,60 @@ import { router } from "@inertiajs/vue3";
 axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 axios.defaults.withCredentials = true;
 
+// Intercepteur pour gérer le renouvellement automatique du token CSRF
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+axios.interceptors.response.use(
+    response => response,
+    async error => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 419 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                .then(() => {
+                    return axios(originalRequest);
+                })
+                .catch(err => {
+                    return Promise.reject(err);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                await axios.get('/sanctum/csrf-cookie');
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+                originalRequest.headers['X-CSRF-TOKEN'] = token;
+                processQueue(null, token);
+                return axios(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 const props = defineProps({
     profiles: {
         type: Array,
@@ -670,12 +724,6 @@ async function sendMessage() {
         const response = await axios.post("/send-message", {
             profile_id: profileId,
             content: messageContent,
-        }, {
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
         });
 
         // Mettre à jour les points immédiatement
@@ -697,16 +745,6 @@ async function sendMessage() {
         
         if (error.response?.status === 403) {
             showPointsAlert.value = true;
-        } else if (error.response?.status === 419) {
-            // Rafraîchir le token CSRF et réessayer
-            try {
-                const csrfResponse = await axios.get('/sanctum/csrf-cookie');
-                // Réessayer l'envoi du message
-                await sendMessage();
-                return;
-            } catch (csrfError) {
-                console.error("Erreur lors de la récupération du token CSRF:", csrfError);
-            }
         }
 
         // Marquer le message comme échoué

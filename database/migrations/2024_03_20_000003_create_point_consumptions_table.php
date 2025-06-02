@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->enum('type', ['message_sent']);
+            //$table->enum('type', ['message_sent', 'bonus_admin']);
             $table->integer('points_spent');
             $table->string('description')->nullable();
             $table->morphs('consumable'); // Pour lier à différents types (messages, etc.)

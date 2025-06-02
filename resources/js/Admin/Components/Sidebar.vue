@@ -34,16 +34,47 @@
         <span class="md:hidden lg:block">Conversations</span>
         </Link>
 
-        <Link href="/admin/moderator-performance" :class="['flex items-center space-x-3 p-3 rounded-lg',
+        <Link href="/admin/moderator-performance"
+          :class="['flex items-center space-x-3 p-3 rounded-lg',
           $page.component === 'Admin/Pages/ModeratorPerformance' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tags"></i>
         <span class="md:hidden lg:block">Performance des modérateurs</span>
         </Link>
 
+        <Link :href="route('admin.moderators.messages.list')"
+          :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/ModeratorMessagesList' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-envelope"></i>
+        <span class="md:hidden lg:block">Messages des modérateurs</span>
+        </Link>
+
+        <Link href="/admin/clients"
+          :class="['flex items-center space-x-3 p-3 rounded-lg',
+            $page.component === 'Admin/Pages/Clients' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-tags"></i>
+        <span class="md:hidden lg:block">Clients</span>
+        </Link>
+
+        <Link :href="route('admin.profile-performance.index')"
+          :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/ProfilePerformance' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-tags"></i>
+        <span class="md:hidden lg:block">Performance des profils</span>
+        </Link>
         <Link href="/admin/profiles" :class="['flex items-center space-x-3 p-3 rounded-lg',
           $page.component === 'Admin/Pages/Profiles' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
         <i class="fas fa-tags"></i>
         <span class="md:hidden lg:block">Profil</span>
+        </Link>
+        <Link href="/admin/transactions" :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/FinancialTransactions' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-tags"></i>
+        <span class="md:hidden lg:block">Transactions financières</span>
+        </Link>
+        <Link href="/admin/moderator-points" :class="['flex items-center space-x-3 p-3 rounded-lg',
+          $page.component === 'Admin/Pages/ModeratorPointsAttribution' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
+        <i class="fas fa-tags"></i>
+        <span class="md:hidden lg:block">Attribution des points aux modérateurs</span>
         </Link>
 
         <Link href="/admin/users" :class="['flex items-center space-x-3 p-3 rounded-lg',

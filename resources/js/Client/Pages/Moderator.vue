@@ -438,6 +438,64 @@ import Echo from "laravel-echo";
 import ClientInfoPanel from "@client/Components/ClientInfoPanel.vue";
 import { Link } from "@inertiajs/vue3";
 
+// Configuration d'Axios pour inclure le CSRF token
+axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+axios.defaults.withCredentials = true;
+
+// Intercepteur pour gérer le renouvellement automatique du token CSRF
+let isRefreshing = false;
+let failedQueue = [];
+
+const processQueue = (error, token = null) => {
+    failedQueue.forEach(prom => {
+        if (error) {
+            prom.reject(error);
+        } else {
+            prom.resolve(token);
+        }
+    });
+    failedQueue = [];
+};
+
+axios.interceptors.response.use(
+    response => response,
+    async error => {
+        const originalRequest = error.config;
+
+        if (error.response?.status === 419 && !originalRequest._retry) {
+            if (isRefreshing) {
+                return new Promise((resolve, reject) => {
+                    failedQueue.push({ resolve, reject });
+                })
+                .then(() => {
+                    return axios(originalRequest);
+                })
+                .catch(err => {
+                    return Promise.reject(err);
+                });
+            }
+
+            originalRequest._retry = true;
+            isRefreshing = true;
+
+            try {
+                await axios.get('/sanctum/csrf-cookie');
+                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+                originalRequest.headers['X-CSRF-TOKEN'] = token;
+                processQueue(null, token);
+                return axios(originalRequest);
+            } catch (refreshError) {
+                processQueue(refreshError, null);
+                return Promise.reject(refreshError);
+            } finally {
+                isRefreshing = false;
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
 // État des données
 const currentAssignedProfile = ref(null);
 const assignedClient = ref([]);
