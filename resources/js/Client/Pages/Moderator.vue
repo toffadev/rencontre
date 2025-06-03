@@ -352,7 +352,18 @@
                                     " alt="Client" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                 <div>
                                     <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
-                                        {{ message.content }}
+                                        <!-- Contenu du message -->
+                                        <div v-if="message.content">{{ message.content }}</div>
+                                        
+                                        <!-- Image attachée -->
+                                        <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
+                                            <img
+                                                :src="message.attachment.url"
+                                                :alt="message.attachment.file_name"
+                                                class="max-w-full rounded-lg cursor-pointer"
+                                                @click="showImagePreview(message.attachment)"
+                                            />
+                                        </div>
                                     </div>
                                     <div class="flex items-center mt-1 text-xs text-gray-500">
                                         <span>{{ message.time }}</span>
@@ -364,7 +375,18 @@
                             <template v-else>
                                 <div>
                                     <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
-                                        {{ message.content }}
+                                        <!-- Contenu du message -->
+                                        <div v-if="message.content">{{ message.content }}</div>
+                                        
+                                        <!-- Image attachée -->
+                                        <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
+                                            <img
+                                                :src="message.attachment.url"
+                                                :alt="message.attachment.file_name"
+                                                class="max-w-full rounded-lg cursor-pointer"
+                                                @click="showImagePreview(message.attachment)"
+                                            />
+                                        </div>
                                     </div>
                                     <div class="flex items-center justify-end mt-1 text-xs text-gray-500">
                                         <span>{{ message.time }}</span>
@@ -385,22 +407,56 @@
 
                     <!-- Message Input -->
                     <div class="border-t border-gray-200 p-4">
-                        <div class="flex items-center space-x-2">
-                            <button class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
-                                <i class="fas fa-plus"></i>
-                            </button>
-                            <input v-model="newMessage" type="text" placeholder="Écrire un message..."
-                                class="flex-1 px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                @keyup.enter="sendMessage" />
-                            <button class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
-                                @click="sendMessage" :disabled="!currentAssignedProfile || !selectedClient
-                                    ">
-                                <i class="fas fa-paper-plane"></i>
-                            </button>
-                        </div>
-                        <div v-if="!currentAssignedProfile" class="mt-2 text-center text-xs text-red-500">
-                            Vous devez avoir un profil attribué pour envoyer des
-                            messages
+                        <div class="flex flex-col space-y-2">
+                            <!-- Prévisualisation de l'image -->
+                            <div v-if="selectedFile" class="flex justify-end">
+                                <div class="relative inline-block">
+                                    <img
+                                        :src="previewUrl"
+                                        class="max-h-32 rounded-lg"
+                                        alt="Preview"
+                                    />
+                                    <button
+                                        @click="removeSelectedFile"
+                                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                                    >
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="flex items-center space-x-2">
+                                <input
+                                    type="file"
+                                    ref="fileInput"
+                                    class="hidden"
+                                    accept="image/*"
+                                    @change="handleFileUpload"
+                                />
+                                <button
+                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                                    title="Ajouter une image"
+                                    @click="$refs.fileInput.click()"
+                                >
+                                    <i class="fas fa-image"></i>
+                                </button>
+                                <div class="flex-1 relative">
+                                    <input
+                                        v-model="newMessage"
+                                        type="text"
+                                        placeholder="Écrire un message..."
+                                        class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                        @keyup.enter="sendMessage"
+                                    />
+                                </div>
+                                <button
+                                    class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
+                                    @click="sendMessage"
+                                    :disabled="!currentAssignedProfile || !selectedClient || (!newMessage.trim() && !selectedFile)"
+                                >
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -428,6 +484,13 @@
             </div>
         </div>
     </MainLayout>
+
+    <!-- Modal de prévisualisation d'image -->
+    <div v-if="showPreview" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" @click="closeImagePreview">
+        <div class="max-w-4xl max-h-full p-4">
+            <img :src="previewImage.url" :alt="previewImage.file_name" class="max-w-full max-h-[90vh] object-contain" />
+        </div>
+    </div>
 </template>
 
 <script setup>
@@ -439,62 +502,10 @@ import ClientInfoPanel from "@client/Components/ClientInfoPanel.vue";
 import { Link } from "@inertiajs/vue3";
 
 // Configuration d'Axios pour inclure le CSRF token
-axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 axios.defaults.withCredentials = true;
-
-// Intercepteur pour gérer le renouvellement automatique du token CSRF
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-    failedQueue.forEach(prom => {
-        if (error) {
-            prom.reject(error);
-        } else {
-            prom.resolve(token);
-        }
-    });
-    failedQueue = [];
-};
-
-axios.interceptors.response.use(
-    response => response,
-    async error => {
-        const originalRequest = error.config;
-
-        if (error.response?.status === 419 && !originalRequest._retry) {
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                })
-                .then(() => {
-                    return axios(originalRequest);
-                })
-                .catch(err => {
-                    return Promise.reject(err);
-                });
-            }
-
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            try {
-                await axios.get('/sanctum/csrf-cookie');
-                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-                originalRequest.headers['X-CSRF-TOKEN'] = token;
-                processQueue(null, token);
-                return axios(originalRequest);
-            } catch (refreshError) {
-                processQueue(refreshError, null);
-                return Promise.reject(refreshError);
-            } finally {
-                isRefreshing = false;
-            }
-        }
-        return Promise.reject(error);
-    }
-);
 
 // État des données
 const currentAssignedProfile = ref(null);
@@ -1034,21 +1045,75 @@ watch(currentAssignedProfile, async (newProfile, oldProfile) => {
     }
 });
 
-// Envoyer un message
+// Ajouter ces refs dans la section script
+const fileInput = ref(null);
+const selectedFile = ref(null);
+const previewUrl = ref(null);
+const showPreview = ref(false);
+const previewImage = ref(null);
+
+// Ajouter ces fonctions dans la section script
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        // Vérifier le type de fichier
+        if (!file.type.startsWith('image/')) {
+            alert('Seules les images sont autorisées');
+            return;
+        }
+        
+        // Vérifier la taille du fichier (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('La taille du fichier ne doit pas dépasser 5MB');
+            return;
+        }
+
+        selectedFile.value = file;
+        previewUrl.value = URL.createObjectURL(file);
+    }
+}
+
+function removeSelectedFile() {
+    selectedFile.value = null;
+    previewUrl.value = null;
+    if (fileInput.value) {
+        fileInput.value.value = '';
+    }
+}
+
+function showImagePreview(attachment) {
+    previewImage.value = attachment;
+    showPreview.value = true;
+}
+
+function closeImagePreview() {
+    showPreview.value = false;
+    previewImage.value = null;
+}
+
+// Modifier la fonction sendMessage pour inclure explicitement le CSRF token
 async function sendMessage() {
-    if (
-        newMessage.value.trim() === "" ||
-        !currentAssignedProfile.value ||
-        !selectedClient.value
-    )
+    if ((!newMessage.value.trim() && !selectedFile.value) || !currentAssignedProfile.value || !selectedClient.value)
         return;
 
-    const now = new Date();
-    const hours = now.getHours().toString().padStart(2, "0");
-    const minutes = now.getMinutes().toString().padStart(2, "0");
-    const timeString = `${hours}:${minutes}`;
+    const formData = new FormData();
+    formData.append('client_id', selectedClient.value.id);
+    formData.append('profile_id', currentAssignedProfile.value.id);
+    
+    if (newMessage.value.trim()) {
+        formData.append('content', newMessage.value);
+    }
+    if (selectedFile.value) {
+        formData.append('attachment', selectedFile.value);
+    }
 
-    // Créer le message local pour une UX plus réactive
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
+
+    // Créer le message local
     const localMessage = {
         id: "temp-" + Date.now(),
         content: newMessage.value,
@@ -1057,46 +1122,45 @@ async function sendMessage() {
         date: new Date().toISOString().split("T")[0],
     };
 
-    // Ajouter le message à la conversation localement
+    // Si une image est sélectionnée, ajouter la prévisualisation
+    if (selectedFile.value) {
+        localMessage.attachment = {
+            url: previewUrl.value,
+            file_name: selectedFile.value.name,
+            mime_type: selectedFile.value.type
+        };
+    }
+
+    // Ajouter le message localement
     if (!chatMessages.value[selectedClient.value.id]) {
         chatMessages.value[selectedClient.value.id] = [];
     }
-
     chatMessages.value[selectedClient.value.id].push(localMessage);
 
-    // Mettre à jour le dernier message s'il s'agit du client attribué
-    if (
-        assignedClient.value.length > 0 &&
-        assignedClient.value[0].id === selectedClient.value.id
-    ) {
-        assignedClient.value[0].lastMessage = newMessage.value;
-    }
-
-    // Vider le champ de texte
+    // Réinitialiser les champs
     newMessage.value = "";
+    removeSelectedFile();
 
     try {
-        console.log("Envoi du message au serveur:", {
-            client_id: selectedClient.value.id,
-            profile_id: currentAssignedProfile.value.id,
-            content: localMessage.content,
-        });
+        const response = await axios.post("/moderateur/send-message", formData);
 
-        // Envoyer le message au serveur
-        const response = await axios.post("/moderateur/send-message", {
-            client_id: selectedClient.value.id,
-            profile_id: currentAssignedProfile.value.id,
-            content: localMessage.content,
-        });
-
-        console.log("Message envoyé avec succès:", response.data);
+        if (response.data.success) {
+            const index = chatMessages.value[selectedClient.value.id].findIndex(
+                (msg) => msg.id === localMessage.id
+            );
+            if (index !== -1) {
+                chatMessages.value[selectedClient.value.id][index] = response.data.messageData;
+            }
+        }
     } catch (error) {
         console.error("Erreur lors de l'envoi du message:", error);
-        console.error("Détails:", {
+        console.error("Détails de l'erreur:", {
             status: error.response?.status,
             data: error.response?.data,
+            message: error.message,
+            stack: error.stack
         });
-
+        
         // Marquer le message comme échoué
         const index = chatMessages.value[selectedClient.value.id].findIndex(
             (msg) => msg.id === localMessage.id
@@ -1196,5 +1260,17 @@ const goToConversation = (clientId) => {
     background-color: #10b981;
     border-radius: 50%;
     border: 2px solid white;
+}
+
+.message-in img, .message-out img {
+    max-width: 200px;
+    height: auto;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.message-in img:hover, .message-out img:hover {
+    opacity: 0.9;
+    cursor: zoom-in;
 }
 </style>

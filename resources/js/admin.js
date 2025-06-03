@@ -4,6 +4,9 @@ import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { route } from 'ziggy-js';
 
+// Rendre route disponible globalement
+window.route = route;
+
 // Initialiser Axios avec le token CSRF
 const csrfMetaTag = document.querySelector('meta[name="csrf-token"]');
 if (csrfMetaTag && csrfMetaTag.content) {

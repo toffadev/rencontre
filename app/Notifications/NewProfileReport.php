@@ -2,11 +2,11 @@
 
 namespace App\Notifications;
 
-use App\Models\ProfileReport;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Notifications\Messages\MailMessage;
+use Illuminate\Notifications\Messages\BroadcastMessage;
 use Illuminate\Notifications\Notification;
+use App\Models\ProfileReport;
 
 class NewProfileReport extends Notification implements ShouldQueue
 {
@@ -21,31 +21,31 @@ class NewProfileReport extends Notification implements ShouldQueue
 
     public function via($notifiable)
     {
-        return ['mail', 'database'];
+        return ['database', 'broadcast'];
     }
 
-    public function toMail($notifiable)
-    {
-        $reportedUser = $this->report->reportedUser;
-        $reporter = $this->report->reporter;
-
-        return (new MailMessage)
-            ->subject('Nouveau signalement de profil')
-            ->line("Un nouveau profil a été signalé.")
-            ->line("Profil signalé : {$reportedUser->name}")
-            ->line("Signalé par : {$reporter->name}")
-            ->line("Raison : {$this->report->reason}")
-            ->line("Description : {$this->report->description}")
-            ->action('Voir le signalement', route('admin.reports.show', $this->report->id));
-    }
-
-    public function toArray($notifiable)
+    public function toDatabase($notifiable)
     {
         return [
             'report_id' => $this->report->id,
+            'reporter_name' => $this->report->reporter->name,
+            'reported_profile_id' => $this->report->reported_profile_id,
+            'reported_profile_name' => $this->report->reportedProfile->name,
             'reported_user_id' => $this->report->reported_user_id,
-            'reporter_id' => $this->report->reporter_id,
             'reason' => $this->report->reason,
+            'description' => $this->report->description,
+            'created_at' => $this->report->created_at,
         ];
+    }
+
+    public function toBroadcast($notifiable)
+    {
+        return new BroadcastMessage([
+            'report_id' => $this->report->id,
+            'reporter_name' => $this->report->reporter->name,
+            'reported_profile_name' => $this->report->reportedProfile->name,
+            'reason' => $this->report->reason,
+            'created_at' => $this->report->created_at->diffForHumans(),
+        ]);
     }
 }

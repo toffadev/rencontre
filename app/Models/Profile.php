@@ -59,4 +59,12 @@ class Profile extends Model
     {
         return $this->hasMany(ModeratorProfileAssignment::class);
     }
+
+    /**
+     * Get reports for this profile
+     */
+    public function reports(): HasMany
+    {
+        return $this->hasMany(ProfileReport::class, 'reported_profile_id');
+    }
 }

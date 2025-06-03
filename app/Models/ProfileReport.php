@@ -19,20 +19,36 @@ class ProfileReport extends Model
 
     protected $casts = [
         'reviewed_at' => 'datetime',
+        'created_at' => 'datetime',
+        'updated_at' => 'datetime'
     ];
+
+    protected $with = ['reporter', 'reportedUser', 'reportedProfile'];
 
     public function reporter(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reporter_id');
+        return $this->belongsTo(User::class, 'reporter_id')
+            ->withDefault([
+                'name' => 'Utilisateur supprimé',
+                'email' => 'N/A'
+            ]);
     }
 
     public function reportedUser(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'reported_user_id');
+        return $this->belongsTo(User::class, 'reported_user_id')
+            ->withDefault([
+                'name' => 'Utilisateur supprimé',
+                'email' => 'N/A'
+            ]);
     }
 
     public function reportedProfile(): BelongsTo
     {
-        return $this->belongsTo(Profile::class, 'reported_profile_id');
+        return $this->belongsTo(Profile::class, 'reported_profile_id')
+            ->withDefault([
+                'name' => 'Profil supprimé',
+                'gender' => 'N/A'
+            ]);
     }
 }

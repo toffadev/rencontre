@@ -45,10 +45,15 @@ class HandleInertiaRequests extends Middleware
                     'type' => $request->user()->type,
                 ] : null,
             ],
+            'userId' => $request->user()?->id,
             'clientId' => $request->user() ? $request->user()->id : null,
             'flash' => [
                 'message' => fn() => $request->session()->get('message'),
                 'error' => fn() => $request->session()->get('error'),
+            ],
+            'ziggy' => [
+                'location' => $request->url(),
+                'current_route' => $request->route()?->getName(),
             ],
         ]);
     }

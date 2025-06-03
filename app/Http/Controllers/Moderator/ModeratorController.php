@@ -15,6 +15,9 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use App\Models\ModeratorStatistic;
+use App\Services\MessageAttachmentService;
+use Illuminate\Support\Facades\Storage;
+use App\Models\MessageAttachment;
 
 class ModeratorController extends Controller
 {
@@ -26,14 +29,23 @@ class ModeratorController extends Controller
     protected $assignmentService;
 
     /**
+     * Le service de gestion des pièces jointes.
+     *
+     * @var \App\Services\MessageAttachmentService
+     */
+    protected $attachmentService;
+
+    /**
      * Créer une nouvelle instance du contrôleur.
      *
      * @param  \App\Services\ModeratorAssignmentService  $assignmentService
+     * @param  \App\Services\MessageAttachmentService  $attachmentService
      * @return void
      */
-    public function __construct(ModeratorAssignmentService $assignmentService)
+    public function __construct(ModeratorAssignmentService $assignmentService, MessageAttachmentService $attachmentService)
     {
         $this->assignmentService = $assignmentService;
+        $this->attachmentService = $attachmentService;
     }
 
     /**
@@ -303,8 +315,8 @@ class ModeratorController extends Controller
     public function getMessages(Request $request)
     {
         $request->validate([
-            'client_id' => 'required|integer|exists:users,id',
-            'profile_id' => 'required|integer|exists:profiles,id',
+            'client_id' => 'required|exists:users,id',
+            'profile_id' => 'required|exists:profiles,id',
         ]);
 
         $currentModeratorId = Auth::id();
@@ -321,18 +333,32 @@ class ModeratorController extends Controller
             ], 403);
         }
 
-        // Récupérer les messages entre ce client et ce profil
-        $messages = Message::where('profile_id', $request->profile_id)
+        // Récupérer les messages avec leurs pièces jointes
+        $messages = Message::with('attachments')
             ->where('client_id', $request->client_id)
+            ->where('profile_id', $request->profile_id)
             ->orderBy('created_at')
             ->get()
             ->map(function ($message) {
+                $attachmentData = null;
+                if ($message->attachments->isNotEmpty()) {
+                    $attachment = $message->attachments->first();
+                    $attachmentData = [
+                        'id' => $attachment->id,
+                        'file_name' => $attachment->file_name,
+                        'mime_type' => $attachment->mime_type,
+                        'url' => Storage::url($attachment->file_path)
+                    ];
+                }
+
                 return [
                     'id' => $message->id,
                     'content' => $message->content,
                     'isFromClient' => $message->is_from_client,
                     'time' => $message->created_at->format('H:i'),
                     'date' => $message->created_at->format('Y-m-d'),
+                    'created_at' => $message->created_at->toISOString(),
+                    'attachment' => $attachmentData
                 ];
             });
 
@@ -356,106 +382,145 @@ class ModeratorController extends Controller
      */
     public function sendMessage(Request $request)
     {
-        $request->validate([
-            'client_id' => 'required|exists:users,id',
-            'profile_id' => 'required|exists:profiles,id',
-            'content' => 'required|string'
-        ]);
-
         try {
-            DB::beginTransaction();
-
-            Log::info('Début de l\'envoi du message', [
-                'moderator_id' => Auth::id(),
-                'client_id' => $request->client_id,
-                'profile_id' => $request->profile_id,
-                'content_length' => strlen($request->content)
+            Log::info('Début de sendMessage', [
+                'request_data' => $request->all(),
+                'has_file' => $request->hasFile('attachment'),
+                'auth_id' => Auth::id(),
+                'csrf_token' => $request->header('X-CSRF-TOKEN')
             ]);
+
+            $request->validate([
+                'client_id' => 'required|exists:users,id',
+                'profile_id' => 'required|exists:profiles,id',
+                'content' => 'required_without:attachment|string|max:1000',
+                'attachment' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:5120',
+            ]);
+
+            Log::info('Validation passée');
+
+            $moderatorId = Auth::id();
+
+            if (!$moderatorId) {
+                Log::error('Modérateur non authentifié');
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Non authentifié'
+                ], 401);
+            }
+
+            Log::info('Vérification de l\'accès au profil', [
+                'moderator_id' => $moderatorId,
+                'profile_id' => $request->profile_id
+            ]);
+
+            // Vérifier l'accès au profil
+            $hasAccess = ModeratorProfileAssignment::where('user_id', $moderatorId)
+                ->where('profile_id', $request->profile_id)
+                ->where('is_active', true)
+                ->exists();
+
+            if (!$hasAccess) {
+                Log::error('Accès non autorisé au profil', [
+                    'moderator_id' => $moderatorId,
+                    'profile_id' => $request->profile_id
+                ]);
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Accès non autorisé à ce profil'
+                ], 403);
+            }
+
+            Log::info('Création du message');
 
             // Créer le message
             $message = Message::create([
                 'client_id' => $request->client_id,
                 'profile_id' => $request->profile_id,
-                'moderator_id' => Auth::id(),
-                'content' => $request->content,
-                'is_from_client' => false
+                'moderator_id' => $moderatorId,
+                'content' => $request->content ?? '',
+                'is_from_client' => false,
             ]);
 
-            Log::info('Message créé avec succès', [
-                'message_id' => $message->id
+            Log::info('Message créé', [
+                'message_id' => $message->id,
+                'message_data' => $message->toArray()
             ]);
 
-            // Mettre à jour les statistiques en temps réel
-            $isLong = strlen($request->content) >= 10;
-            $earnings = $isLong ? 50 : 25;
+            // Gérer le fichier attaché
+            if ($request->hasFile('attachment')) {
+                try {
+                    Log::info('Début du traitement du fichier', [
+                        'file_info' => [
+                            'name' => $request->file('attachment')->getClientOriginalName(),
+                            'size' => $request->file('attachment')->getSize(),
+                            'mime' => $request->file('attachment')->getMimeType()
+                        ]
+                    ]);
 
-            try {
-                $stats = ModeratorStatistic::firstOrCreate(
-                    [
-                        'user_id' => Auth::id(),
-                        'profile_id' => $request->profile_id,
-                        'stats_date' => now()->format('Y-m-d')
-                    ],
-                    [
-                        'short_messages_count' => 0,
-                        'long_messages_count' => 0,
-                        'points_received' => 0,
-                        'earnings' => 0
-                    ]
-                );
+                    $attachment = $this->attachmentService->storeAttachment($message, $request->file('attachment'));
 
-                Log::info('Statistiques créées/récupérées', [
-                    'stats_id' => $stats->id,
-                    'is_new_record' => $stats->wasRecentlyCreated
-                ]);
+                    Log::info('Fichier uploadé avec succès', [
+                        'attachment_id' => $attachment->id,
+                        'file_name' => $attachment->file_name,
+                        'file_path' => $attachment->file_path
+                    ]);
 
-                if ($isLong) {
-                    $stats->increment('long_messages_count');
-                } else {
-                    $stats->increment('short_messages_count');
+                    // Ajouter l'URL de l'attachement à la réponse
+                    $message->attachment = [
+                        'url' => Storage::url($attachment->file_path),
+                        'file_name' => $attachment->file_name,
+                        'mime_type' => $attachment->mime_type,
+                    ];
+                } catch (\Exception $e) {
+                    Log::error('Erreur lors du traitement du fichier', [
+                        'error' => $e->getMessage(),
+                        'trace' => $e->getTraceAsString()
+                    ]);
+                    throw $e;
                 }
-                $stats->increment('earnings', $earnings);
-
-                $stats->refresh();
-                Log::info('Statistiques mises à jour avec succès', [
-                    'stats_id' => $stats->id,
-                    'short_messages' => $stats->short_messages_count,
-                    'long_messages' => $stats->long_messages_count,
-                    'earnings' => $stats->earnings
-                ]);
-            } catch (\Exception $e) {
-                Log::error('Erreur lors de la mise à jour des statistiques', [
-                    'error' => $e->getMessage(),
-                    'trace' => $e->getTraceAsString()
-                ]);
-                throw $e;
             }
 
-            DB::commit();
+            // Formater la réponse
+            $messageData = [
+                'id' => $message->id,
+                'content' => $message->content,
+                'isFromClient' => false,
+                'time' => $message->created_at->format('H:i'),
+                'date' => $message->created_at->format('Y-m-d'),
+                'created_at' => $message->created_at->toISOString(),
+                'attachment' => $message->attachment ?? null,
+            ];
 
-            Log::info('Transaction validée avec succès', [
-                'message_id' => $message->id,
-                'stats_id' => $stats->id,
-                'stats_date' => $stats->stats_date
-            ]);
+            Log::info('Envoi de l\'événement broadcast');
 
-            // Diffuser l'événement
+            // Émettre l'événement en temps réel
             broadcast(new MessageSent($message))->toOthers();
 
-            return response()->json([
-                'message' => $message,
-                'success' => true
-            ]);
-        } catch (\Exception $e) {
-            DB::rollback();
-            Log::error('Erreur lors de l\'envoi du message:', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            Log::info('Message envoyé avec succès', [
+                'message_id' => $message->id,
+                'has_attachment' => isset($message->attachment),
+                'response_data' => $messageData
             ]);
 
             return response()->json([
-                'message' => 'Erreur lors de l\'envoi du message',
-                'error' => $e->getMessage()
+                'success' => true,
+                'messageData' => $messageData,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur dans sendMessage', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
             ], 500);
         }
     }

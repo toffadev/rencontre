@@ -214,7 +214,19 @@
                                                 message.failed ? 'failed' : ''
                                             }`"
                                         >
-                                            {{ message.content }}
+                                            <!-- Contenu du message -->
+                                            <div v-if="message.content" class="mb-2">{{ message.content }}</div>
+                                            
+                                            <!-- Image attachée -->
+                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
+                                                <img
+                                                    :src="message.attachment.url"
+                                                    :alt="message.attachment.file_name"
+                                                    class="max-w-full rounded-lg cursor-pointer"
+                                                    @click="showImagePreview(message.attachment)"
+                                                />
+                                            </div>
+
                                             <span
                                                 v-if="message.pending"
                                                 class="ml-2 inline-block text-xs"
@@ -287,15 +299,40 @@
                         {{ selectedProfile?.name }} est en train d'écrire...
                     </div>
 
-                    <!-- Message Input avec compteur de caractères -->
+                    <!-- Message Input -->
                     <div class="border-t border-gray-200 p-4">
                         <div class="flex flex-col space-y-2">
+                            <!-- Prévisualisation de l'image -->
+                            <div v-if="selectedFile" class="flex justify-end">
+                                <div class="relative inline-block">
+                                    <img
+                                        :src="previewUrl"
+                                        class="max-h-32 rounded-lg"
+                                        alt="Preview"
+                                    />
+                                    <button
+                                        @click="removeSelectedFile"
+                                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                                    >
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
                             <div class="flex items-center space-x-2">
+                                <input
+                                    type="file"
+                                    ref="fileInput"
+                                    class="hidden"
+                                    accept="image/*"
+                                    @change="handleFileUpload"
+                                />
                                 <button
                                     class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    title="Ajouter un fichier"
+                                    title="Ajouter une image"
+                                    @click="$refs.fileInput.click()"
                                 >
-                                    <i class="fas fa-plus"></i>
+                                    <i class="fas fa-image"></i>
                                 </button>
                                 <div class="flex-1 relative">
                                     <input
@@ -316,7 +353,7 @@
                                     class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
                                     @click="sendMessage"
                                     :disabled="
-                                        !newMessage.trim() ||
+                                        (!newMessage.trim() && !selectedFile) ||
                                         remainingPoints < 5
                                     "
                                     :title="
@@ -384,6 +421,13 @@
                 @close="closeReportModal"
                 @reported="handleReported"
             />
+
+            <!-- Modal de prévisualisation d'image -->
+            <div v-if="showPreview" class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" @click="closeImagePreview">
+                <div class="max-w-4xl max-h-full p-4">
+                    <img :src="previewImage.url" :alt="previewImage.file_name" class="max-w-full max-h-[90vh] object-contain" />
+                </div>
+            </div>
         </div>
     </MainLayout>
 </template>
@@ -480,6 +524,11 @@ const selectedProfileForReport = ref(null);
 const blockedProfileIds = ref([]);
 const reportedProfiles = ref([]);
 const conversationStates = ref(new Map());
+const fileInput = ref(null);
+const selectedFile = ref(null);
+const previewUrl = ref(null);
+const showPreview = ref(false);
+const previewImage = ref(null);
 
 // Messages pour la conversation courante
 const currentMessages = computed(() => {
@@ -727,61 +776,76 @@ watch(selectedProfile, (newProfile, oldProfile) => {
 
 // Modifier la fonction sendMessage
 async function sendMessage() {
-    if (newMessage.value.trim() === "" || !selectedProfile.value) return;
+    if ((!newMessage.value.trim() && !selectedFile.value) || !selectedProfile.value) return;
 
-    const profileId = selectedProfile.value.id;
-    const messageContent = newMessage.value;
+    const formData = new FormData();
+    formData.append('profile_id', selectedProfile.value.id);
+    if (newMessage.value.trim()) {
+        formData.append('content', newMessage.value);
+    }
+    if (selectedFile.value) {
+        formData.append('attachment', selectedFile.value);
+    }
+
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+    });
 
     // Créer le message local
     const localMessage = {
         id: "temp-" + Date.now(),
-        content: messageContent,
+        content: newMessage.value,
         isOutgoing: true,
-        time: new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-        }),
-        date: new Date().toISOString().split("T")[0],
-        created_at: new Date().toISOString(),
+        time: timeString,
+        date: now.toISOString().split("T")[0],
         pending: true,
     };
 
-    // Ajouter le message localement
-    if (!messagesMap.value[profileId]) {
-        messagesMap.value[profileId] = [];
+    // Si une image est sélectionnée, ajouter la prévisualisation
+    if (selectedFile.value) {
+        localMessage.attachment = {
+            url: previewUrl.value,
+            file_name: selectedFile.value.name,
+            mime_type: selectedFile.value.type
+        };
     }
-    messagesMap.value[profileId].push(localMessage);
 
-    // Réinitialiser l'input et faire défiler
+    // Ajouter le message localement
+    if (!messagesMap.value[selectedProfile.value.id]) {
+        messagesMap.value[selectedProfile.value.id] = [];
+    }
+    messagesMap.value[selectedProfile.value.id].push(localMessage);
+
+    // Réinitialiser les champs
     newMessage.value = "";
+    removeSelectedFile();
+
+    // Faire défiler vers le bas
     nextTick(() => {
         scrollToBottom();
     });
 
     try {
-        const response = await axios.post("/send-message", {
-            profile_id: profileId,
-            content: messageContent,
+        const response = await axios.post("/send-message", formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data'
+            }
         });
 
-        // Mettre à jour les points immédiatement
+        // Mettre à jour les points
         if (response.data.remaining_points !== undefined) {
             remainingPoints.value = response.data.remaining_points;
         }
 
-        // Mettre à jour le message et l'état de la conversation
+        // Mettre à jour le message avec les données du serveur
         if (response.data.success) {
-            const index = messagesMap.value[profileId].findIndex(
+            const index = messagesMap.value[selectedProfile.value.id].findIndex(
                 (msg) => msg.id === localMessage.id
             );
             if (index !== -1) {
-                messagesMap.value[profileId][index] = response.data.messageData;
-            }
-
-            // Mettre à jour l'état de la conversation
-            const state = conversationStates.value.get(profileId);
-            if (state) {
-                state.awaitingReply = false;
+                messagesMap.value[selectedProfile.value.id][index] = response.data.messageData;
             }
         }
     } catch (error) {
@@ -792,12 +856,12 @@ async function sendMessage() {
         }
 
         // Marquer le message comme échoué
-        const index = messagesMap.value[profileId].findIndex(
+        const index = messagesMap.value[selectedProfile.value.id].findIndex(
             (msg) => msg.id === localMessage.id
         );
         if (index !== -1) {
-            messagesMap.value[profileId][index].failed = true;
-            messagesMap.value[profileId][index].pending = false;
+            messagesMap.value[selectedProfile.value.id][index].failed = true;
+            messagesMap.value[selectedProfile.value.id][index].pending = false;
         }
     }
 }
@@ -1015,6 +1079,44 @@ function isAwaitingReply(profileId) {
 function getUnreadCount(profileId) {
     return conversationStates.value.get(profileId)?.unreadCount || 0;
 }
+
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) {
+        // Vérifier le type de fichier
+        if (!file.type.startsWith('image/')) {
+            alert('Seules les images sont autorisées');
+            return;
+        }
+        
+        // Vérifier la taille du fichier (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('La taille du fichier ne doit pas dépasser 5MB');
+            return;
+        }
+
+        selectedFile.value = file;
+        previewUrl.value = URL.createObjectURL(file);
+    }
+}
+
+function removeSelectedFile() {
+    selectedFile.value = null;
+    previewUrl.value = null;
+    if (fileInput.value) {
+        fileInput.value.value = '';
+    }
+}
+
+function showImagePreview(attachment) {
+    previewImage.value = attachment;
+    showPreview.value = true;
+}
+
+function closeImagePreview() {
+    showPreview.value = false;
+    previewImage.value = null;
+}
 </script>
 
 <style scoped>
@@ -1088,5 +1190,17 @@ function getUnreadCount(profileId) {
 /* Mettre à jour les styles des avatars */
 .fa-user {
     font-size: 1.2rem;
+}
+
+.message-in img, .message-out img {
+    max-width: 200px;
+    height: auto;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.message-in img:hover, .message-out img:hover {
+    opacity: 0.9;
+    cursor: zoom-in;
 }
 </style>

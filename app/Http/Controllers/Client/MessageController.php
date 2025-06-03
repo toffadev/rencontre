@@ -13,14 +13,18 @@ use Illuminate\Support\Facades\Log;
 use App\Services\PointService;
 use Exception;
 use App\Models\ConversationState;
+use App\Services\MessageAttachmentService;
+use Illuminate\Support\Facades\Storage;
 
 class MessageController extends Controller
 {
     protected $pointService;
+    protected $attachmentService;
 
-    public function __construct(PointService $pointService)
+    public function __construct(PointService $pointService, MessageAttachmentService $attachmentService)
     {
         $this->pointService = $pointService;
+        $this->attachmentService = $attachmentService;
     }
 
     /**
@@ -38,11 +42,35 @@ class MessageController extends Controller
         $clientId = Auth::id();
         $profileId = $request->profile_id;
 
-        // Récupérer les messages entre ce client et ce profil
-        $messages = Message::where('profile_id', $profileId)
+        // Récupérer les messages avec leurs pièces jointes
+        $messages = Message::with('attachments')
+            ->where('profile_id', $profileId)
             ->where('client_id', $clientId)
             ->orderBy('created_at')
             ->get();
+
+        $formattedMessages = $messages->map(function ($message) {
+            $attachmentData = null;
+            if ($message->attachments->isNotEmpty()) {
+                $attachment = $message->attachments->first();
+                $attachmentData = [
+                    'id' => $attachment->id,
+                    'file_name' => $attachment->file_name,
+                    'mime_type' => $attachment->mime_type,
+                    'url' => Storage::url($attachment->file_path)
+                ];
+            }
+
+            return [
+                'id' => $message->id,
+                'content' => $message->content,
+                'isOutgoing' => $message->is_from_client,
+                'time' => $message->created_at->format('H:i'),
+                'date' => $message->created_at->format('Y-m-d'),
+                'created_at' => $message->created_at->toISOString(),
+                'attachment' => $attachmentData
+            ];
+        });
 
         // Compter les messages non lus
         $unreadCount = $messages->where('is_from_client', false)
@@ -65,17 +93,6 @@ class MessageController extends Controller
             ]
         );
 
-        $formattedMessages = $messages->map(function ($message) {
-            return [
-                'id' => $message->id,
-                'content' => $message->content,
-                'isOutgoing' => $message->is_from_client,
-                'time' => $message->created_at->format('H:i'),
-                'date' => $message->created_at->format('Y-m-d'),
-                'created_at' => $message->created_at->toISOString(),
-            ];
-        });
-
         return response()->json([
             'messages' => $formattedMessages,
             'conversation_state' => [
@@ -97,7 +114,8 @@ class MessageController extends Controller
     {
         $request->validate([
             'profile_id' => 'required|integer|exists:profiles,id',
-            'content' => 'required|string|max:1000'
+            'content' => 'required_without:attachment|string|max:1000',
+            'attachment' => 'nullable|file|mimes:jpeg,png,jpg,gif|max:5120', // 5MB max
         ]);
 
         $user = Auth::user();
@@ -109,14 +127,23 @@ class MessageController extends Controller
             $message = Message::create([
                 'client_id' => $clientId,
                 'profile_id' => $profileId,
-                'moderator_id' => null, // Pas de modérateur car vient du client
-                'content' => $request->content,
+                'moderator_id' => null,
+                'content' => $request->content ?? '',
                 'is_from_client' => true,
             ]);
 
-            // Déduire les points après la création du message pour pouvoir le lier
+            // Gérer la pièce jointe si présente
+            $attachment = null;
+            if ($request->hasFile('attachment')) {
+                $attachment = $this->attachmentService->storeAttachment($message, $request->file('attachment'));
+            }
+
+            // Déduire les points après la création du message
             if (!$this->pointService->deductPoints($user, 'message_sent', PointService::POINTS_PER_MESSAGE, $message)) {
                 // Si la déduction échoue, supprimer le message et retourner une erreur
+                if ($attachment) {
+                    $this->attachmentService->deleteAttachment($attachment);
+                }
                 $message->delete();
                 return response()->json([
                     'error' => 'Points insuffisants pour envoyer un message',
@@ -130,8 +157,20 @@ class MessageController extends Controller
                 'profile_id' => $profileId,
                 'message_id' => $message->id,
                 'content' => $message->content,
+                'has_attachment' => $attachment !== null,
                 'points_remaining' => $user->points
             ]);
+
+            // Préparer les données de l'attachement pour la réponse
+            $attachmentData = null;
+            if ($attachment) {
+                $attachmentData = [
+                    'id' => $attachment->id,
+                    'file_name' => $attachment->file_name,
+                    'mime_type' => $attachment->mime_type,
+                    'url' => Storage::url($attachment->file_path)
+                ];
+            }
 
             // Diffuser l'événement de message
             broadcast(new MessageSent($message))->toOthers();
@@ -162,6 +201,7 @@ class MessageController extends Controller
                     'time' => $message->created_at->format('H:i'),
                     'date' => $message->created_at->format('Y-m-d'),
                     'created_at' => $message->created_at->toISOString(),
+                    'attachment' => $attachmentData
                 ],
                 'remaining_points' => $user->points
             ]);

@@ -130,4 +130,32 @@ class User extends Authenticatable
     {
         return $this->hasMany(PointTransaction::class);
     }
+
+    /**
+     * Get reports made by this user
+     */
+    public function reportsMade()
+    {
+        return $this->hasMany(ProfileReport::class, 'reporter_id');
+    }
+
+    /**
+     * Get reports where this user is reported
+     */
+    public function reportsReceived()
+    {
+        return $this->hasMany(ProfileReport::class, 'reported_user_id');
+    }
+
+    /**
+     * Get the URL for the user's profile photo.
+     *
+     * @return string
+     */
+    public function getProfilePhotoUrlAttribute()
+    {
+        // Pour l'instant, on retourne une image par défaut
+        // Vous pouvez personnaliser ceci plus tard pour utiliser une vraie photo de profil
+        return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&color=7F9CF5&background=EBF4FF';
+    }
 }

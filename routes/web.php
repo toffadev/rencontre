@@ -75,6 +75,9 @@ Route::middleware(['client_or_admin'])->group(function () {
     Route::post('/messages/mark-as-read', [App\Http\Controllers\Client\MessageController::class, 'markAsRead'])->name('client.messages.mark-as-read');
     Route::get('/active-conversations', [App\Http\Controllers\Client\MessageController::class, 'getActiveConversations'])->name('client.active-conversations');
 
+    // Nouvelle route pour les pièces jointes
+    Route::post('/messages/upload-attachment', [App\Http\Controllers\Client\MessageController::class, 'uploadAttachment'])->name('client.messages.upload-attachment');
+
     // Routes pour la gestion des points
     Route::get('/points/data', [App\Http\Controllers\Client\PointController::class, 'getPointsData'])->name('client.points.data');
     Route::post('/points/checkout', [App\Http\Controllers\Client\PointController::class, 'createCheckoutSession'])->name('client.points.checkout');
@@ -230,6 +233,20 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         // Export des données
         Route::get('/export', [ProfilePerformanceController::class, 'export'])->name('export');
     });
+
+    // Routes pour les notifications
+    Route::get('/notifications', [App\Http\Controllers\Admin\NotificationController::class, 'index'])->name('notifications.index');
+    Route::post('/notifications/{id}/mark-read', [App\Http\Controllers\Admin\NotificationController::class, 'markAsRead'])->name('notifications.mark-read');
+    Route::post('/notifications/mark-all-read', [App\Http\Controllers\Admin\NotificationController::class, 'markAllAsRead'])->name('notifications.mark-all-read');
+
+    // Routes pour la gestion des signalements
+    Route::prefix('reports')->name('reports.')->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\ProfileReportController::class, 'index'])->name('index');
+        Route::get('/list', [App\Http\Controllers\Admin\ProfileReportController::class, 'getReports'])->name('list');
+        Route::post('/{id}/accept', [App\Http\Controllers\Admin\ProfileReportController::class, 'accept'])->name('accept');
+        Route::post('/{id}/dismiss', [App\Http\Controllers\Admin\ProfileReportController::class, 'dismiss'])->name('dismiss');
+        Route::get('/{id}', [App\Http\Controllers\Admin\ProfileReportController::class, 'show'])->name('show');
+    });
 });
 
 // Moderator routes
@@ -247,7 +264,9 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     Route::post('/start-conversation', [App\Http\Controllers\Moderator\ModeratorController::class, 'startConversation'])->name('start-conversation');
     Route::get('/profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAssignedProfile'])->name('profile');
     Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
-    Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])->name('send-message');
+    Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])
+        ->name('send-message')
+        ->middleware(['web', 'auth', 'moderator']);
     Route::post('/set-primary-profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
 
     // Routes pour les informations client
