@@ -45,7 +45,7 @@
 
             <!-- Section principale -->
             <div class="flex flex-col lg:flex-row gap-6">
-                <!-- Liste des conversations -->
+                <!-- Liste des conversations - Version desktop -->
                 <ActiveConversations
                     :profiles="filteredProfiles"
                     :selected-profile="selectedProfile"
@@ -56,349 +56,405 @@
                     @buyPoints="redirectToProfile"
                     @buyPointsForProfile="buyPointsForProfile"
                     @report="showReportModal"
+                    class="hidden lg:block lg:w-1/3"
                 />
 
-                <!-- Chat Section -->
-                <div
-                    v-if="selectedProfile"
-                    class="w-full lg:w-2/3 bg-white rounded-xl shadow-md overflow-hidden"
-                >
-                    <!-- Chat Header -->
-                    <div
-                        class="border-b border-gray-200 p-4 flex items-center justify-between"
-                    >
-                        <!-- Left side - Selected Profile Info -->
-                        <div class="flex items-center space-x-3">
-                            <div class="relative">
-                                <img
-                                    :src="
-                                        selectedProfile?.main_photo_path ||
-                                        'https://via.placeholder.com/64'
-                                    "
-                                    :alt="selectedProfile?.name"
-                                    class="w-12 h-12 rounded-full object-cover"
-                                />
-                                <div class="online-dot"></div>
+                <!-- Section Chat -->
+                <div class="w-full lg:w-2/3">
+                    <!-- Barre de profils horizontale style Messenger (mobile uniquement) -->
+                    <div class="lg:hidden bg-white rounded-xl shadow-md mb-4 overflow-hidden">
+                        <!-- Points disponibles -->
+                        <div class="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-coins text-pink-500"></i>
+                                <span class="text-sm text-gray-600">{{ remainingPoints }} points</span>
                             </div>
-                            <div>
-                                <h3 class="font-semibold">
-                                    {{ selectedProfile?.name }}
-                                </h3>
-                                <p class="text-sm text-gray-500">
-                                    En ligne maintenant
-                                </p>
-                            </div>
-                            <!-- Ajout du bouton d'achat de points -->
-                            <button
-                                @click="buyPointsForProfile"
-                                class="ml-4 px-4 py-2 bg-pink-500 text-white rounded-lg text-sm hover:bg-pink-600 transition flex items-center"
-                            >
-                                <i class="fas fa-coins mr-2"></i>
-                                Acheter des points a votre interlocuteur
+                            <button @click="redirectToProfile" class="text-pink-500 text-sm hover:underline flex items-center">
+                                <i class="fas fa-plus-circle mr-1"></i>
+                                Recharger
                             </button>
                         </div>
+                        
+                        <div class="overflow-x-auto scrollbar-hide">
+                            <div class="flex p-3 space-x-4">
+                                <div v-for="profile in filteredProfiles" 
+                                     :key="profile.id"
+                                     class="flex-shrink-0 relative">
+                                    <!-- Container du profil -->
+                                    <div class="relative">
+                                        <!-- Photo de profil avec indicateur de réponse en attente -->
+                                        <div class="relative cursor-pointer" @click="selectProfile(profile)">
+                                            <img :src="profile.main_photo_path || 'https://via.placeholder.com/64'" 
+                                                 :alt="profile.name"
+                                                 class="w-14 h-14 rounded-full object-cover"
+                                                 :class="{
+                                                    'ring-2 ring-pink-500 ring-offset-2': selectedProfile?.id === profile.id,
+                                                    'border-2 border-yellow-400': isAwaitingReply(profile.id)
+                                                 }"/>
+                                            <div class="online-dot"></div>
+                                        </div>
 
-                        <!-- Right side - Current User Info and Actions -->
-                        <div class="flex items-center space-x-4">
-                            <!-- Current User Info -->
-                            <div class="flex items-center">
-                                <div class="text-right mr-3">
-                                    <p class="font-semibold">
-                                        {{ auth?.user?.name }}
-                                    </p>
-                                    <p class="text-xs text-gray-500">
-                                        {{ remainingPoints }} points disponibles
-                                    </p>
+                                        <!-- Badge de messages non lus -->
+                                        <div v-if="getUnreadCount(profile.id)" 
+                                             class="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs z-20">
+                                            {{ getUnreadCount(profile.id) }}
+                                        </div>
+
+                                        <!-- Menu d'actions -->
+                                        <div class="absolute -top-2 -right-2 flex space-x-1 z-10">
+                                            <!-- Bouton de signalement avec état -->
+                                            <button 
+                                                @click.stop="showReportModal(profile)"
+                                                class="bg-white rounded-full w-6 h-6 flex items-center justify-center shadow-sm border border-gray-200"
+                                                :class="{'bg-red-50': profile.isReported}"
+                                            >
+                                                <i class="fas fa-flag" 
+                                                   :class="profile.isReported ? 'text-red-500' : 'text-gray-400 hover:text-red-500'"
+                                                   :title="profile.isReported ? 'Déjà signalé' : 'Signaler'"></i>
+                                            </button>
+                                        </div>
+
+                                        <!-- Indicateur de message en attente -->
+                                        <div v-if="isAwaitingReply(profile.id)" 
+                                             class="absolute bottom-0 right-0 bg-yellow-400 w-3 h-3 rounded-full border-2 border-white z-10"
+                                             title="En attente de votre réponse">
+                                        </div>
+                                    </div>
+
+                                    <!-- Nom du profil -->
+                                    <div class="text-xs text-center mt-1 text-gray-600 truncate w-14">
+                                        {{ profile.name }}
+                                    </div>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Content -->
+                    <div v-if="selectedProfile" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col h-[calc(100vh-theme(spacing.32))]">
+                        <!-- Chat Header -->
+                        <div
+                            class="border-b border-gray-200 p-4 flex items-center justify-between"
+                        >
+                            <!-- Left side - Selected Profile Info -->
+                            <div class="flex items-center space-x-3">
                                 <div class="relative">
                                     <img
-                                        v-if="auth?.user?.profile_photo_url"
-                                        :src="auth.user.profile_photo_url"
-                                        :alt="auth.user.name"
-                                        class="w-10 h-10 rounded-full object-cover"
+                                        :src="
+                                            selectedProfile?.main_photo_path ||
+                                            'https://via.placeholder.com/64'
+                                        "
+                                        :alt="selectedProfile?.name"
+                                        class="w-12 h-12 rounded-full object-cover"
                                     />
-                                    <div
-                                        v-else
-                                        class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"
+                                    <div class="online-dot"></div>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold">
+                                        {{ selectedProfile?.name }}
+                                    </h3>
+                                    <p class="text-sm text-gray-500">
+                                        En ligne 
+                                    </p>
+                                </div>
+                            </div>
+
+                            <!-- Right side - Current User Info and Actions -->
+                            <div class="flex items-center space-x-4">
+                                <!-- Current User Info -->
+                                <div class="flex items-center">
+                                    <div class="relative mr-3">
+                                        <img
+                                            v-if="auth?.user?.profile_photo_url"
+                                            :src="auth.user.profile_photo_url"
+                                            :alt="auth.user.name"
+                                            class="w-10 h-10 rounded-full object-cover"
+                                        />
+                                        <div
+                                            v-else
+                                            class="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center"
+                                        >
+                                            <i
+                                                class="fas fa-user text-gray-400"
+                                            ></i>
+                                        </div>
+                                    </div>
+                                    <div class="text-left">
+                                        <p class="font-semibold">
+                                            {{ auth?.user?.name }}
+                                        </p>
+                                        <p class="text-xs text-gray-500">
+                                            {{ remainingPoints }} points 
+                                        </p>
+                                    </div>
+                                </div>
+
+                                <!-- Actions -->
+                                <div class="flex space-x-2">
+                                    <button
+                                        @click="buyPointsForProfile"
+                                        class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
+                                        title="Offrir des points"
                                     >
-                                        <i
-                                            class="fas fa-user text-gray-400"
-                                        ></i>
-                                    </div>
+                                        <i class="fas fa-coins"></i>
+                                    </button>
+                                    <!-- <button
+                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                                        title="Appel audio"
+                                    >
+                                        <i class="fas fa-phone-alt"></i>
+                                    </button>
+                                    <button
+                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                                        title="Appel vidéo"
+                                    >
+                                        <i class="fas fa-video"></i>
+                                    </button>
+                                    <button
+                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
+                                        title="Plus d'options"
+                                    >
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button> -->
                                 </div>
-                            </div>
-
-                            <!-- Actions -->
-                            <div class="flex space-x-2">
-                                <button
-                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    title="Appel audio"
-                                >
-                                    <i class="fas fa-phone-alt"></i>
-                                </button>
-                                <button
-                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    title="Appel vidéo"
-                                >
-                                    <i class="fas fa-video"></i>
-                                </button>
-                                <button
-                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    title="Plus d'options"
-                                >
-                                    <i class="fas fa-ellipsis-v"></i>
-                                </button>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Chat Messages -->
-                    <div
-                        class="chat-container overflow-y-auto p-4 space-y-3"
-                        ref="chatContainer"
-                    >
-                        <!-- Messages groupés par date -->
-                        <div v-if="currentMessages.length">
-                            <div
-                                v-for="(
-                                    messagesForDate, date
-                                ) in groupedMessages"
-                                :key="date"
-                            >
-                                <!-- En-tête de date -->
+                        <!-- Chat Messages -->
+                        <div
+                            class="chat-container flex-1 overflow-y-auto p-4 space-y-3"
+                            ref="chatContainer"
+                        >
+                            <!-- Messages groupés par date -->
+                            <div v-if="currentMessages.length">
                                 <div
-                                    class="text-center text-xs text-gray-500 my-4"
+                                    v-for="(
+                                        messagesForDate, date
+                                    ) in groupedMessages"
+                                    :key="date"
                                 >
-                                    {{ formatDate(date) }}
-                                </div>
+                                    <!-- En-tête de date -->
+                                    <div
+                                        class="text-center text-xs text-gray-500 my-4"
+                                    >
+                                        {{ formatDate(date) }}
+                                    </div>
 
-                                <!-- Messages pour cette date -->
-                                <div
-                                    v-for="message in messagesForDate"
-                                    :key="message.id"
-                                    :class="`flex space-x-2 mb-3 ${
-                                        message.isOutgoing ? 'justify-end' : ''
-                                    }`"
-                                >
-                                    <template v-if="!message.isOutgoing">
-                                        <div class="relative">
-                                            <img
-                                                v-if="
-                                                    selectedProfile.main_photo_path
-                                                "
-                                                :src="
-                                                    selectedProfile.main_photo_path
-                                                "
-                                                :alt="selectedProfile.name"
-                                                class="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                            />
-                                            <div
-                                                v-else
-                                                class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
-                                            >
-                                                <i
-                                                    class="fas fa-user text-gray-400"
-                                                ></i>
-                                            </div>
-                                        </div>
-                                    </template>
-                                    <div>
-                                        <div
-                                            :class="`${
-                                                message.isOutgoing
-                                                    ? 'message-out'
-                                                    : 'message-in'
-                                            } px-4 py-2 max-w-xs lg:max-w-md ${
-                                                message.pending ? 'pending' : ''
-                                            } ${
-                                                message.failed ? 'failed' : ''
-                                            }`"
-                                        >
-                                            <!-- Contenu du message -->
-                                            <div v-if="message.content" class="mb-2">{{ message.content }}</div>
-                                            
-                                            <!-- Image attachée -->
-                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
+                                    <!-- Messages pour cette date -->
+                                    <div
+                                        v-for="message in messagesForDate"
+                                        :key="message.id"
+                                        :class="`flex space-x-2 mb-3 ${
+                                            message.isOutgoing ? 'justify-end' : ''
+                                        }`"
+                                    >
+                                        <template v-if="!message.isOutgoing">
+                                            <div class="relative">
                                                 <img
-                                                    :src="message.attachment.url"
-                                                    :alt="message.attachment.file_name"
-                                                    class="max-w-full rounded-lg cursor-pointer"
-                                                    @click="showImagePreview(message.attachment)"
+                                                    v-if="
+                                                        selectedProfile.main_photo_path
+                                                    "
+                                                    :src="
+                                                        selectedProfile.main_photo_path
+                                                    "
+                                                    :alt="selectedProfile.name"
+                                                    class="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                                 />
+                                                <div
+                                                    v-else
+                                                    class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                                                >
+                                                    <i
+                                                        class="fas fa-user text-gray-400"
+                                                    ></i>
+                                                </div>
                                             </div>
-
-                                            <span
-                                                v-if="message.pending"
-                                                class="ml-2 inline-block text-xs"
-                                                >⌛</span
-                                            >
-                                            <span
-                                                v-if="message.failed"
-                                                class="ml-2 inline-block text-xs"
-                                                >❌</span
-                                            >
-                                        </div>
-                                        <div
-                                            class="flex items-center mt-1 text-xs text-gray-500"
-                                            :class="{
-                                                'justify-end':
-                                                    message.isOutgoing,
-                                            }"
-                                        >
-                                            <span class="font-medium mr-2">{{
-                                                message.isOutgoing
-                                                    ? auth?.user?.name || "Vous"
-                                                    : selectedProfile.name
-                                            }}</span>
-                                            <span>{{ message.time }}</span>
-                                        </div>
-                                    </div>
-                                    <template v-if="message.isOutgoing">
-                                        <div class="relative">
-                                            <img
-                                                v-if="
-                                                    auth?.user
-                                                        ?.profile_photo_url
-                                                "
-                                                :src="
-                                                    auth.user.profile_photo_url
-                                                "
-                                                :alt="auth.user.name"
-                                                class="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                            />
+                                        </template>
+                                        <div>
                                             <div
-                                                v-else
-                                                class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                                                :class="`${
+                                                    message.isOutgoing
+                                                        ? 'message-out'
+                                                        : 'message-in'
+                                                } px-4 py-2 max-w-xs lg:max-w-md ${
+                                                    message.pending ? 'pending' : ''
+                                                } ${
+                                                    message.failed ? 'failed' : ''
+                                                }`"
                                             >
-                                                <i
-                                                    class="fas fa-user text-gray-400"
-                                                ></i>
+                                                <!-- Contenu du message -->
+                                                <div v-if="message.content" class="mb-2">{{ message.content }}</div>
+                                                
+                                                <!-- Image attachée -->
+                                                <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
+                                                    <img
+                                                        :src="message.attachment.url"
+                                                        :alt="message.attachment.file_name"
+                                                        class="max-w-full rounded-lg cursor-pointer"
+                                                        @click="showImagePreview(message.attachment)"
+                                                    />
+                                                </div>
+
+                                                <span
+                                                    v-if="message.pending"
+                                                    class="ml-2 inline-block text-xs"
+                                                    >⌛</span
+                                                >
+                                                <span
+                                                    v-if="message.failed"
+                                                    class="ml-2 inline-block text-xs"
+                                                    >❌</span
+                                                >
+                                            </div>
+                                            <div
+                                                class="flex items-center mt-1 text-xs text-gray-500"
+                                                :class="{
+                                                    'justify-end':
+                                                        message.isOutgoing,
+                                                }"
+                                            >
+                                                <span class="font-medium mr-2">{{
+                                                    message.isOutgoing
+                                                        ? auth?.user?.name || "Vous"
+                                                        : selectedProfile.name
+                                                }}</span>
+                                                <span>{{ message.time }}</span>
                                             </div>
                                         </div>
-                                    </template>
+                                        <template v-if="message.isOutgoing">
+                                            <div class="relative">
+                                                <img
+                                                    v-if="
+                                                        auth?.user
+                                                            ?.profile_photo_url
+                                                    "
+                                                    :src="
+                                                        auth.user.profile_photo_url
+                                                    "
+                                                    :alt="auth.user.name"
+                                                    class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                                />
+                                                <div
+                                                    v-else
+                                                    class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center"
+                                                >
+                                                    <i
+                                                        class="fas fa-user text-gray-400"
+                                                    ></i>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
                                 </div>
+                            </div>
+
+                            <!-- État vide -->
+                            <div v-else class="text-center py-8">
+                                <p class="text-gray-500">
+                                    Aucun message dans cette conversation.
+                                </p>
+                                <p class="text-gray-400 text-sm mt-2">
+                                    Envoyez un message pour commencer à discuter.
+                                </p>
                             </div>
                         </div>
 
-                        <!-- État vide -->
-                        <div v-else class="text-center py-8">
-                            <p class="text-gray-500">
-                                Aucun message dans cette conversation.
-                            </p>
-                            <p class="text-gray-400 text-sm mt-2">
-                                Envoyez un message pour commencer à discuter.
-                            </p>
+                        <!-- Ajouter un indicateur de frappe -->
+                        <div
+                            v-if="isTyping"
+                            class="text-xs text-gray-500 italic px-4 py-2"
+                        >
+                            {{ selectedProfile?.name }} est en train d'écrire...
                         </div>
-                    </div>
 
-                    <!-- Ajouter un indicateur de frappe -->
-                    <div
-                        v-if="isTyping"
-                        class="text-xs text-gray-500 italic px-4 py-2"
-                    >
-                        {{ selectedProfile?.name }} est en train d'écrire...
-                    </div>
-
-                    <!-- Message Input -->
-                    <div class="border-t border-gray-200 p-4">
-                        <div class="flex flex-col space-y-2">
-                            <!-- Prévisualisation de l'image -->
-                            <div v-if="selectedFile" class="flex justify-end">
-                                <div class="relative inline-block">
-                                    <img
-                                        :src="previewUrl"
-                                        class="max-h-32 rounded-lg"
-                                        alt="Preview"
+                        <!-- Message Input -->
+                        <div class="border-t border-gray-200 sticky bottom-0 bg-white z-50 p-4">
+                            <div class="flex flex-col space-y-2">
+                                <!-- Prévisualisation de l'image -->
+                                <div v-if="selectedFile" class="flex justify-end">
+                                    <div class="relative inline-block">
+                                        <img
+                                            :src="previewUrl"
+                                            class="max-h-32 rounded-lg"
+                                            alt="Preview"
+                                        />
+                                        <button
+                                            @click="removeSelectedFile"
+                                            class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                                        >
+                                            <i class="fas fa-times"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div class="flex items-center space-x-2">
+                                    <input
+                                        type="file"
+                                        ref="fileInput"
+                                        class="hidden"
+                                        accept="image/*"
+                                        @change="handleFileUpload"
                                     />
                                     <button
-                                        @click="removeSelectedFile"
-                                        class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
+                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition flex-shrink-0"
+                                        title="Ajouter une image"
+                                        @click="$refs.fileInput.click()"
                                     >
-                                        <i class="fas fa-times"></i>
+                                        <i class="fas fa-image"></i>
+                                    </button>
+                                    <div class="flex-1 relative">
+                                        <input
+                                            v-model="newMessage"
+                                            type="text"
+                                            placeholder="Écrire un message..."
+                                            class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                            @keyup.enter="sendMessage"
+                                            maxlength="500"
+                                        />
+                                        <span class="absolute right-3 bottom-2 text-xs text-gray-400">
+                                            {{ newMessage.length }}/500
+                                        </span>
+                                    </div>
+                                    <button
+                                        class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition flex-shrink-0"
+                                        @click="sendMessage"
+                                        :disabled="(!newMessage.trim() && !selectedFile) || remainingPoints < 5"
+                                    >
+                                        <i class="fas fa-paper-plane"></i>
                                     </button>
                                 </div>
-                            </div>
-                            
-                            <div class="flex items-center space-x-2">
-                                <input
-                                    type="file"
-                                    ref="fileInput"
-                                    class="hidden"
-                                    accept="image/*"
-                                    @change="handleFileUpload"
-                                />
-                                <button
-                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    title="Ajouter une image"
-                                    @click="$refs.fileInput.click()"
+                                <div
+                                    v-if="remainingPoints < 5"
+                                    class="text-xs text-red-500 text-center"
                                 >
-                                    <i class="fas fa-image"></i>
-                                </button>
-                                <div class="flex-1 relative">
-                                    <input
-                                        v-model="newMessage"
-                                        type="text"
-                                        placeholder="Écrire un message..."
-                                        class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                        @keyup.enter="sendMessage"
-                                        maxlength="500"
-                                    />
-                                    <span
-                                        class="absolute right-3 bottom-2 text-xs text-gray-400"
+                                    Points insuffisants pour envoyer un message.
+                                    <a
+                                        @click="redirectToProfile"
+                                        class="text-pink-600 cursor-pointer hover:underline"
+                                        >Acheter des points</a
                                     >
-                                        {{ newMessage.length }}/500
-                                    </span>
                                 </div>
-                                <button
-                                    class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                    @click="sendMessage"
-                                    :disabled="
-                                        (!newMessage.trim() && !selectedFile) ||
-                                        remainingPoints < 5
-                                    "
-                                    :title="
-                                        remainingPoints < 5
-                                            ? 'Points insuffisants'
-                                            : 'Envoyer le message'
-                                    "
-                                >
-                                    <i class="fas fa-paper-plane"></i>
-                                </button>
-                            </div>
-                            <div
-                                v-if="remainingPoints < 5"
-                                class="text-xs text-red-500 text-center"
-                            >
-                                Points insuffisants pour envoyer un message.
-                                <a
-                                    @click="redirectToProfile"
-                                    class="text-pink-600 cursor-pointer hover:underline"
-                                    >Acheter des points</a
-                                >
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- No Profile Selected State -->
-                <div
-                    v-else
-                    class="w-full lg:w-2/3 bg-white rounded-xl shadow-md p-8 flex items-center justify-center"
-                >
-                    <div class="text-center">
-                        <div class="text-gray-400 mb-4">
-                            <i class="fas fa-comments text-5xl"></i>
+                    <!-- No Profile Selected State -->
+                    <div v-else class="bg-white rounded-xl shadow-md p-8 flex items-center justify-center h-[calc(100vh-theme(spacing.32))]">
+                        <div class="text-center">
+                            <div class="text-gray-400 mb-4">
+                                <i class="fas fa-comments text-5xl"></i>
+                            </div>
+                            <h3 class="text-lg font-medium text-gray-700">
+                                Bienvenue, {{ auth?.user?.name }} !
+                            </h3>
+                            <p class="text-gray-500 mt-2">
+                                Sélectionnez un profil dans la liste pour commencer
+                                une conversation
+                            </p>
+                            <p class="text-sm text-pink-600 mt-4">
+                                Vous avez {{ remainingPoints }} points disponibles
+                            </p>
                         </div>
-                        <h3 class="text-lg font-medium text-gray-700">
-                            Bienvenue, {{ auth?.user?.name }} !
-                        </h3>
-                        <p class="text-gray-500 mt-2">
-                            Sélectionnez un profil dans la liste pour commencer
-                            une conversation
-                        </p>
-                        <p class="text-sm text-pink-600 mt-4">
-                            Vous avez {{ remainingPoints }} points disponibles
-                        </p>
                     </div>
                 </div>
             </div>
@@ -596,10 +652,10 @@ async function selectProfile(profile) {
     // Marquer la conversation comme lue
     await markConversationAsRead(profile.id);
 
-    // Faire défiler le chat vers le bas
-    nextTick(() => {
+    // Faire défiler le chat vers le bas avec un petit délai pour laisser le temps au DOM de se mettre à jour
+    setTimeout(() => {
         scrollToBottom();
-    });
+    }, 100);
 }
 
 // Charger les messages d'un profil
@@ -867,10 +923,15 @@ async function sendMessage() {
 }
 
 // Faire défiler vers le bas du chat
-function scrollToBottom() {
-    if (chatContainer.value) {
-        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-    }
+function scrollToBottom(smooth = false) {
+    nextTick(() => {
+        if (chatContainer.value) {
+            chatContainer.value.scrollTo({
+                top: chatContainer.value.scrollHeight,
+                behavior: smooth ? 'smooth' : 'auto'
+            });
+        }
+    });
 }
 
 // Formatage des données
@@ -1117,6 +1178,50 @@ function closeImagePreview() {
     showPreview.value = false;
     previewImage.value = null;
 }
+
+// Ajout de la détection de la taille de l'écran
+const isMobile = ref(false);
+
+// Détecter la taille de l'écran
+function checkMobile() {
+    isMobile.value = window.innerWidth < 1024;
+}
+
+// Gestionnaire de redimensionnement
+function handleResize() {
+    checkMobile();
+    if (selectedProfile.value) {
+        scrollToBottom();
+    }
+}
+
+// Gestionnaire d'orientation
+function handleOrientation() {
+    setTimeout(() => {
+        scrollToBottom();
+    }, 100);
+}
+
+onMounted(() => {
+    checkMobile();
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientation);
+    
+    // Scroll initial
+    if (selectedProfile.value) {
+        scrollToBottom();
+    }
+});
+
+onUnmounted(() => {
+    window.removeEventListener('resize', handleResize);
+    window.removeEventListener('orientationchange', handleOrientation);
+});
+
+// Amélioration des watchers existants
+watch([currentMessages, selectedProfile], () => {
+    scrollToBottom(true);
+});
 </script>
 
 <style scoped>
@@ -1127,8 +1232,16 @@ function closeImagePreview() {
 }
 
 .chat-container {
-    height: 400px;
+    height: 100%;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 1024px) {
+    .chat-container {
+        height: calc(100vh - 16rem);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
 }
 
 .message-in {
@@ -1161,6 +1274,48 @@ function closeImagePreview() {
     border: 2px solid white;
 }
 
+/* Styles pour le scroll horizontal sur mobile */
+.overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+}
+
+.overflow-x-auto::-webkit-scrollbar {
+    display: none;
+}
+
+/* Styles pour les images dans les messages */
+.message-in img, .message-out img {
+    max-width: 200px;
+    height: auto;
+    border-radius: 8px;
+    margin-top: 4px;
+}
+
+.message-in img:hover, .message-out img:hover {
+    opacity: 0.9;
+    cursor: zoom-in;
+}
+
+/* Support pour le safe area sur iOS */
+@supports(padding: max(0px)) {
+    .sticky {
+        padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    }
+}
+
+/* Styles pour les icônes d'avatar */
+.fas.fa-male,
+.fas.fa-female {
+    font-size: 1.5rem;
+}
+
+.fa-user {
+    font-size: 1.2rem;
+}
+
+/* Animation des points */
 .points-alert-enter-active,
 .points-alert-leave-active {
     transition: all 0.3s ease;
@@ -1172,35 +1327,36 @@ function closeImagePreview() {
     opacity: 0;
 }
 
-/* Styles pour le bouton de signalement */
-.fa-flag {
-    font-size: 0.875rem;
+/* Style pour la barre de défilement horizontale sur mobile */
+.scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
 
-.profile-card {
-    position: relative;
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
 }
 
-/* Ajouter des styles pour les icônes d'avatar */
-.fas.fa-male,
-.fas.fa-female {
-    font-size: 1.5rem;
+/* Style amélioré pour les avatars sur mobile */
+@media (max-width: 1024px) {
+    .online-dot {
+        width: 10px;
+        height: 10px;
+        border-width: 1.5px;
+    }
 }
 
-/* Mettre à jour les styles des avatars */
-.fa-user {
-    font-size: 1.2rem;
-}
-
-.message-in img, .message-out img {
-    max-width: 200px;
-    height: auto;
-    border-radius: 8px;
-    margin-top: 4px;
-}
-
-.message-in img:hover, .message-out img:hover {
-    opacity: 0.9;
-    cursor: zoom-in;
+/* Styles pour le menu d'actions sur mobile */
+@media (max-width: 1024px) {
+    .group:active .opacity-0 {
+        opacity: 1;
+    }
+    
+    /* Support pour le hover sur les appareils qui le supportent */
+    @media (hover: hover) {
+        .group:hover .opacity-0 {
+            opacity: 1;
+        }
+    }
 }
 </style>

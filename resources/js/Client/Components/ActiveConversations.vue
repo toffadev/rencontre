@@ -1,5 +1,5 @@
 <template>
-    <div class="w-full lg:w-1/3 bg-white rounded-xl shadow-md overflow-hidden p-4">
+    <div class="w-full bg-white rounded-xl shadow-md overflow-hidden p-4">
         <div class="flex justify-between items-center mb-4">
             <h2 class="text-xl font-semibold">Mes conversations</h2>
             <div class="flex space-x-2">
