@@ -51,6 +51,7 @@
                     :selected-profile="selectedProfile"
                     :messages="messagesMap"
                     :remaining-points="remainingPoints"
+                    :conversation-states="conversationStates"
                     @select="selectProfile"
                     @buyPoints="redirectToProfile"
                     @buyPointsForProfile="buyPointsForProfile"
@@ -478,6 +479,7 @@ const showReportModalFlag = ref(false);
 const selectedProfileForReport = ref(null);
 const blockedProfileIds = ref([]);
 const reportedProfiles = ref([]);
+const conversationStates = ref(new Map());
 
 // Messages pour la conversation courante
 const currentMessages = computed(() => {
@@ -530,15 +532,20 @@ function formatDate(dateString) {
 
 // Sélectionner un profil et charger les messages
 async function selectProfile(profile) {
-    if (selectedProfile.value && selectedProfile.value.id === profile.id)
-        return;
+    if (selectedProfile.value && selectedProfile.value.id === profile.id) return;
 
     selectedProfile.value = profile;
+    
+    // Initialiser l'état de la conversation si nécessaire
+    initConversationState(profile.id);
 
     // Charger les messages si nous ne les avons pas déjà
     if (!messagesMap.value[profile.id]) {
         await loadMessages(profile.id);
     }
+
+    // Marquer la conversation comme lue
+    await markConversationAsRead(profile.id);
 
     // Faire défiler le chat vers le bas
     nextTick(() => {
@@ -550,21 +557,26 @@ async function selectProfile(profile) {
 async function loadMessages(profileId) {
     try {
         loading.value = true;
-        console.log(`Chargement des messages pour le profil ${profileId}`);
 
         const response = await axios.get("/messages", {
-            params: { profile_id: profileId },
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-                'Accept': 'application/json'
-            }
+            params: { profile_id: profileId }
         });
 
         if (response.data.messages) {
             messagesMap.value = {
                 ...messagesMap.value,
-                [profileId]: response.data.messages,
+                [profileId]: response.data.messages
             };
+
+            // Mettre à jour l'état de la conversation
+            const state = response.data.conversation_state;
+            conversationStates.value.set(profileId, {
+                unreadCount: state.unread_count,
+                lastReadMessageId: state.last_read_message_id,
+                isOpen: selectedProfile.value?.id === profileId,
+                hasBeenOpened: state.has_been_opened,
+                awaitingReply: state.awaiting_reply
+            });
         }
     } catch (error) {
         console.error("Erreur lors du chargement des messages:", error);
@@ -609,16 +621,20 @@ async function loadBlockedProfiles() {
 // Charger toutes les conversations actives
 async function loadAllConversations() {
     try {
-        const response = await axios.get("/active-conversations", {
-            headers: {
-                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content'),
-                'Accept': 'application/json'
-            }
-        });
+        const response = await axios.get("/active-conversations");
         if (response.data.conversations) {
-            // Pour chaque conversation active, charger les messages
-            for (const conversation of response.data.conversations) {
-                await loadMessages(conversation.profile_id);
+            for (const conv of response.data.conversations) {
+                // Initialiser l'état de la conversation
+                conversationStates.value.set(conv.profile_id, {
+                    unreadCount: conv.unread_count,
+                    lastReadMessageId: conv.last_read_message_id,
+                    isOpen: selectedProfile.value?.id === conv.profile_id,
+                    hasBeenOpened: conv.has_been_opened,
+                    awaitingReply: conv.awaiting_reply
+                });
+                
+                // Charger les messages
+                await loadMessages(conv.profile_id);
             }
         }
     } catch (error) {
@@ -643,15 +659,44 @@ onMounted(async () => {
         // Charger toutes les conversations actives
         await loadAllConversations();
 
+        // Initialiser les états des conversations pour tous les profils
+        props.profiles.forEach(profile => {
+            initConversationState(profile.id);
+            if (messagesMap.value[profile.id]) {
+                updateUnreadCount(profile.id);
+            }
+        });
+
         // Configurer Echo pour les points et messages en temps réel
         if (window.Echo) {
             window.Echo.private(`client.${window.clientId}`)
                 .listen('.message.sent', async (data) => {
                     const profileId = data.profile_id;
+                    
+                    // Initialiser l'état si nécessaire
+                    if (!conversationStates.value.has(profileId)) {
+                        conversationStates.value.set(profileId, {
+                            unreadCount: 0,
+                            lastReadMessageId: null,
+                            isOpen: selectedProfile.value?.id === profileId,
+                            hasBeenOpened: false,
+                            awaitingReply: false
+                        });
+                    }
+                    
+                    // Mettre à jour les messages
                     await loadMessages(profileId);
                     await loadPoints();
 
-                    if (selectedProfile.value && selectedProfile.value.id === profileId) {
+                    // Mettre à jour le compteur si ce n'est pas la conversation active
+                    const state = conversationStates.value.get(profileId);
+                    if (state && (!selectedProfile.value || selectedProfile.value.id !== profileId)) {
+                        state.unreadCount = (state.unreadCount || 0) + 1;
+                        state.awaitingReply = true;
+                    }
+
+                    // Si c'est la conversation active, faire défiler vers le bas
+                    if (selectedProfile.value?.id === profileId) {
                         nextTick(() => {
                             scrollToBottom();
                         });
@@ -659,14 +704,6 @@ onMounted(async () => {
                 })
                 .listen('.points.updated', (data) => {
                     remainingPoints.value = data.points;
-                })
-                .listen('.profile.reported', (data) => {
-                    // Mettre à jour le statut de signalement
-                    const reportedProfile = {
-                        profile_id: data.profile_id,
-                        status: 'pending'
-                    };
-                    reportedProfiles.value.push(reportedProfile);
                 });
         }
 
@@ -705,6 +742,7 @@ async function sendMessage() {
             minute: "2-digit",
         }),
         date: new Date().toISOString().split("T")[0],
+        created_at: new Date().toISOString(),
         pending: true,
     };
 
@@ -731,13 +769,19 @@ async function sendMessage() {
             remainingPoints.value = response.data.remaining_points;
         }
 
-        // Mettre à jour le message
+        // Mettre à jour le message et l'état de la conversation
         if (response.data.success) {
             const index = messagesMap.value[profileId].findIndex(
                 (msg) => msg.id === localMessage.id
             );
             if (index !== -1) {
                 messagesMap.value[profileId][index] = response.data.messageData;
+            }
+
+            // Mettre à jour l'état de la conversation
+            const state = conversationStates.value.get(profileId);
+            if (state) {
+                state.awaitingReply = false;
             }
         }
     } catch (error) {
@@ -888,6 +932,88 @@ function buyPointsForProfile() {
     if (selectedProfile.value) {
         router.visit(`/profile/${selectedProfile.value.id}/points`);
     }
+}
+
+// Ajouter la propriété computed pour le tri des conversations
+const sortedProfiles = computed(() => {
+    return props.profiles.sort((a, b) => {
+        const aLastMessage = messagesMap.value[a.id]?.slice(-1)[0];
+        const bLastMessage = messagesMap.value[b.id]?.slice(-1)[0];
+        
+        const aTime = aLastMessage ? new Date(aLastMessage.created_at) : new Date(0);
+        const bTime = bLastMessage ? new Date(bLastMessage.created_at) : new Date(0);
+        
+        return bTime - aTime;
+    });
+});
+
+// Initialiser l'état d'une conversation
+function initConversationState(profileId) {
+    if (!conversationStates.value.has(profileId)) {
+        conversationStates.value.set(profileId, {
+            unreadCount: 0,
+            lastReadMessageId: null,
+            isOpen: false,
+            hasBeenOpened: false,
+            awaitingReply: false
+        });
+    }
+}
+
+// Mettre à jour le compteur de messages non lus
+function updateUnreadCount(profileId) {
+    const state = conversationStates.value.get(profileId);
+    if (!state) return;
+
+    const messages = messagesMap.value[profileId] || [];
+    const lastReadId = state.lastReadMessageId;
+    
+    // Compter uniquement les messages non lus qui sont reçus (non envoyés par le client)
+    const unreadCount = messages.filter(msg => {
+        return !msg.isOutgoing && 
+               (!lastReadId || msg.id > lastReadId) &&
+               (!selectedProfile.value || selectedProfile.value.id !== profileId);
+    }).length;
+
+    // Mettre à jour l'état avec le nouveau compteur
+    state.unreadCount = unreadCount;
+    state.isOpen = selectedProfile.value?.id === profileId;
+}
+
+// Marquer une conversation comme lue
+async function markConversationAsRead(profileId) {
+    const state = conversationStates.value.get(profileId);
+    if (!state) return;
+
+    const messages = messagesMap.value[profileId] || [];
+    const lastMessage = messages[messages.length - 1];
+    
+    if (lastMessage) {
+        try {
+            // Mettre à jour l'état local
+            state.lastReadMessageId = lastMessage.id;
+            state.hasBeenOpened = true;
+            state.isOpen = true;
+            state.unreadCount = 0; // Réinitialiser le compteur
+            
+            // Appeler l'API pour persister l'état
+            await axios.post('/messages/mark-as-read', {
+                profile_id: profileId,
+                last_message_id: lastMessage.id
+            });
+        } catch (error) {
+            console.error('Erreur lors du marquage comme lu:', error);
+        }
+    }
+}
+
+function isAwaitingReply(profileId) {
+    const state = conversationStates.value.get(profileId);
+    return state?.awaitingReply || false;
+}
+
+function getUnreadCount(profileId) {
+    return conversationStates.value.get(profileId)?.unreadCount || 0;
 }
 </script>
 

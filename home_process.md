@@ -260,7 +260,7 @@ public function share(Request $request): array
 
 ## 6. Canaux de Diffusion (Broadcasting Channels)
 
-Dans `channels.php`, nous avons défini les canaux de diffusion pour sécuriser la communication WebSocket :
+Dans `routes/channels.php`, nous avons défini les canaux de diffusion pour sécuriser la communication WebSocket :
 
 ```php
 // Canal privé pour les clients (accessible uniquement par le client lui-même)

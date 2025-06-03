@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use App\Services\PointService;
 use Exception;
+use App\Models\ConversationState;
 
 class MessageController extends Controller
 {
@@ -37,41 +38,52 @@ class MessageController extends Controller
         $clientId = Auth::id();
         $profileId = $request->profile_id;
 
-        // Log pour le débogage
-        Log::info("[DEBUG] Chargement des messages", [
-            'client_id' => $clientId,
-            'profile_id' => $profileId
-        ]);
-
         // Récupérer les messages entre ce client et ce profil
         $messages = Message::where('profile_id', $profileId)
             ->where('client_id', $clientId)
             ->orderBy('created_at')
             ->get();
 
-        Log::info("[DEBUG] Messages trouvés", [
-            'count' => $messages->count()
-        ]);
+        // Compter les messages non lus
+        $unreadCount = $messages->where('is_from_client', false)
+            ->where('read_at', null)
+            ->count();
+
+        // Vérifier si le dernier message nécessite une réponse
+        $lastMessage = $messages->last();
+        $awaitingReply = $lastMessage && !$lastMessage->is_from_client;
+
+        // Récupérer ou créer l'état de la conversation
+        $conversationState = ConversationState::updateOrCreate(
+            [
+                'client_id' => $clientId,
+                'profile_id' => $profileId
+            ],
+            [
+                'has_been_opened' => true,
+                'awaiting_reply' => $awaitingReply
+            ]
+        );
 
         $formattedMessages = $messages->map(function ($message) {
             return [
                 'id' => $message->id,
                 'content' => $message->content,
-                'isOutgoing' => $message->is_from_client, // Pour le client, "outgoing" = is_from_client
+                'isOutgoing' => $message->is_from_client,
                 'time' => $message->created_at->format('H:i'),
                 'date' => $message->created_at->format('Y-m-d'),
+                'created_at' => $message->created_at->toISOString(),
             ];
         });
 
-        // Marquer les messages non lus comme lus (uniquement les messages des profils)
-        Message::where('profile_id', $profileId)
-            ->where('client_id', $clientId)
-            ->where('is_from_client', false)
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
-
         return response()->json([
-            'messages' => $formattedMessages
+            'messages' => $formattedMessages,
+            'conversation_state' => [
+                'unread_count' => $unreadCount,
+                'awaiting_reply' => $awaitingReply,
+                'last_read_message_id' => $conversationState->last_read_message_id,
+                'has_been_opened' => $conversationState->has_been_opened
+            ]
         ]);
     }
 
@@ -84,7 +96,7 @@ class MessageController extends Controller
     public function sendMessage(Request $request)
     {
         $request->validate([
-            'profile_id' => 'required|exists:users,id',
+            'profile_id' => 'required|integer|exists:profiles,id',
             'content' => 'required|string|max:1000'
         ]);
 
@@ -127,6 +139,19 @@ class MessageController extends Controller
             // Déclencher l'événement NewClientMessage pour la gestion des attributions
             event(new NewClientMessage($message));
 
+            // Mettre à jour l'état de la conversation
+            ConversationState::updateOrCreate(
+                [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId
+                ],
+                [
+                    'last_read_message_id' => $message->id,
+                    'has_been_opened' => true,
+                    'awaiting_reply' => false
+                ]
+            );
+
             return response()->json([
                 'success' => true,
                 'message' => 'Message envoyé avec succès',
@@ -136,6 +161,7 @@ class MessageController extends Controller
                     'isOutgoing' => true,
                     'time' => $message->created_at->format('H:i'),
                     'date' => $message->created_at->format('Y-m-d'),
+                    'created_at' => $message->created_at->toISOString(),
                 ],
                 'remaining_points' => $user->points
             ]);
@@ -167,16 +193,85 @@ class MessageController extends Controller
             ->with(['profile' => function ($query) {
                 $query->select('id', 'name', 'main_photo_path', 'gender', 'created_at');
             }])
-            ->get()
-            ->map(function ($message) {
-                return [
-                    'profile_id' => $message->profile_id,
-                    'profile' => $message->profile
-                ];
-            });
+            ->get();
+
+        $conversationsData = $conversations->map(function ($conversation) use ($clientId) {
+            $profileId = $conversation->profile_id;
+
+            // Compter les messages non lus pour ce profil
+            $unreadCount = Message::where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->where('is_from_client', false)
+                ->whereNull('read_at')
+                ->count();
+
+            // Vérifier si le dernier message nécessite une réponse
+            $lastMessage = Message::where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->latest()
+                ->first();
+
+            $awaitingReply = $lastMessage && !$lastMessage->is_from_client;
+
+            // Récupérer ou créer l'état de la conversation
+            $state = ConversationState::firstOrCreate(
+                [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId
+                ],
+                [
+                    'awaiting_reply' => $awaitingReply
+                ]
+            );
+
+            return [
+                'profile_id' => $profileId,
+                'profile' => $conversation->profile,
+                'unread_count' => $unreadCount,
+                'awaiting_reply' => $awaitingReply,
+                'has_been_opened' => $state->has_been_opened,
+                'last_read_message_id' => $state->last_read_message_id
+            ];
+        });
 
         return response()->json([
-            'conversations' => $conversations
+            'conversations' => $conversationsData
         ]);
+    }
+
+    /**
+     * Mark messages as read for a specific profile
+     */
+    public function markAsRead(Request $request)
+    {
+        $request->validate([
+            'profile_id' => 'required|exists:profiles,id',
+            'last_message_id' => 'required|exists:messages,id'
+        ]);
+
+        $clientId = Auth::id();
+        $profileId = $request->profile_id;
+
+        // Marquer tous les messages non lus comme lus
+        Message::where('client_id', $clientId)
+            ->where('profile_id', $profileId)
+            ->where('is_from_client', false)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        // Mettre à jour l'état de la conversation
+        ConversationState::updateOrCreate(
+            [
+                'client_id' => $clientId,
+                'profile_id' => $profileId
+            ],
+            [
+                'last_read_message_id' => $request->last_message_id,
+                'has_been_opened' => true,
+                'awaiting_reply' => true
+            ]
+        );
+
+        return response()->json(['success' => true]);
     }
 }

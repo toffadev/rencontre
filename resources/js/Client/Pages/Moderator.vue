@@ -606,11 +606,30 @@ const loadAvailableClients = async () => {
 // Sélectionner un client pour discussion
 const selectClient = async (client) => {
     selectedClient.value = client;
-    hasMoreMessages.value = true; // Réinitialiser l'état de pagination
-    currentPage.value[client.id] = 1; // Réinitialiser la page courante
+    hasMoreMessages.value = true;
+    currentPage.value[client.id] = 1;
 
-    // Charger les messages initiaux
-    await loadMessages(client.id, 1, false);
+    try {
+        // S'assurer que nous avons le bon profil pour ce client
+        const profileId = currentAssignedProfile.value?.id;
+        if (!profileId) {
+            console.error("Aucun profil attribué");
+            return;
+        }
+
+        // Charger les messages initiaux
+        await loadMessages(client.id, 1, false);
+
+        // Marquer la notification comme lue si elle existe
+        const notification = notifications.value.find(
+            n => n.clientId === client.id && !n.read
+        );
+        if (notification) {
+            markNotificationAsRead(notification.id);
+        }
+    } catch (error) {
+        console.error("Erreur lors de la sélection du client:", error);
+    }
 };
 
 // Démarrer une conversation avec un client disponible
@@ -795,38 +814,49 @@ onMounted(async () => {
             window.Echo.private(`moderator.${moderatorId}`)
                 .listen(".profile.assigned", async (data) => {
                     console.log("Événement profile.assigned reçu:", data);
+                    
                     // Recharger les données après l'attribution d'un profil
                     await loadAssignedData();
 
-                    // Si le profil attribué est différent du profil actuel et qu'il est principal,
-                    // on charge la conversation associée
-                    if (
-                        data.profile &&
-                        data.profile.id !== currentAssignedProfile.value?.id &&
-                        data.is_primary
-                    ) {
+                    // Si le profil attribué est différent du profil actuel et qu'il est principal
+                    if (data.profile && 
+                        data.profile.id !== currentAssignedProfile.value?.id && 
+                        data.is_primary) {
+                        
                         currentAssignedProfile.value = data.profile;
-                        // Si un client est associé à ce changement de profil, on le charge
+                        
+                        // Si un client est associé à ce changement de profil
                         if (data.client_id) {
-                            const clientResponse = await axios.get(
-                                "/moderateur/messages",
-                                {
+                            try {
+                                // Charger les messages du client
+                                const clientResponse = await axios.get("/moderateur/messages", {
                                     params: {
                                         client_id: data.client_id,
                                         profile_id: data.profile.id,
                                     },
+                                });
+
+                                if (clientResponse.data.messages) {
+                                    chatMessages.value[data.client_id] = clientResponse.data.messages;
+                                    
+                                    // Trouver et sélectionner le client
+                                    const clientInfo = assignedClient.value.find(
+                                        (c) => c.id === data.client_id
+                                    );
+                                    
+                                    if (clientInfo) {
+                                        selectedClient.value = clientInfo;
+                                        
+                                        // Faire défiler vers le bas du chat
+                                        nextTick(() => {
+                                            if (chatContainer.value) {
+                                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                                            }
+                                        });
+                                    }
                                 }
-                            );
-                            if (clientResponse.data.messages) {
-                                chatMessages.value[data.client_id] =
-                                    clientResponse.data.messages;
-                                // Sélectionner ce client
-                                const clientInfo = assignedClient.value.find(
-                                    (c) => c.id === data.client_id
-                                );
-                                if (clientInfo) {
-                                    selectedClient.value = clientInfo;
-                                }
+                            } catch (error) {
+                                console.error("Erreur lors du chargement des messages:", error);
                             }
                         }
                     }
@@ -978,10 +1008,29 @@ onUnmounted(() => {
     }
 });
 
-// Surveiller les changements du profil pour reconfigurer l'écoute des messages
-watch(currentAssignedProfile, (newProfile) => {
+// Modifier le watch sur currentAssignedProfile pour gérer automatiquement les changements de profil
+watch(currentAssignedProfile, async (newProfile, oldProfile) => {
     if (newProfile && window.Echo) {
         listenToProfileMessages(newProfile.id);
+
+        // Si le profil a changé, mettre à jour l'interface
+        if (oldProfile && newProfile.id !== oldProfile.id) {
+            // Récupérer les clients pour le nouveau profil
+            await loadAssignedData();
+
+            // Si nous avons des clients attribués, sélectionner automatiquement le plus récent
+            if (assignedClient.value.length > 0) {
+                const mostRecentClient = assignedClient.value[0];
+                await selectClient(mostRecentClient);
+
+                // Faire défiler vers le bas du chat
+                nextTick(() => {
+                    if (chatContainer.value) {
+                        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                    }
+                });
+            }
+        }
     }
 });
 

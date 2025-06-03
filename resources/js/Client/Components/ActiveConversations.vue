@@ -75,7 +75,7 @@
                 @click="$emit('select', profile)"
                 :class="{
                     'border-l-4 border-pink-500': selectedProfile && selectedProfile.id === profile.id,
-                    'bg-pink-50': profile.hasUnreadMessages
+                    'bg-pink-50': profile.unreadCount > 0
                 }"
             >
                 <div
@@ -89,12 +89,22 @@
                             class="w-12 h-12 rounded-full object-cover"
                         />
                         <div class="online-dot" v-if="profile.is_online"></div>
+                        
                         <!-- Badge de notification -->
                         <div
-                            v-if="profile.unreadCount"
+                            v-if="profile.unreadCount > 0"
                             class="absolute -top-1 -right-1 bg-pink-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
                         >
                             {{ profile.unreadCount }}
+                        </div>
+                        
+                        <!-- Indicateur de réponse en attente -->
+                        <div
+                            v-else-if="profile.awaitingReply"
+                            class="absolute -top-1 -right-1 bg-yellow-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"
+                            title="En attente de votre réponse"
+                        >
+                            <i class="fas fa-reply"></i>
                         </div>
                     </div>
 
@@ -125,7 +135,7 @@
                         </div>
                         <p 
                             class="text-sm text-gray-600 truncate"
-                            :class="{ 'font-semibold': profile.hasUnreadMessages }"
+                            :class="{ 'font-semibold': profile.unreadCount > 0 }"
                         >
                             {{ profile.lastMessage?.content || 'Aucun message' }}
                         </p>
@@ -175,6 +185,10 @@ const props = defineProps({
     remainingPoints: {
         type: Number,
         required: true
+    },
+    conversationStates: {
+        type: Map,
+        required: true
     }
 });
 
@@ -195,17 +209,22 @@ const sortedConversations = computed(() => {
         .map(profile => {
             const messages = props.messages[profile.id] || [];
             const lastMessage = messages[messages.length - 1];
-            const unreadCount = messages.filter(m => !m.isOutgoing && !m.read_at).length;
+            const state = props.conversationStates.get(profile.id) || {
+                unreadCount: 0,
+                awaitingReply: false,
+                hasBeenOpened: false
+            };
             
             return {
                 ...profile,
                 lastMessage,
-                unreadCount,
-                hasUnreadMessages: unreadCount > 0,
+                unreadCount: state.unreadCount || 0,
+                awaitingReply: state.awaitingReply || false,
+                hasBeenOpened: state.hasBeenOpened || false,
                 lastMessageDate: lastMessage ? new Date(lastMessage.created_at) : new Date(0)
             };
         })
-        .sort((a, b) => b.lastMessageDate - a.lastMessageDate); // Tri par date du dernier message
+        .sort((a, b) => b.lastMessageDate - a.lastMessageDate);
 });
 
 function formatTime(timestamp) {

@@ -297,12 +297,11 @@ class ModeratorAssignmentService
      */
     public function findLeastBusyModerator($clientId, $profileId)
     {
-        // Get online moderators (active in the last 30 minutes) - Augmenté de 10 à 30 minutes
+        // Get online moderators (active in the last 30 minutes)
         $onlineModerators = User::where('type', 'moderateur')
             ->where('status', 'active')
-            ->get(); // Récupérer tous les modérateurs actifs, sans condition d'activité récente
+            ->get();
 
-        // Log pour le débogage
         Log::info("[DEBUG] Recherche de modérateurs", [
             'client_id' => $clientId,
             'profile_id' => $profileId,
@@ -315,107 +314,126 @@ class ModeratorAssignmentService
             return null;
         }
 
-        // Calculate workload for each moderator (number of active conversations)
+        // Calculate workload for each moderator based on unanswered messages
         $workloads = [];
         foreach ($onlineModerators as $moderator) {
-            // Count unique clients this moderator is currently handling
-            $activeClientCount = DB::table('messages')
-                ->join('moderator_profile_assignments', function ($join) use ($moderator) {
-                    $join->on('messages.profile_id', '=', 'moderator_profile_assignments.profile_id')
-                        ->where('moderator_profile_assignments.user_id', '=', $moderator->id)
-                        ->where('moderator_profile_assignments.is_active', '=', true);
-                })
-                ->where('messages.created_at', '>', now()->subMinutes(30))
-                ->distinct('messages.client_id')
-                ->count('messages.client_id');
+            // Get all active profile assignments for this moderator
+            $activeProfileIds = ModeratorProfileAssignment::where('user_id', $moderator->id)
+                ->where('is_active', true)
+                ->pluck('profile_id')
+                ->toArray();
 
-            $workloads[$moderator->id] = $activeClientCount;
+            // Count conversations without responses in the last 30 minutes
+            $unansweredConversations = DB::table('messages as m1')
+                ->join(DB::raw('(
+                    SELECT client_id, profile_id, MAX(created_at) as last_message_time
+                    FROM messages
+                    GROUP BY client_id, profile_id
+                ) as m2'), function ($join) {
+                    $join->on('m1.client_id', '=', 'm2.client_id')
+                        ->on('m1.profile_id', '=', 'm2.profile_id')
+                        ->on('m1.created_at', '=', 'm2.last_message_time');
+                })
+                ->whereIn('m1.profile_id', $activeProfileIds)
+                ->where('m1.is_from_client', true)
+                ->where('m1.created_at', '>', now()->subMinutes(30))
+                ->whereNotExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('messages as m3')
+                        ->whereRaw('m3.client_id = m1.client_id')
+                        ->whereRaw('m3.profile_id = m1.profile_id')
+                        ->where('m3.is_from_client', false)
+                        ->whereRaw('m3.created_at > m1.created_at');
+                })
+                ->count(DB::raw('DISTINCT m1.client_id'));
+
+            $workloads[$moderator->id] = $unansweredConversations;
         }
 
-        // Log les charges de travail
         Log::info("[DEBUG] Charges de travail des modérateurs", [
             'workloads' => $workloads
         ]);
 
-        // Find moderators who already have this profile assigned
-        $moderatorsWithProfile = ModeratorProfileAssignment::where('profile_id', $profileId)
+        // Check if any moderator already has this profile
+        $currentAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
             ->where('is_active', true)
-            ->pluck('user_id')
-            ->toArray();
+            ->first();
 
-        // Log les modérateurs avec le profil déjà assigné
-        Log::info("[DEBUG] Modérateurs avec le profil déjà assigné", [
-            'profile_id' => $profileId,
-            'moderateurs' => $moderatorsWithProfile
-        ]);
+        // If a moderator has this profile and their workload is not too high, keep it with them
+        if ($currentAssignment) {
+            $currentModeratorWorkload = $workloads[$currentAssignment->user_id] ?? PHP_INT_MAX;
+            $minWorkload = min($workloads);
 
-        // Prioritize:
-        // 1. Moderators who already have the profile assigned
-        // 2. Moderators with the least workload
-        // 3. Moderators who have no conversations
-
-        $selectedModeratorId = null;
-        $lowestWorkload = PHP_INT_MAX;
-
-        // First check if any moderator with this profile has no workload
-        foreach ($moderatorsWithProfile as $modId) {
-            if (isset($workloads[$modId]) && $workloads[$modId] == 0) {
-                Log::info("[DEBUG] Modérateur sélectionné (avec profil, sans charge)", [
-                    'moderator_id' => $modId
+            // Only keep the profile with current moderator if their workload is not significantly higher
+            if ($currentModeratorWorkload <= $minWorkload + 1) {
+                Log::info("[DEBUG] Conservation du profil avec le modérateur actuel", [
+                    'moderator_id' => $currentAssignment->user_id,
+                    'workload' => $currentModeratorWorkload
                 ]);
-                return User::find($modId);
+                return User::find($currentAssignment->user_id);
             }
         }
 
-        // Then find moderator with this profile with least workload
-        foreach ($moderatorsWithProfile as $modId) {
-            if (isset($workloads[$modId]) && $workloads[$modId] < $lowestWorkload) {
-                $selectedModeratorId = $modId;
-                $lowestWorkload = $workloads[$modId];
-            }
-        }
-
-        // Si nous avons déjà sélectionné un modérateur avec le profil assigné
-        if ($selectedModeratorId) {
-            Log::info("[DEBUG] Modérateur sélectionné (avec profil, charge minimale)", [
-                'moderator_id' => $selectedModeratorId,
-                'workload' => $lowestWorkload
-            ]);
-            return User::find($selectedModeratorId);
-        }
-
-        // If no moderator has this profile or all are too busy, 
-        // find any moderator with no workload
-        foreach ($workloads as $modId => $workload) {
-            if ($workload == 0) {
-                Log::info("[DEBUG] Modérateur sélectionné (sans charge)", [
-                    'moderator_id' => $modId
-                ]);
-                return User::find($modId);
-            }
-        }
-
-        // If still no selection, pick the one with least workload
+        // Find moderator with minimum workload
+        $minWorkload = PHP_INT_MAX;
         $selectedModeratorId = null;
-        $lowestWorkload = PHP_INT_MAX;
 
         foreach ($workloads as $modId => $workload) {
-            if ($workload < $lowestWorkload) {
+            if ($workload < $minWorkload) {
+                $minWorkload = $workload;
                 $selectedModeratorId = $modId;
-                $lowestWorkload = $workload;
             }
         }
 
         if ($selectedModeratorId) {
-            Log::info("[DEBUG] Modérateur sélectionné (charge minimale générale)", [
+            Log::info("[DEBUG] Nouveau modérateur sélectionné", [
                 'moderator_id' => $selectedModeratorId,
-                'workload' => $lowestWorkload
+                'workload' => $minWorkload
             ]);
             return User::find($selectedModeratorId);
         }
 
         Log::warning("[DEBUG] Aucun modérateur n'a pu être sélectionné");
         return null;
+    }
+
+    /**
+     * Release profiles that have been responded to
+     * 
+     * @param User $moderator The moderator
+     * @return int Number of profiles released
+     */
+    private function releaseRespondedProfiles(User $moderator): int
+    {
+        $released = 0;
+        $assignments = ModeratorProfileAssignment::where('user_id', $moderator->id)
+            ->where('is_active', true)
+            ->get();
+
+        foreach ($assignments as $assignment) {
+            // Check if there are any unanswered messages for this profile
+            $hasUnansweredMessages = DB::table('messages as m1')
+                ->where('profile_id', $assignment->profile_id)
+                ->where('is_from_client', true)
+                ->where('created_at', '>', now()->subMinutes(30))
+                ->whereNotExists(function ($query) {
+                    $query->select(DB::raw(1))
+                        ->from('messages as m2')
+                        ->whereRaw('m2.client_id = m1.client_id')
+                        ->whereRaw('m2.profile_id = m1.profile_id')
+                        ->where('m2.is_from_client', false)
+                        ->whereRaw('m2.created_at > m1.created_at');
+                })
+                ->exists();
+
+            if (!$hasUnansweredMessages && !$assignment->is_primary) {
+                $assignment->is_active = false;
+                $assignment->save();
+                $released++;
+            }
+        }
+
+        return $released;
     }
 
     /**
@@ -577,6 +595,15 @@ class ModeratorAssignmentService
     {
         $clientsAssigned = 0;
         $clientsNeedingResponse = $this->getClientsNeedingResponse();
+
+        // First, release any profiles that have been responded to
+        $onlineModerators = User::where('type', 'moderateur')
+            ->where('status', 'active')
+            ->get();
+
+        foreach ($onlineModerators as $moderator) {
+            $this->releaseRespondedProfiles($moderator);
+        }
 
         foreach ($clientsNeedingResponse as $client) {
             $moderator = $this->assignClientToModerator($client['client_id'], $client['profile_id']);
