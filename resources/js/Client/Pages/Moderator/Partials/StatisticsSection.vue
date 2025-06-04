@@ -1,39 +1,39 @@
 <template>
     <div>
         <!-- Cartes de statistiques -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 sm:mb-6">
             <!-- Messages -->
             <div
-                class="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition"
+                class="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition"
             >
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-lg font-medium">Messages</h4>
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h4 class="text-base sm:text-lg font-medium">Messages</h4>
                     <div class="bg-pink-100 text-pink-600 p-2 rounded-full">
                         <i class="fas fa-comments"></i>
                     </div>
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Total</span>
-                        <span class="font-bold">{{
+                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="font-bold text-sm sm:text-base">{{
                             statistics?.totals?.short_messages +
                                 statistics?.totals?.long_messages || 0
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Messages courts</span>
+                        <span class="text-gray-600 text-sm">Messages courts</span>
                         <span class="text-sm">{{
                             statistics?.totals?.short_messages || 0
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Messages longs</span>
+                        <span class="text-gray-600 text-sm">Messages longs</span>
                         <span class="text-sm">{{
                             statistics?.totals?.long_messages || 0
                         }}</span>
                     </div>
                     <div class="pt-2 border-t">
-                        <span class="text-sm text-gray-500"
+                        <span class="text-xs sm:text-sm text-gray-500"
                             >Moyenne par jour:
                             {{
                                 Math.round(
@@ -47,23 +47,23 @@
 
             <!-- Gains -->
             <div
-                class="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition"
+                class="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition"
             >
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-lg font-medium">Gains</h4>
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h4 class="text-base sm:text-lg font-medium">Gains</h4>
                     <div class="bg-green-100 text-green-600 p-2 rounded-full">
                         <i class="fas fa-coins"></i>
                     </div>
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Total</span>
-                        <span class="font-bold">{{
+                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="font-bold text-sm sm:text-base">{{
                             formatCurrency(statistics?.totals?.earnings || 0)
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Messages courts</span>
+                        <span class="text-gray-600 text-sm">Messages courts</span>
                         <span class="text-sm">{{
                             formatCurrency(
                                 (statistics?.totals?.short_messages || 0) * 25
@@ -71,7 +71,7 @@
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Messages longs</span>
+                        <span class="text-gray-600 text-sm">Messages longs</span>
                         <span class="text-sm">{{
                             formatCurrency(
                                 (statistics?.totals?.long_messages || 0) * 50
@@ -79,7 +79,7 @@
                         }}</span>
                     </div>
                     <div class="pt-2 border-t">
-                        <span class="text-sm text-gray-500"
+                        <span class="text-xs sm:text-sm text-gray-500"
                             >Moyenne par jour:
                             {{
                                 formatCurrency(
@@ -93,29 +93,29 @@
 
             <!-- Points reçus -->
             <div
-                class="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition"
+                class="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition sm:col-span-2 lg:col-span-1"
             >
-                <div class="flex items-center justify-between mb-4">
-                    <h4 class="text-lg font-medium">Points reçus</h4>
+                <div class="flex items-center justify-between mb-3 sm:mb-4">
+                    <h4 class="text-base sm:text-lg font-medium">Points reçus</h4>
                     <div class="bg-purple-100 text-purple-600 p-2 rounded-full">
                         <i class="fas fa-gift"></i>
                     </div>
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Total</span>
-                        <span class="font-bold">{{
+                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="font-bold text-sm sm:text-base">{{
                             statistics?.totals?.points_received || 0
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">Cette période</span>
+                        <span class="text-gray-600 text-sm">Cette période</span>
                         <span class="text-sm">{{
                             calculatePeriodPoints()
                         }}</span>
                     </div>
                     <div class="pt-2 border-t">
-                        <span class="text-sm text-gray-500">
+                        <span class="text-xs sm:text-sm text-gray-500">
                             Du {{ formatDate(statistics?.period?.start) }} au
                             {{ formatDate(statistics?.period?.end) }}
                         </span>
@@ -125,16 +125,16 @@
         </div>
 
         <!-- Graphique d'évolution -->
-        <div class="bg-white rounded-xl p-6 shadow-sm mb-6">
-            <div class="flex items-center justify-between mb-6">
-                <h4 class="text-lg font-medium">Évolution des performances</h4>
-                <div class="flex space-x-2">
+        <div class="bg-white rounded-xl p-4 sm:p-6 shadow-sm mb-6">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 mb-4 sm:mb-6">
+                <h4 class="text-base sm:text-lg font-medium">Évolution des performances</h4>
+                <div class="flex flex-wrap gap-2">
                     <button
                         v-for="metric in metrics"
                         :key="metric.id"
                         @click="selectedMetric = metric.id"
                         :class="[
-                            'px-3 py-1 rounded-full text-sm',
+                            'px-3 py-1 rounded-full text-sm flex-1 sm:flex-none',
                             selectedMetric === metric.id
                                 ? 'bg-pink-500 text-white'
                                 : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
@@ -146,7 +146,7 @@
             </div>
 
             <!-- Le graphique -->
-            <div class="h-64">
+            <div class="h-48 sm:h-64">
                 <canvas ref="chartCanvas"></canvas>
             </div>
         </div>
@@ -157,7 +157,7 @@
             class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center"
         >
             <div
-                class="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"
+                class="animate-spin rounded-full h-10 w-10 sm:h-12 sm:w-12 border-b-2 border-pink-500"
             ></div>
         </div>
     </div>

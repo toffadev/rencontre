@@ -368,7 +368,7 @@
                         </div>
 
                         <!-- Message Input -->
-                        <div class="border-t border-gray-200 sticky bottom-0 bg-white z-50 p-4">
+                        <div class="border-t border-gray-200 sticky bottom-0 bg-white z-50 p-4 chat-input">
                             <div class="flex flex-col space-y-2">
                                 <!-- Prévisualisation de l'image -->
                                 <div v-if="selectedFile" class="flex justify-end">
@@ -652,10 +652,13 @@ async function selectProfile(profile) {
     // Marquer la conversation comme lue
     await markConversationAsRead(profile.id);
 
-    // Faire défiler le chat vers le bas avec un petit délai pour laisser le temps au DOM de se mettre à jour
+    // Faire défiler vers le chat avec un petit délai pour laisser le temps au DOM de se mettre à jour
     setTimeout(() => {
-        scrollToBottom();
-    }, 100);
+        const chatInput = document.querySelector('.chat-input');
+        if (chatInput) {
+            chatInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, 300);
 }
 
 // Charger les messages d'un profil
