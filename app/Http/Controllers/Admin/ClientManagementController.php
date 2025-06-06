@@ -98,7 +98,7 @@ class ClientManagementController extends Controller
     public function show($id)
     {
         $client = User::where('type', 'client')
-            ->with(['clientInfo', 'customInfos', 'messages.profile', 'pointConsumptions', 'pointTransactions'])
+            ->with(['clientInfo', 'customInfos', 'messages.profile', 'pointConsumptions', 'pointTransactions', 'clientProfile'])
             ->findOrFail($id);
 
         // Statistiques du client
@@ -113,6 +113,25 @@ class ClientManagementController extends Controller
             'last_activity' => $this->getLastActivity($client)
         ];
 
+        // Formater les informations du profil
+        $profile = $client->clientProfile;
+        $profileData = $profile ? [
+            'birth_date' => $profile->birth_date ? $profile->birth_date->format('Y-m-d') : null,
+            'age' => $profile->birth_date ? $profile->birth_date->age : null,
+            'city' => $profile->city,
+            'country' => $profile->country,
+            'relationship_status' => $this->getRelationshipStatusLabel($profile->relationship_status),
+            'height' => $profile->height,
+            'occupation' => $profile->occupation,
+            'has_children' => $profile->has_children,
+            'wants_children' => $profile->wants_children,
+            'sexual_orientation' => $this->getOrientationLabel($profile->sexual_orientation),
+            'seeking_gender' => $this->getGenderLabel($profile->seeking_gender),
+            'bio' => $profile->bio,
+            'profile_photo_url' => $profile->profile_photo_url,
+            'profile_completed' => $profile->profile_completed,
+        ] : null;
+
         return Inertia::render('ClientDetail', [
             'client' => [
                 'id' => $client->id,
@@ -121,7 +140,7 @@ class ClientManagementController extends Controller
                 'registration_date' => $client->created_at->format('Y-m-d'),
                 'status' => $client->status,
                 'points' => $client->points,
-                'client_info' => $client->clientInfo,
+                'profile' => $profileData,
                 'custom_infos' => $client->customInfos
             ],
             'stats' => $stats,
@@ -316,5 +335,45 @@ class ClientManagementController extends Controller
 
         // Trier par date décroissante
         return $activities->sortByDesc('date')->values();
+    }
+
+    /**
+     * Obtenir le libellé du statut relationnel
+     */
+    private function getRelationshipStatusLabel($status)
+    {
+        $labels = [
+            'single' => 'Célibataire',
+            'divorced' => 'Divorcé(e)',
+            'widowed' => 'Veuf/Veuve'
+        ];
+
+        return $labels[$status] ?? $status;
+    }
+
+    /**
+     * Obtenir le libellé de l'orientation sexuelle
+     */
+    private function getOrientationLabel($orientation)
+    {
+        $labels = [
+            'heterosexual' => 'Hétérosexuel(le)',
+            'homosexual' => 'Homosexuel(le)'
+        ];
+
+        return $labels[$orientation] ?? $orientation;
+    }
+
+    /**
+     * Obtenir le libellé du genre recherché
+     */
+    private function getGenderLabel($gender)
+    {
+        $labels = [
+            'male' => 'Homme',
+            'female' => 'Femme'
+        ];
+
+        return $labels[$gender] ?? $gender;
     }
 }

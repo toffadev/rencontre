@@ -135,9 +135,18 @@
                                             : '',
                                     ]">
                                         <div class="relative">
-                                            <img :src="client.avatar ||
-                                                'https://via.placeholder.com/64'
-                                                " :alt="client.name" class="w-12 h-12 rounded-full object-cover" />
+                                            <template v-if="client.avatar">
+                                                <img
+                                                    :src="client.avatar"
+                                                    :alt="client.name"
+                                                    class="w-12 h-12 rounded-full object-cover"
+                                                />
+                                            </template>
+                                            <template v-else>
+                                                <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                    <i class="fas fa-user text-gray-400 text-xl"></i>
+                                                </div>
+                                            </template>
                                             <div class="online-dot"></div>
                                         </div>
                                         <div class="flex-1 min-w-0">
@@ -206,9 +215,18 @@
                                     <div
                                         class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200">
                                         <div class="relative">
-                                            <img :src="client.avatar ||
-                                                'https://via.placeholder.com/64'
-                                                " :alt="client.name" class="w-12 h-12 rounded-full object-cover" />
+                                            <template v-if="client.avatar">
+                                                <img
+                                                    :src="client.avatar"
+                                                    :alt="client.name"
+                                                    class="w-12 h-12 rounded-full object-cover"
+                                                />
+                                            </template>
+                                            <template v-else>
+                                                <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                    <i class="fas fa-user text-gray-400 text-xl"></i>
+                                                </div>
+                                            </template>
                                             <div class="online-dot"></div>
                                         </div>
                                         <div class="flex-1 min-w-0">
@@ -303,9 +321,18 @@
                         <!-- Chat Header -->
                         <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
                             <div class="relative">
-                                <img :src="selectedClient.avatar || 'https://via.placeholder.com/64'"
-                                     alt="Client" 
-                                     class="w-12 h-12 rounded-full object-cover" />
+                                <template v-if="selectedClient.avatar">
+                                    <img
+                                        :src="selectedClient.avatar"
+                                        :alt="selectedClient.name"
+                                        class="w-12 h-12 rounded-full object-cover"
+                                    />
+                                </template>
+                                <template v-else>
+                                    <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-user text-gray-400 text-xl"></i>
+                                    </div>
+                                </template>
                                 <div class="online-dot"></div>
                             </div>
                             <div>
@@ -348,9 +375,18 @@
 
                             <div v-for="(message, index) in currentChatMessages" :key="message.id || index" :class="`flex space-x-2 ${message.isFromClient ? '' : 'justify-end'}`">
                                 <template v-if="message.isFromClient">
-                                    <img :src="selectedClient.avatar ||
-                                        'https://via.placeholder.com/64'
-                                        " alt="Client" class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                                    <template v-if="selectedClient.avatar">
+                                        <img
+                                            :src="selectedClient.avatar"
+                                            :alt="selectedClient.name"
+                                            class="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                                        />
+                                    </template>
+                                    <template v-else>
+                                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                            <i class="fas fa-user text-gray-400 text-sm"></i>
+                                        </div>
+                                    </template>
                                     <div>
                                         <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
                                             <!-- Contenu du message -->

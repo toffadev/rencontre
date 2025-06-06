@@ -25,31 +25,6 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" integrity="sha512-iecdLmaskl7CVkqkXNQ/ZH/XLlvWZOJyj7Yy7tcenmpD1ypASozpmT/E0iPtmFIB46ZmdtAc9eNBvH0H/ZpiBw==" crossorigin="anonymous" referrerpolicy="no-referrer" />
     
-    <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            maxWidth: {
-              '6xl': '72rem',
-              '7xl': '80rem',
-            },
-            fontFamily: {
-              sans: ['Poppins', 'sans-serif'],
-            },
-            colors: {
-              primary: '#4f46e5',
-              secondary: '#10b981',
-              danger: '#ef4444',
-              dark: '#1f2937',
-              light: '#f9fafb',
-            }
-          }
-        }
-      }
-    </script>
-    
     <!-- Scripts and Styles -->
     @routes
     @vite(['resources/css/app.css'])

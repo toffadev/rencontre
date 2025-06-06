@@ -14,45 +14,36 @@
                 <div class="bg-white rounded-xl profile-card p-6 mb-6">
                     <div class="flex flex-col items-center">
                         <img
-                            :src="auth?.user?.profile_photo_url || 'https://randomuser.me/api/portraits/women/44.jpg'"
-                            :alt="auth?.user?.name"
+                            :src="profileData.photo_url"
+                            :alt="profileData.name"
                             class="w-24 h-24 rounded-full border-4 border-pink-100 mb-4"
                         />
-                        <h2 class="text-xl font-bold">{{ auth?.user?.name }}</h2>
-                        <p class="text-gray-500 text-sm mb-4">{{ auth?.user?.location || 'Paris, France' }}</p>
+                        <h2 class="text-xl font-bold">{{ profileData.name }}</h2>
+                        <p class="text-gray-500 text-sm mb-4">{{ profileData.city }}, {{ profileData.country }}</p>
                         <div class="flex space-x-2 mb-6">
                             <span
+                                v-if="profileData.age"
                                 class="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded"
-                                >28 ans</span
-                            >
+                            >{{ profileData.age }} ans</span>
                             <span
                                 class="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded"
-                                >Femme</span
-                            >
-                            <span
-                                class="bg-pink-100 text-pink-800 text-xs px-2 py-1 rounded"
-                                >Célibataire</span
-                            >
+                            >{{ getRelationshipStatus }}</span>
                         </div>
                     </div>
 
                     <div class="border-t border-gray-200 pt-4">
                         <h3 class="font-medium mb-3">À propos de moi</h3>
                         <p class="text-gray-600 text-sm mb-4">
-                            Passionnée de voyages et de cuisine. Je recherche
-                            quelqu'un pour partager des moments simples et des
-                            aventures extraordinaires.
+                            {{ profileData.bio || "Aucune description pour le moment." }}
                         </p>
 
                         <div class="flex justify-between text-sm mb-1">
                             <span class="text-gray-500">Inscrit depuis</span>
-                            <span class="font-medium">15/03/2023</span>
+                            <span class="font-medium">{{ profileData.registration_date }}</span>
                         </div>
                         <div class="flex justify-between text-sm mb-1">
-                            <span class="text-gray-500"
-                                >Dernière connexion</span
-                            >
-                            <span class="font-medium">Aujourd'hui</span>
+                            <span class="text-gray-500">Dernière connexion</span>
+                            <span class="font-medium">{{ profileData.last_login }}</span>
                         </div>
                     </div>
                 </div>
@@ -451,6 +442,10 @@ const props = defineProps({
     auth: {
         type: Object,
         required: true
+    },
+    profileData: {
+        type: Object,
+        required: true
     }
 });
 
@@ -510,6 +505,16 @@ const pointsPlans = [
         popular: false,
     },
 ];
+
+// Computed pour le statut relationnel en français
+const getRelationshipStatus = computed(() => {
+    const statusMap = {
+        'single': 'Célibataire',
+        'divorced': 'Divorcé(e)',
+        'widowed': 'Veuf/Veuve'
+    };
+    return statusMap[props.profileData.relationship_status] || props.profileData.relationship_status || 'Non renseigné';
+});
 
 // Charger Stripe
 let stripe = null;

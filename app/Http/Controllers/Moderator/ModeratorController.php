@@ -152,7 +152,7 @@ class ModeratorController extends Controller
                 $clientsNeedingResponse[] = [
                     'id' => $client->id,
                     'name' => $client->name,
-                    'avatar' => null, // À compléter si vous avez des avatars
+                    'avatar' => $client->clientProfile?->profile_photo_url,
                     'lastMessage' => $message->content,
                     'unreadCount' => $unreadCount,
                     'createdAt' => $message->created_at,
@@ -588,7 +588,7 @@ class ModeratorController extends Controller
             $result[] = [
                 'id' => $client->id,
                 'name' => $client->name,
-                'avatar' => null, // À compléter si vous avez des avatars
+                'avatar' => $client->profile_photo_url ?? null,
                 'history' => $clientHistory,
                 'hasHistory' => !empty($clientHistory),
                 'lastActivity' => $client->updated_at->diffForHumans()
@@ -662,7 +662,7 @@ class ModeratorController extends Controller
         $clientDetails = [
             'id' => $client->id,
             'name' => $client->name,
-            'avatar' => null, // À compléter si vous avez des avatars
+            'avatar' => $client->clientProfile?->profile_photo_url,
             'profileId' => $profile->id,
             'profileName' => $profile->name,
             'profilePhoto' => $profile->main_photo_path

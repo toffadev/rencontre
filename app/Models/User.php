@@ -158,4 +158,12 @@ class User extends Authenticatable
         // Vous pouvez personnaliser ceci plus tard pour utiliser une vraie photo de profil
         return 'https://ui-avatars.com/api/?name=' . urlencode($this->name) . '&color=7F9CF5&background=EBF4FF';
     }
+
+    /**
+     * Get the client profile associated with the user.
+     */
+    public function clientProfile()
+    {
+        return $this->hasOne(ClientProfile::class);
+    }
 }

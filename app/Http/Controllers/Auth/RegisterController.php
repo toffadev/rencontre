@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\ClientProfile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -30,6 +31,7 @@ class RegisterController extends Controller
      */
     public function register(Request $request)
     {
+        //dd($request->all());
         $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
@@ -46,11 +48,18 @@ class RegisterController extends Controller
             'type' => 'client',
         ]);
 
+        // Create initial client profile
+        ClientProfile::create([
+            'user_id' => $user->id,
+            'birth_date' => $request->dob,
+            'profile_completed' => false,
+        ]);
+
         // Generate token for the user
         $token = $user->createToken('auth_token')->plainTextToken;
 
         Auth::login($user);
 
-        return redirect()->route('home');
+        return redirect()->route('profile.setup');
     }
 }

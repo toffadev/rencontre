@@ -42,12 +42,23 @@ class LoginController extends Controller
             // Generate token for API access
             $token = $user->createToken('auth_token')->plainTextToken;
 
-            // Check user type for redirect
-            if ($user->type === 'admin' || $user->type === 'moderateur') {
-                return redirect()->intended(route('admin.dashboard'));
+            // Redirection selon le type d'utilisateur
+            if ($user->type === 'moderateur') {
+                return redirect()->route('moderator.chat');
+            } elseif ($user->type === 'client') {
+                return redirect()->route('client.home');
             }
 
-            return redirect()->intended(route('home'));
+            // Si c'est un admin qui essaie de se connecter via le formulaire client
+            if ($user->type === 'admin') {
+                Auth::logout();
+                $request->session()->invalidate();
+                $request->session()->regenerateToken();
+                return redirect()->route('admin.login')
+                    ->withErrors(['email' => 'Les administrateurs doivent utiliser le formulaire de connexion administrateur.']);
+            }
+
+            return redirect()->route('home');
         }
 
         return back()->withErrors([
@@ -63,6 +74,8 @@ class LoginController extends Controller
      */
     public function logout(Request $request)
     {
+        $userType = Auth::user()->type;
+
         // Revoke all user's tokens
         if (Auth::check()) {
             Auth::user()->tokens()->delete();
@@ -71,6 +84,11 @@ class LoginController extends Controller
         Auth::logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
+
+        // Rediriger vers la page de connexion appropriée
+        if ($userType === 'admin') {
+            return redirect()->route('admin.login');
+        }
 
         return redirect()->route('login');
     }

@@ -16,7 +16,9 @@ class AdminLoginController extends Controller
      */
     public function showLoginForm()
     {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Auth/Login', [
+            'csrf_token' => csrf_token(),
+        ]);
     }
 
     /**
@@ -41,9 +43,6 @@ class AdminLoginController extends Controller
 
             // Vérifier si l'utilisateur est un administrateur
             if ($user->type === 'admin') {
-                // Generate token for API access if needed
-                $token = $user->createToken('auth_token')->plainTextToken;
-
                 return redirect()->intended(route('admin.dashboard'));
             }
 

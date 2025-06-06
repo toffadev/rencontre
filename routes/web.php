@@ -42,8 +42,16 @@ Route::get('/test-redis', function () {
 // Route principale qui redirige en fonction de l'authentification
 Route::get('/', function () {
     if (Auth::check()) {
-        // Si l'utilisateur est connecté, afficher la page d'accueil client
-        // via le HomeController (qui vérifie déjà les permissions via middleware)
+        $user = Auth::user();
+
+        // Redirection selon le type d'utilisateur
+        if ($user->type === 'admin') {
+            return redirect()->route('admin.dashboard');
+        } elseif ($user->type === 'moderateur') {
+            return redirect()->route('moderator.chat');
+        }
+
+        // Si c'est un client, afficher la page d'accueil client
         return app()->make(HomeController::class)->index();
     } else {
         // Si l'utilisateur n'est pas connecté, rediriger vers login
@@ -51,14 +59,35 @@ Route::get('/', function () {
     }
 })->name('home');
 
-// Routes qui nécessitent une authentification client ou admin
-Route::middleware(['client_or_admin'])->group(function () {
+// Routes qui nécessitent une authentification client uniquement
+Route::middleware(['auth', 'client_only'])->group(function () {
+    // Profile setup routes
+    Route::get('/profile-setup', [App\Http\Controllers\Client\ProfileSetupController::class, 'show'])
+        ->name('profile.setup');
+    Route::post('/profile-setup', [App\Http\Controllers\Client\ProfileSetupController::class, 'store'])
+        ->name('profile.setup.store');
+
     // Page d'accueil client explicite (URL: /home)
-    Route::get('/home', [HomeController::class, 'index'])->name('client.home');
+    Route::get('/', [HomeController::class, 'index'])->name('client.home');
 
     // Client area routes
     Route::get('/profil', function () {
-        return Inertia::render('Profil/Show');
+        $user = Auth::user();
+        $profile = $user->clientProfile;
+
+        return Inertia::render('Profil/Show', [
+            'profileData' => [
+                'photo_url' => $profile->profile_photo_url,
+                'name' => $user->name,
+                'city' => $profile->city,
+                'country' => $profile->country,
+                'age' => $profile->birth_date ? $profile->birth_date->age : null,
+                'bio' => $profile->bio,
+                'registration_date' => $user->created_at->format('d/m/Y'),
+                'last_login' => $user->last_login_at ? $user->last_login_at->diffForHumans() : 'Aujourd\'hui',
+                'relationship_status' => $profile->relationship_status,
+            ]
+        ]);
     })->name('profile');
 
     // Route pour la page des points d'un profil
@@ -133,9 +162,8 @@ Route::middleware('auth')->group(function () {
 
 // Admin routes
 Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(function () {
-    Route::get('/dashboard', function () {
-        return Inertia::render('Dashboard');
-    })->name('dashboard');
+    Route::get('/dashboard', [App\Http\Controllers\Admin\DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard/stats', [App\Http\Controllers\Admin\DashboardController::class, 'getStats'])->name('dashboard.stats');
 
     // Conversation Viewer routes
     Route::prefix('conversations')->name('conversations.')->group(function () {

@@ -1,7 +1,9 @@
 <template>
     <div>
         <!-- Cartes de statistiques -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 sm:mb-6">
+        <div
+            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4 sm:mb-6"
+        >
             <!-- Messages -->
             <div
                 class="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition"
@@ -14,20 +16,26 @@
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="text-gray-600 text-sm sm:text-base"
+                            >Total</span
+                        >
                         <span class="font-bold text-sm sm:text-base">{{
                             statistics?.totals?.short_messages +
                                 statistics?.totals?.long_messages || 0
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm">Messages courts</span>
+                        <span class="text-gray-600 text-sm"
+                            >Messages courts</span
+                        >
                         <span class="text-sm">{{
                             statistics?.totals?.short_messages || 0
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm">Messages longs</span>
+                        <span class="text-gray-600 text-sm"
+                            >Messages longs</span
+                        >
                         <span class="text-sm">{{
                             statistics?.totals?.long_messages || 0
                         }}</span>
@@ -57,13 +65,17 @@
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="text-gray-600 text-sm sm:text-base"
+                            >Total</span
+                        >
                         <span class="font-bold text-sm sm:text-base">{{
                             formatCurrency(statistics?.totals?.earnings || 0)
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm">Messages courts</span>
+                        <span class="text-gray-600 text-sm"
+                            >Messages courts</span
+                        >
                         <span class="text-sm">{{
                             formatCurrency(
                                 (statistics?.totals?.short_messages || 0) * 25
@@ -71,7 +83,9 @@
                         }}</span>
                     </div>
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm">Messages longs</span>
+                        <span class="text-gray-600 text-sm"
+                            >Messages longs</span
+                        >
                         <span class="text-sm">{{
                             formatCurrency(
                                 (statistics?.totals?.long_messages || 0) * 50
@@ -96,14 +110,18 @@
                 class="bg-white rounded-xl p-4 sm:p-6 shadow-sm hover:shadow-md transition sm:col-span-2 lg:col-span-1"
             >
                 <div class="flex items-center justify-between mb-3 sm:mb-4">
-                    <h4 class="text-base sm:text-lg font-medium">Points reçus</h4>
+                    <h4 class="text-base sm:text-lg font-medium">
+                        Points reçus
+                    </h4>
                     <div class="bg-purple-100 text-purple-600 p-2 rounded-full">
                         <i class="fas fa-gift"></i>
                     </div>
                 </div>
                 <div class="space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600 text-sm sm:text-base">Total</span>
+                        <span class="text-gray-600 text-sm sm:text-base"
+                            >Total</span
+                        >
                         <span class="font-bold text-sm sm:text-base">{{
                             statistics?.totals?.points_received || 0
                         }}</span>
@@ -126,8 +144,12 @@
 
         <!-- Graphique d'évolution -->
         <div class="bg-white rounded-xl p-4 sm:p-6 shadow-sm mb-6">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 mb-4 sm:mb-6">
-                <h4 class="text-base sm:text-lg font-medium">Évolution des performances</h4>
+            <div
+                class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6 mb-4 sm:mb-6"
+            >
+                <h4 class="text-base sm:text-lg font-medium">
+                    Évolution des performances
+                </h4>
                 <div class="flex flex-wrap gap-2">
                     <button
                         v-for="metric in metrics"

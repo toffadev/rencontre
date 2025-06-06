@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Client;
 
 use App\Http\Controllers\Controller;
 use App\Models\Profile;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -16,9 +17,18 @@ class HomeController extends Controller
      */
     public function index()
     {
+        $user = auth()->user();
+        $clientProfile = $user->clientProfile;
+
+        // Redirect to profile setup if not completed
+        if (!$clientProfile || !$clientProfile->profile_completed) {
+            return redirect()->route('profile.setup');
+        }
+
         // Get active profiles with their photos and user (moderator)
         $profiles = Profile::with(['photos', 'mainPhoto', 'user'])
             ->where('status', 'active')
+            ->where('gender', $clientProfile->seeking_gender) // Filter by gender preference
             ->latest()
             ->take(10)
             ->get()

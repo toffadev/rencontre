@@ -5,16 +5,27 @@ import { route } from 'ziggy-js';
 
 const props = defineProps({
     status: String,
+    csrf_token: {
+        type: String,
+        required: true
+    }
 });
 
 const form = useForm({
     email: '',
     password: '',
     remember: false,
+    _token: props.csrf_token
 });
 
 const submit = () => {
-    form.post(route('admin.login.submit'));
+    form.post(route('admin.login.submit'), {
+        onSuccess: () => {
+            form.reset('password')
+        },
+        preserveScroll: true,
+        preserveState: true
+    });
 };
 </script>
 

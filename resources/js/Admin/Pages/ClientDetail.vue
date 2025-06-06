@@ -23,36 +23,112 @@
               Informations du Client
             </h3>
           </div>
-          <div class="border-t border-gray-200 px-4 py-5 sm:px-6">
-            <dl class="grid grid-cols-1 gap-x-4 gap-y-8 sm:grid-cols-2">
-              <div class="sm:col-span-1">
-                <dt class="text-sm font-medium text-gray-500">Nom</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ client.name }}</dd>
+          <div class="border-t border-gray-200">
+            <div class="px-4 py-5 sm:p-6">
+              <div class="md:grid md:grid-cols-3 md:gap-8">
+                <!-- Photo de profil et infos de base -->
+                <div class="md:col-span-1">
+                  <div class="flex flex-col items-center">
+                    <img
+                      :src="client.profile?.profile_photo_url || 'https://via.placeholder.com/150'"
+                      alt="Photo de profil"
+                      class="h-32 w-32 rounded-full object-cover"
+                    />
+                    <div class="mt-4 text-center">
+                      <h4 class="text-lg font-medium text-gray-900">{{ client.name }}</h4>
+                      <p class="text-sm text-gray-500">{{ client.email }}</p>
+                    </div>
+                    <div class="mt-2">
+                      <span
+                        :class="{
+                          'px-2 py-1 text-xs font-medium rounded-full': true,
+                          'bg-green-100 text-green-800': client.status === 'active',
+                          'bg-red-100 text-red-800': client.status === 'inactive',
+                          'bg-yellow-100 text-yellow-800': client.status === 'suspended'
+                        }"
+                      >
+                        {{ client.status }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Informations personnelles -->
+                <div class="mt-5 md:col-span-2 md:mt-0">
+                  <dl class="grid grid-cols-1 gap-x-4 gap-y-6 sm:grid-cols-2">
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Date d'inscription</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.registration_date }}</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Âge</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.age || 'Non renseigné' }} ans</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Ville</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.city || 'Non renseigné' }}</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Pays</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.country || 'Non renseigné' }}</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Statut relationnel</dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        {{ client.profile?.relationship_status || 'Non renseigné' }}
+                      </dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Profession</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.occupation || 'Non renseigné' }}</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Taille</dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        {{ client.profile?.height ? `${client.profile.height} cm` : 'Non renseigné' }}
+                      </dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Orientation</dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        {{ client.profile?.sexual_orientation || 'Non renseigné' }}
+                      </dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Recherche</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.seeking_gender || 'Non renseigné' }}</dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">A des enfants</dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        {{ client.profile?.has_children ? 'Oui' : 'Non' }}
+                      </dd>
+                    </div>
+
+                    <div class="sm:col-span-1">
+                      <dt class="text-sm font-medium text-gray-500">Souhaite des enfants</dt>
+                      <dd class="mt-1 text-sm text-gray-900">
+                        {{ client.profile?.wants_children === null ? 'Non renseigné' : (client.profile.wants_children ? 'Oui' : 'Non') }}
+                      </dd>
+                    </div>
+
+                    <div class="sm:col-span-2">
+                      <dt class="text-sm font-medium text-gray-500">Bio</dt>
+                      <dd class="mt-1 text-sm text-gray-900">{{ client.profile?.bio || 'Aucune bio' }}</dd>
+                    </div>
+                  </dl>
+                </div>
               </div>
-              <div class="sm:col-span-1">
-                <dt class="text-sm font-medium text-gray-500">Email</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ client.email }}</dd>
-              </div>
-              <div class="sm:col-span-1">
-                <dt class="text-sm font-medium text-gray-500">Date d'inscription</dt>
-                <dd class="mt-1 text-sm text-gray-900">{{ client.registration_date }}</dd>
-              </div>
-              <div class="sm:col-span-1">
-                <dt class="text-sm font-medium text-gray-500">Statut</dt>
-                <dd class="mt-1 text-sm text-gray-900">
-                  <span
-                    :class="{
-                      'px-2 py-1 text-xs font-medium rounded-full': true,
-                      'bg-green-100 text-green-800': client.status === 'active',
-                      'bg-red-100 text-red-800': client.status === 'inactive',
-                      'bg-yellow-100 text-yellow-800': client.status === 'suspended'
-                    }"
-                  >
-                    {{ client.status }}
-                  </span>
-                </dd>
-              </div>
-            </dl>
+            </div>
           </div>
         </div>
       </div>

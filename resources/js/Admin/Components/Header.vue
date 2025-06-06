@@ -40,25 +40,13 @@
               v-if="showUserMenu"
               class="absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5"
             >
-              <Link
-                :href="route('admin.profile')"
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Mon profil
-              </Link>
-              <Link
-                :href="route('admin.settings')"
-                class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-              >
-                Paramètres
-              </Link>
               <button
                 @click="logout"
                 class="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
               >
                 Déconnexion
-          </button>
-        </div>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -71,6 +59,7 @@ import { ref, onMounted, onUnmounted } from 'vue';
 import { Link } from '@inertiajs/vue3';
 import NotificationDropdown from './NotificationDropdown.vue';
 import { router } from '@inertiajs/vue3';
+import { route } from 'ziggy-js';
 
 const props = defineProps({
   title: {

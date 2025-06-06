@@ -4,7 +4,7 @@
     <div class="flex items-center justify-between p-4 border-b border-gray-200">
       <div class="flex items-center space-x-2">
         <i class="fas fa-tachometer-alt text-primary text-2xl"></i>
-        <span class="text-xl font-bold text-dark md:hidden lg:block">AXEL MERRYL</span>
+        <span class="text-xl font-bold text-dark md:hidden lg:block">Site de rencontre</span>
       </div>
     </div>
 
@@ -82,13 +82,6 @@
         <i class="fas fa-tags"></i>
         <span class="md:hidden lg:block">Utilisateurs</span>
         </Link>
-
-        <Link href="/admin/events" :class="['flex items-center space-x-3 p-3 rounded-lg',
-          $page.component === 'Admin/Pages/Events' ? 'bg-primary text-white' : 'text-gray-700 hover:bg-gray-100']">
-        <i class="fas fa-tags"></i>
-        <span class="md:hidden lg:block">Événements</span>
-        </Link>
-
         <!-- Autres liens du menu -->
       </div>
 

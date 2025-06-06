@@ -23,20 +23,20 @@ class RedirectIfAuthenticated
             if (Auth::guard($guard)->check()) {
                 $user = Auth::guard($guard)->user();
 
-                // Vérifier si la route demandée est une route d'authentification (login, register)
-                // Dans ce cas, rediriger vers le tableau de bord approprié
-                if ($request->routeIs('login', 'register', 'password.*', 'admin.login', 'admin.login.submit')) {
-                    if ($user->type === 'admin') {
-                        return redirect()->route('admin.dashboard');
-                    } elseif ($user->type === 'moderateur') {
-                        return redirect()->route('moderator.dashboard');
-                    }
-
-                    return redirect()->route('home');
+                // Si l'utilisateur essaie d'accéder à une route admin alors qu'il n'est pas admin
+                if ($request->is('admin/*') && $user->type !== 'admin') {
+                    Auth::logout();
+                    return redirect()->route('login');
                 }
 
-                // Si ce n'est pas une route d'authentification, laisser l'utilisateur continuer
-                return $next($request);
+                // Redirection selon le type d'utilisateur
+                if ($user->type === 'admin') {
+                    return redirect()->route('admin.dashboard');
+                } elseif ($user->type === 'moderateur') {
+                    return redirect()->route('moderator.chat');
+                } elseif ($user->type === 'client') {
+                    return redirect()->route('client.home');
+                }
             }
         }
 

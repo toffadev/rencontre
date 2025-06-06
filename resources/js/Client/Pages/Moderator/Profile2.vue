@@ -3,16 +3,10 @@
         <div class="py-4 sm:py-10">
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 <!-- En-tête -->
-                <div
-                    class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mb-4 sm:mb-6"
-                >
-                    <div
-                        class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-0"
-                    >
+                <div class="bg-white shadow-sm rounded-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                    <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 sm:gap-0">
                         <div>
-                            <h1
-                                class="text-2xl sm:text-3xl font-bold text-gray-900"
-                            >
+                            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">
                                 Tableau de bord Modérateur
                             </h1>
                             <p class="mt-1 sm:mt-2 text-sm text-gray-600">
@@ -37,9 +31,7 @@
                             <FilterBar
                                 :date-range="filters.dateRange"
                                 :profiles="profiles"
-                                :show-message-type-filter="
-                                    activeTab === 'messages'
-                                "
+                                :show-message-type-filter="activeTab === 'messages'"
                                 @filter-changed="handleFilterChange"
                             />
                         </div>

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('gender');
+            //$table->enum('gender', ['male', 'female']);
             $table->text('bio')->nullable();
             $table->string('main_photo_path')->nullable();
             $table->string('status')->default('active');
