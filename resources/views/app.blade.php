@@ -7,24 +7,39 @@
     @auth
     <meta name="user-id" content="{{ auth()->id() }}">
     <meta name="user-type" content="{{ auth()->user()->type }}">
-    {{-- <script>
-      window.Laravel = {
-        user: {
-          id: {{ auth()->id() }},
-          type: "{{ auth()->user()->type }}"
+   
+    <script>
+    // S'assurer que les données d'authentification sont disponibles immédiatement
+    document.addEventListener('DOMContentLoaded', function() {
+        // Vérifier si les données Laravel sont disponibles
+        if (window.Laravel && window.Laravel.user) {
+            console.log('Données Laravel disponibles:', window.Laravel.user);
+        } else {
+            console.warn('Données Laravel non disponibles au chargement du DOM');
         }
-      };
-    </script> --}}
+    });
+    </script>
     <script>
         window.Laravel = {!! json_encode([
             'csrfToken' => csrf_token(),
-            'user' => Auth::user() ? [
-                'id' => Auth::id(),
-                'type' => Auth::user()->type
-            ] : null
+            'user' => [
+                'id' => auth()->id(),
+                'type' => auth()->user()->type,
+                'name' => auth()->user()->name
+            ],
+            'appUrl' => config('app.url')
         ]) !!};
     </script>
     @endauth
+    @guest
+    <script>
+        window.Laravel = {!! json_encode([
+            'csrfToken' => csrf_token(),
+            'user' => null,
+            'appUrl' => config('app.url')
+        ]) !!};
+    </script>
+    @endguest
     <title>HeartMatch - Trouvez l'amour</title>
     
     <!-- Fonts -->
@@ -45,7 +60,7 @@
     @endif
         
     <!-- Stripe.js -->
-    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://js.stripe.com/v3/" defer></script>
     
     @inertiaHead
   </head>

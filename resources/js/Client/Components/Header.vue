@@ -72,6 +72,7 @@ import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import EchoTest from './EchoTest.vue';
+import axios from 'axios';
 
 const showDropdown = ref(false);
 const dropdownRef = ref(null);
@@ -102,8 +103,32 @@ onBeforeUnmount(() => {
     document.removeEventListener('click', closeDropdown);
 });
 
-const logout = () => {
-    router.post(route('logout'));
+const logout = async () => {
+    try {
+        // Récupérer un nouveau token CSRF avant la déconnexion
+        await axios.get('/sanctum/csrf-cookie');
+        
+        // Effectuer la déconnexion
+        await router.post(route('logout'), {}, {
+            onSuccess: () => {
+                // Nettoyer Echo et les abonnements WebSocket
+                if (window.Echo) {
+                    window.Echo.disconnect();
+                }
+                // Rediriger vers la page de connexion
+                window.location.href = route('login');
+            },
+            onError: (error) => {
+                console.error('Erreur lors de la déconnexion:', error);
+                // En cas d'erreur, forcer la redirection
+                window.location.href = route('login');
+            }
+        });
+    } catch (error) {
+        console.error('Erreur lors de la déconnexion:', error);
+        // En cas d'erreur, forcer la redirection
+        window.location.href = route('login');
+    }
 };
 </script>
 

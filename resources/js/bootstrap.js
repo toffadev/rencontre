@@ -2,131 +2,150 @@ import axios from 'axios';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
-
 /**
  * Configuration d'Axios avec le token CSRF
  */
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-// Récupérer le token CSRF depuis la meta tag
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-if (csrfToken) {
-    window.axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
+// Fonction pour initialiser Echo de manière sécurisée
+function initializeEcho() {
+    // Attendre que le DOM soit chargé
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', setupEcho);
+    } else {
+        setupEcho();
+    }
 }
 
-/**
- * Configuration de Pusher globalement
- */
-window.Pusher = Pusher;
+// Fonction pour obtenir le token CSRF
+function getCsrfToken() {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+}
 
-/**
- * Récupération sécurisée des données utilisateur
- */
-function getUserData() {
-    // Méthode 1: Depuis window.Laravel (défini dans app.blade.php)
-    if (window.Laravel && window.Laravel.user) {
-        return window.Laravel.user;
+// Fonction pour configurer Axios
+function configureAxios() {
+    const token = getCsrfToken();
+    if (token) {
+        window.axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        window.axios.defaults.withCredentials = true;
     }
-    
-    // Méthode 2: Depuis les meta tags
+}
+
+// Configurer l'intercepteur Axios pour gérer les erreurs CSRF
+window.axios.interceptors.response.use(
+    response => response,
+    async error => {
+        if (error.response?.status === 419) {
+            // Récupérer un nouveau token CSRF
+            try {
+                await window.axios.get('/sanctum/csrf-cookie');
+                const newToken = getCsrfToken();
+                if (newToken) {
+                    // Mettre à jour le token dans les headers
+                    window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+                    // Réessayer la requête originale avec le nouveau token
+                    error.config.headers['X-CSRF-TOKEN'] = newToken;
+                    return window.axios(error.config);
+                }
+            } catch (refreshError) {
+                console.error('Erreur lors du rafraîchissement du token CSRF:', refreshError);
+                window.location.reload(); // Recharger la page en dernier recours
+            }
+        }
+        return Promise.reject(error);
+    }
+);
+
+function setupEcho() {
+    // Récupérer le token CSRF et les données utilisateur
+    const csrfToken = getCsrfToken();
     const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
     const userType = document.querySelector('meta[name="user-type"]')?.getAttribute('content');
-    
-    if (userId && userType) {
-        return { 
-            id: parseInt(userId), 
-            type: userType 
-        };
+
+    // S'assurer que nous avons toutes les données nécessaires
+    if (!csrfToken || !userId || !userType) {
+        console.warn('Données d\'authentification manquantes, réessai dans 1 seconde...');
+        setTimeout(setupEcho, 1000);
+        return;
     }
-    
-    return null;
-}
 
-const userData = getUserData();
-console.log('Données utilisateur récupérées:', userData);
+    // Configurer Axios
+    configureAxios();
 
-/**
- * Configuration Echo avec autorisation personnalisée
- */
-const echoOptions = {
-    broadcaster: 'reverb',
-    key: import.meta.env.VITE_REVERB_APP_KEY,
-    wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
-    wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
-    forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
-    enabledTransports: ['ws', 'wss'],
-    enableLogging: true,
-    
-    // Configuration d'autorisation personnalisée
-    authorizer: (channel, options) => {
-        return {
-            authorize: (socketId, callback) => {
-                console.log(`🔐 Autorisation du canal: ${channel.name} avec socketId: ${socketId}`);
-                
-                // Vérifier que l'utilisateur est connecté
-                if (!userData || !userData.id) {
-                    console.error('❌ Utilisateur non authentifié');
-                    callback(new Error('Utilisateur non authentifié'));
-                    return;
-                }
-                
-                // Préparer les données d'autorisation
-                const authData = {
-                    socket_id: socketId,
-                    channel_name: channel.name
-                };
-                
-                console.log('📤 Envoi des données d\'autorisation:', authData);
-                
-                axios.post('/broadcasting/auth', authData, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                .then(response => {
-                    console.log(`✅ Autorisation réussie pour ${channel.name}:`, response.data);
-                    callback(null, response.data);
-                })
-                .catch(error => {
-                    console.error(`❌ Erreur d'autorisation pour ${channel.name}:`, {
-                        status: error.response?.status,
-                        data: error.response?.data,
-                        message: error.message
-                    });
-                    callback(error);
-                });
+    // Configuration de Pusher
+    window.Pusher = Pusher;
+
+    // Stocker les données utilisateur
+    window.clientId = parseInt(userId);
+    window.userType = userType;
+
+    // Configuration Echo
+    const echoOptions = {
+        broadcaster: 'reverb',
+        key: import.meta.env.VITE_REVERB_APP_KEY,
+        wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
+        wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
+        forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
+        enabledTransports: ['ws', 'wss'],
+        enableLogging: true,
+        auth: {
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
             }
-        };
-    }
-};
+        },
+        authorizer: (channel, options) => {
+            return {
+                authorize: (socketId, callback) => {
+                    console.log(`🔐 Tentative d'autorisation du canal: ${channel.name}`);
+                    
+                    axios.post('/broadcasting/auth', {
+                        socket_id: socketId,
+                        channel_name: channel.name
+                    }, {
+                        headers: {
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/json'
+                        }
+                    })
+                    .then(response => {
+                        console.log(`✅ Autorisation réussie pour ${channel.name}`);
+                        callback(null, response.data);
+                    })
+                    .catch(error => {
+                        console.error(`❌ Erreur d'autorisation pour ${channel.name}:`, error);
+                        callback(error);
+                    });
+                }
+            };
+        }
+    };
 
-console.log('🚀 Initialisation d\'Echo avec les options:', echoOptions);
-window.Echo = new Echo(echoOptions);
-
-/**
- * Stockage des données utilisateur pour utilisation globale
- */
-if (userData) {
-    window.clientId = userData.id;
-    window.userType = userData.type;
-    console.log(`👤 Utilisateur connecté - ID: ${userData.id}, Type: ${userData.type}`);
-} else {
-    console.warn('⚠️ Aucune donnée utilisateur trouvée');
+    // Initialiser Echo
+    window.Echo = new Echo(echoOptions);
+    console.log('🚀 Echo initialisé avec succès');
 }
 
-/**
- * Fonction utilitaire pour s'abonner aux canaux clients
- */
+// Démarrer l'initialisation
+initializeEcho();
+
+// Reconfigurer Axios après chaque navigation
+document.addEventListener('inertia:navigate', () => {
+    configureAxios();
+});
+
+// Fonction utilitaire pour s'abonner aux canaux clients
 window.subscribeToClientChannel = function() {
-    if (!userData || !userData.id) {
-        console.error('❌ Impossible de s\'abonner au canal client: utilisateur non authentifié');
+    if (!window.clientId) {
+        console.error('❌ Impossible de s\'abonner au canal client: ID client non disponible');
         return null;
     }
     
-    const channelName = `client.${userData.id}`;
+    const channelName = `client.${window.clientId}`;
     console.log(`📡 Abonnement au canal: ${channelName}`);
     
     return window.Echo.private(channelName)
@@ -141,7 +160,7 @@ window.subscribeToClientChannel = function() {
 /**
  * Test de connexion Echo
  */
-if (userData) {
+if (window.clientId) {
     setTimeout(() => {
         console.log('🧪 Test de la connexion Echo...');
         try {

@@ -499,63 +499,135 @@ import axios from "axios";
 import Echo from "laravel-echo";
 import { router } from "@inertiajs/vue3";
 
-// Configuration d'Axios pour inclure le CSRF token
-axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-axios.defaults.withCredentials = true;
+// Créer une fonction pour configurer Axios
+/* const configureAxios = () => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        axios.defaults.withCredentials = true;
+    } else {
+        console.warn('CSRF token not found');
+    }
+}; */
 
-// Intercepteur pour gérer le renouvellement automatique du token CSRF
-let isRefreshing = false;
-let failedQueue = [];
-
-const processQueue = (error, token = null) => {
-    failedQueue.forEach(prom => {
-        if (error) {
-            prom.reject(error);
+const configureAxios = async () => {
+    // Attendre que le DOM soit complètement chargé
+    await new Promise(resolve => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', resolve);
         } else {
-            prom.resolve(token);
+            resolve();
         }
     });
-    failedQueue = [];
+
+    // Récupérer le token CSRF depuis les métadonnées
+    let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    // Si pas de token, essayer de le récupérer depuis window.Laravel
+    if (!token && window.Laravel && window.Laravel.csrfToken) {
+        token = window.Laravel.csrfToken;
+    }
+
+    // Si toujours pas de token, faire une requête pour l'obtenir
+    if (!token) {
+        try {
+            await axios.get('/sanctum/csrf-cookie');
+            token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        } catch (error) {
+            console.error('Impossible de récupérer le token CSRF:', error);
+        }
+    }
+
+    if (token) {
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+        axios.defaults.withCredentials = true;
+        console.log('Axios configuré avec le token CSRF');
+    } else {
+        console.error('CSRF token introuvable après toutes les tentatives');
+    }
+};
+// === SOLUTION 3: Fonction d'attente de l'authentification ===
+
+const waitForAuthentication = async (maxAttempts = 10, delay = 500) => {
+    for (let i = 0; i < maxAttempts; i++) {
+        // Vérifier si l'utilisateur est authentifié
+        const isAuthenticated = window.Laravel && window.Laravel.user && window.Laravel.user.id;
+        const hasCSRFToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        if (isAuthenticated && hasCSRFToken) {
+            console.log('Authentification confirmée');
+            return true;
+        }
+
+        console.log(`Attente de l'authentification... tentative ${i + 1}/${maxAttempts}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    console.error('Timeout: authentification non confirmée après', maxAttempts, 'tentatives');
+    return false;
 };
 
-axios.interceptors.response.use(
-    response => response,
-    async error => {
-        const originalRequest = error.config;
+const setupAxiosInterceptor = () => {
+    // Intercepteur pour les réponses
+    axios.interceptors.response.use(
+        response => response,
+        async error => {
+            if (error.response?.status === 419) {
+                console.log('Erreur 419 détectée, tentative de renouvellement du token...');
 
-        if (error.response?.status === 419 && !originalRequest._retry) {
-            if (isRefreshing) {
-                return new Promise((resolve, reject) => {
-                    failedQueue.push({ resolve, reject });
-                })
-                .then(() => {
-                    return axios(originalRequest);
-                })
-                .catch(err => {
-                    return Promise.reject(err);
-                });
+                try {
+                    // Renouveler le token CSRF
+                    await axios.get('/sanctum/csrf-cookie');
+
+                    // Attendre un peu pour que le token soit bien défini
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Reconfigurer Axios avec le nouveau token
+                    await configureAxios();
+
+                    // Réessayer la requête originale
+                    const originalRequest = error.config;
+                    if (originalRequest) {
+                        return axios(originalRequest);
+                    }
+                } catch (retryError) {
+                    console.error('Échec du renouvellement du token:', retryError);
+                    // Afficher un message à l'utilisateur
+                    showAuthError();
+                }
             }
-
-            originalRequest._retry = true;
-            isRefreshing = true;
-
-            try {
-                await axios.get('/sanctum/csrf-cookie');
-                const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-                originalRequest.headers['X-CSRF-TOKEN'] = token;
-                processQueue(null, token);
-                return axios(originalRequest);
-            } catch (refreshError) {
-                processQueue(refreshError, null);
-                return Promise.reject(refreshError);
-            } finally {
-                isRefreshing = false;
-            }
+            return Promise.reject(error);
         }
-        return Promise.reject(error);
-    }
-);
+    );
+
+    // Intercepteur pour les requêtes (s'assurer que le token est toujours présent)
+    axios.interceptors.request.use(
+        config => {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (token) {
+                config.headers['X-CSRF-TOKEN'] = token;
+            }
+            config.headers['X-Requested-With'] = 'XMLHttpRequest';
+            return config;
+        },
+        error => Promise.reject(error)
+    );
+};
+
+
+const showAuthError = () => {
+    // Vous pouvez adapter cette fonction selon votre UI
+    console.error('Erreur d\'authentification persistante');
+
+    // Option 1: Recharger automatiquement
+    setTimeout(() => {
+        window.location.reload();
+    }, 2000);
+
+    // Option 2: Afficher un toast ou une notification
+    // showToast('Problème d\'authentification, rechargement...', 'error');
+};
 
 const props = defineProps({
     profiles: {
@@ -694,7 +766,7 @@ async function loadMessages(profileId) {
 }
 
 // Charger les points
-async function loadPoints() {
+/* async function loadPoints() {
     try {
         const response = await axios.get("/points/data", {
             headers: {
@@ -706,6 +778,41 @@ async function loadPoints() {
         return response.data.points;
     } catch (error) {
         console.error("Erreur lors du chargement des points:", error);
+        return remainingPoints.value;
+    }
+} */
+
+// Exemple pour loadPoints() dans le composant client :
+async function loadPoints() {
+    try {
+        const response = await axios.get("/points/data", {
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        remainingPoints.value = response.data.points;
+        return response.data.points;
+    } catch (error) {
+        console.error("Erreur lors du chargement des points:", error);
+
+        // Si erreur 419, essayer une fois de plus après renouvellement du token
+        if (error.response?.status === 419) {
+            console.log('Tentative de renouvellement du token pour loadPoints...');
+            try {
+                await axios.get('/sanctum/csrf-cookie');
+                await configureAxios();
+                const retryResponse = await axios.get("/points/data", {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+                remainingPoints.value = retryResponse.data.points;
+                return retryResponse.data.points;
+            } catch (retryError) {
+                console.error('Échec du retry pour loadPoints:', retryError);
+            }
+        }
+
         return remainingPoints.value;
     }
 }
@@ -755,9 +862,29 @@ function redirectToProfile() {
     router.visit("/profil");
 }
 
-// Charger les points au montage du composant et configurer Echo
-onMounted(async () => {
+// Modifier onMounted pour inclure la configuration d'Axios
+/* onMounted(async () => {
     try {
+        // Configurer Axios en premier
+        configureAxios();
+
+        // Ajouter un intercepteur pour renouveler le token si nécessaire
+        axios.interceptors.response.use(
+            response => response,
+            async error => {
+                if (error.response?.status === 419) {
+                    // Renouveler le token CSRF
+                    await axios.get('/sanctum/csrf-cookie');
+                    // Reconfigurer Axios avec le nouveau token
+                    configureAxios();
+                    // Réessayer la requête originale
+                    const originalRequest = error.config;
+                    return axios(originalRequest);
+                }
+                return Promise.reject(error);
+            }
+        );
+
         // Charger les profils bloqués et signalés
         await loadBlockedProfiles();
 
@@ -822,7 +949,100 @@ onMounted(async () => {
     } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
     }
+}); */
+
+onMounted(async () => {
+    try {
+        console.log('Initialisation du composant client...');
+
+        // Attendre que l'authentification soit prête
+        const isReady = await waitForAuthentication();
+        if (!isReady) {
+            console.error('Authentification non prête, rechargement de la page...');
+            window.location.reload();
+            return;
+        }
+
+        // Configurer Axios
+        await configureAxios();
+
+        // Configurer l'intercepteur
+        setupAxiosInterceptor();
+
+        // Petite pause pour s'assurer que tout est bien initialisé
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Charger les données dans l'ordre
+        await loadBlockedProfiles();
+        await loadPoints();
+        await loadAllConversations();
+
+        // Initialiser les états des conversations
+        props.profiles.forEach(profile => {
+            initConversationState(profile.id);
+            if (messagesMap.value[profile.id]) {
+                updateUnreadCount(profile.id);
+            }
+        });
+
+        // Configurer Echo pour les communications en temps réel
+        if (window.Echo) {
+            window.Echo.private(`client.${window.clientId}`)
+                .listen('.message.sent', async (data) => {
+                    const profileId = data.profile_id;
+
+                    // Initialiser l'état si nécessaire
+                    if (!conversationStates.value.has(profileId)) {
+                        conversationStates.value.set(profileId, {
+                            unreadCount: 0,
+                            lastReadMessageId: null,
+                            isOpen: selectedProfile.value?.id === profileId,
+                            hasBeenOpened: false,
+                            awaitingReply: false
+                        });
+                    }
+
+                    // Mettre à jour les messages
+                    await loadMessages(profileId);
+                    await loadPoints();
+
+                    // Mettre à jour le compteur si ce n'est pas la conversation active
+                    const state = conversationStates.value.get(profileId);
+                    if (state && (!selectedProfile.value || selectedProfile.value.id !== profileId)) {
+                        state.unreadCount = (state.unreadCount || 0) + 1;
+                        state.awaitingReply = true;
+                    }
+
+                    // Si c'est la conversation active, faire défiler vers le bas
+                    if (selectedProfile.value?.id === profileId) {
+                        nextTick(() => {
+                            scrollToBottom();
+                        });
+                    }
+                })
+                .listen('.points.updated', (data) => {
+                    remainingPoints.value = data.points;
+                });
+        } else {
+            console.warn('Laravel Echo non disponible');
+        }
+
+        // Scroll initial
+        nextTick(() => {
+            scrollToBottom();
+        });
+
+        console.log('Initialisation du composant client terminée');
+
+    } catch (error) {
+        console.error("Erreur lors de l'initialisation:", error);
+        // En cas d'erreur, proposer de recharger
+        if (confirm('Une erreur s\'est produite lors de l\'initialisation. Recharger la page ?')) {
+            window.location.reload();
+        }
+    }
 });
+
 
 // Observer les changements de sélection de profil
 watch(selectedProfile, (newProfile, oldProfile) => {

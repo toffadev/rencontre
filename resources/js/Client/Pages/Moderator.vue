@@ -583,11 +583,136 @@ import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 import { Link } from "@inertiajs/vue3";
 
-// Configuration d'Axios pour inclure le CSRF token
-const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-axios.defaults.headers.common['X-CSRF-TOKEN'] = csrfToken;
-axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-axios.defaults.withCredentials = true;
+// Créer une fonction pour configurer Axios
+/* const configureAxios = () => {
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (token) {
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+        axios.defaults.withCredentials = true;
+    } else {
+        console.warn('CSRF token not found');
+    }
+}; */
+
+const configureAxios = async () => {
+    // Attendre que le DOM soit complètement chargé
+    await new Promise(resolve => {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', resolve);
+        } else {
+            resolve();
+        }
+    });
+
+    // Récupérer le token CSRF depuis les métadonnées
+    let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+    // Si pas de token, essayer de le récupérer depuis window.Laravel
+    if (!token && window.Laravel && window.Laravel.csrfToken) {
+        token = window.Laravel.csrfToken;
+    }
+
+    // Si toujours pas de token, faire une requête pour l'obtenir
+    if (!token) {
+        try {
+            await axios.get('/sanctum/csrf-cookie');
+            token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        } catch (error) {
+            console.error('Impossible de récupérer le token CSRF:', error);
+        }
+    }
+
+    if (token) {
+        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
+        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+        axios.defaults.withCredentials = true;
+        console.log('Axios configuré avec le token CSRF');
+    } else {
+        console.error('CSRF token introuvable après toutes les tentatives');
+    }
+};
+
+const setupAxiosInterceptor = () => {
+    // Intercepteur pour les réponses
+    axios.interceptors.response.use(
+        response => response,
+        async error => {
+            if (error.response?.status === 419) {
+                console.log('Erreur 419 détectée, tentative de renouvellement du token...');
+
+                try {
+                    // Renouveler le token CSRF
+                    await axios.get('/sanctum/csrf-cookie');
+
+                    // Attendre un peu pour que le token soit bien défini
+                    await new Promise(resolve => setTimeout(resolve, 100));
+
+                    // Reconfigurer Axios avec le nouveau token
+                    await configureAxios();
+
+                    // Réessayer la requête originale
+                    const originalRequest = error.config;
+                    if (originalRequest) {
+                        return axios(originalRequest);
+                    }
+                } catch (retryError) {
+                    console.error('Échec du renouvellement du token:', retryError);
+                    // Afficher un message à l'utilisateur
+                    showAuthError();
+                }
+            }
+            return Promise.reject(error);
+        }
+    );
+
+    // Intercepteur pour les requêtes (s'assurer que le token est toujours présent)
+    axios.interceptors.request.use(
+        config => {
+            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            if (token) {
+                config.headers['X-CSRF-TOKEN'] = token;
+            }
+            config.headers['X-Requested-With'] = 'XMLHttpRequest';
+            return config;
+        },
+        error => Promise.reject(error)
+    );
+};
+
+// === SOLUTION 3: Fonction d'attente de l'authentification ===
+
+const waitForAuthentication = async (maxAttempts = 10, delay = 500) => {
+    for (let i = 0; i < maxAttempts; i++) {
+        // Vérifier si l'utilisateur est authentifié
+        const isAuthenticated = window.Laravel && window.Laravel.user && window.Laravel.user.id;
+        const hasCSRFToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        if (isAuthenticated && hasCSRFToken) {
+            console.log('Authentification confirmée');
+            return true;
+        }
+
+        console.log(`Attente de l'authentification... tentative ${i + 1}/${maxAttempts}`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+    }
+
+    console.error('Timeout: authentification non confirmée après', maxAttempts, 'tentatives');
+    return false;
+};
+
+const showAuthError = () => {
+    // Vous pouvez adapter cette fonction selon votre UI
+    console.error('Erreur d\'authentification persistante');
+
+    // Option 1: Recharger automatiquement
+    setTimeout(() => {
+        window.location.reload();
+    }, 2000);
+
+    // Option 2: Afficher un toast ou une notification
+    // showToast('Problème d\'authentification, rechargement...', 'error');
+};
 
 // État des données
 const currentAssignedProfile = ref(null);
@@ -911,8 +1036,28 @@ const handleScroll = async (event) => {
 };
 
 // Configurer l'application et charger les données initiales
-onMounted(async () => {
+/* onMounted(async () => {
     try {
+        // Configurer Axios en premier
+        configureAxios();
+
+        // Ajouter un intercepteur pour renouveler le token si nécessaire
+        axios.interceptors.response.use(
+            response => response,
+            async error => {
+                if (error.response?.status === 419) {
+                    // Renouveler le token CSRF
+                    await axios.get('/sanctum/csrf-cookie');
+                    // Reconfigurer Axios avec le nouveau token
+                    configureAxios();
+                    // Réessayer la requête originale
+                    const originalRequest = error.config;
+                    return axios(originalRequest);
+                }
+                return Promise.reject(error);
+            }
+        );
+
         // Charger les données depuis l'API
         await loadAssignedData();
 
@@ -1022,8 +1167,144 @@ onMounted(async () => {
     } catch (error) {
         console.error("Erreur lors de l'initialisation:", error);
     }
-});
+}); */
 
+onMounted(async () => {
+    try {
+        console.log('Initialisation du composant modérateur...');
+
+        // Attendre que l'authentification soit prête
+        const isReady = await waitForAuthentication();
+        if (!isReady) {
+            console.error('Authentification non prête, rechargement de la page...');
+            window.location.reload();
+            return;
+        }
+
+        // Configurer Axios
+        await configureAxios();
+
+        // Configurer l'intercepteur
+        setupAxiosInterceptor();
+
+        // Petite pause pour s'assurer que tout est bien initialisé
+        await new Promise(resolve => setTimeout(resolve, 200));
+
+        // Charger les données depuis l'API
+        await loadAssignedData();
+
+        // Configurer Laravel Echo
+        if (window.Echo) {
+            console.log(
+                "Configuration de Laravel Echo pour recevoir les notifications en temps réel"
+            );
+
+            // Récupérer l'ID du modérateur depuis l'API
+            const userResponse = await axios.get("/api/user");
+            const moderatorId = userResponse.data.id;
+
+            if (!moderatorId) {
+                console.error("ID du modérateur non disponible");
+                return;
+            }
+
+            console.log(`ID du modérateur connecté: ${moderatorId}`);
+
+            // Écouter les notifications d'attribution de profil
+            console.log(`Souscription au canal: moderator.${moderatorId}`);
+
+            window.Echo.private(`moderator.${moderatorId}`)
+                .listen(".profile.assigned", async (data) => {
+                    console.log("Événement profile.assigned reçu:", data);
+
+                    // Recharger les données après l'attribution d'un profil
+                    await loadAssignedData();
+
+                    // Si le profil attribué est différent du profil actuel et qu'il est principal
+                    if (data.profile &&
+                        data.profile.id !== currentAssignedProfile.value?.id &&
+                        data.is_primary) {
+
+                        currentAssignedProfile.value = data.profile;
+
+                        // Si un client est associé à ce changement de profil
+                        if (data.client_id) {
+                            try {
+                                // Charger les messages du client
+                                const clientResponse = await axios.get("/moderateur/messages", {
+                                    params: {
+                                        client_id: data.client_id,
+                                        profile_id: data.profile.id,
+                                    },
+                                });
+
+                                if (clientResponse.data.messages) {
+                                    chatMessages.value[data.client_id] = clientResponse.data.messages;
+
+                                    // Trouver et sélectionner le client
+                                    const clientInfo = assignedClient.value.find(
+                                        (c) => c.id === data.client_id
+                                    );
+
+                                    if (clientInfo) {
+                                        selectedClient.value = clientInfo;
+
+                                        // Faire défiler vers le bas du chat
+                                        nextTick(() => {
+                                            if (chatContainer.value) {
+                                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+                                            }
+                                        });
+                                    }
+                                }
+                            } catch (error) {
+                                console.error("Erreur lors du chargement des messages:", error);
+                            }
+                        }
+                    }
+                })
+                .listen(".client.assigned", async (data) => {
+                    console.log("Événement client.assigned reçu:", data);
+                    // Recharger les données après l'attribution d'un client
+                    await loadAssignedData();
+
+                    // Si c'est un nouveau client et qu'il n'y a pas de client sélectionné,
+                    // on le sélectionne automatiquement
+                    if (!selectedClient.value && data.client) {
+                        const clientInfo = assignedClient.value.find(
+                            (c) => c.id === data.client.id
+                        );
+                        if (clientInfo) {
+                            selectedClient.value = clientInfo;
+                            await loadMessages(clientInfo.id);
+                        }
+                    }
+                })
+                .error((error) => {
+                    console.error(
+                        `Erreur sur le canal moderator.${moderatorId}:`,
+                        error
+                    );
+                });
+
+            // Si un profil est déjà attribué, écouter les messages sur son canal
+            if (currentAssignedProfile.value) {
+                listenToProfileMessages(currentAssignedProfile.value.id);
+            }
+        } else {
+            console.error("Laravel Echo n'est pas disponible, les notifications en temps réel ne fonctionneront pas");
+        }
+
+        console.log('Initialisation du composant modérateur terminée');
+
+    } catch (error) {
+        console.error("Erreur lors de l'initialisation:", error);
+        // En cas d'erreur, proposer de recharger
+        if (confirm('Une erreur s\'est produite lors de l\'initialisation. Recharger la page ?')) {
+            window.location.reload();
+        }
+    }
+});
 // Ajouter la fonction de gestion des notifications
 const addNotification = (message, clientId, clientName) => {
     const notification = {

@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\ModeratorPerformanceController;
 use App\Http\Controllers\Admin\ProfilePerformanceController;
 use App\Models\User;
 
+
 /*
 |--------------------------------------------------------------------------
 | Web Routes
@@ -44,7 +45,14 @@ Route::get('/test-redis', function () {
     }
 });
 
-
+// Ajoutez cette route dans votre web.php :
+Route::get('/auth/check', function () {
+    return response()->json([
+        'authenticated' => auth()->check(),
+        'user' => auth()->user(),
+        'csrf_token' => csrf_token()
+    ]);
+})->middleware('web');
 // Route principale qui redirige en fonction de l'authentification
 Route::get('/', function () {
     if (Auth::check()) {
