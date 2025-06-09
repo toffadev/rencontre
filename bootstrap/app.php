@@ -31,6 +31,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'moderator' => \App\Http\Middleware\ModeratorMiddleware::class,
             'client_or_admin' => \App\Http\Middleware\ClientOrAdminMiddleware::class,
             'client_only' => \App\Http\Middleware\ClientOnlyMiddleware::class,
+            'broadcast_auth' => \App\Http\Middleware\EnsureBroadcastAuthentication::class,
+
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

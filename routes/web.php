@@ -28,6 +28,11 @@ use App\Models\User;
 |--------------------------------------------------------------------------
 */
 
+// Route d'authentification pour les broadcasts
+Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
+    return Illuminate\Support\Facades\Broadcast::auth($request);
+})->middleware(['auth', 'broadcast_auth'])->name('broadcasting.auth');
+
 Route::get('/test-redis', function () {
     try {
         Redis::set('hello', 'Redis fonctionne !');
@@ -38,6 +43,7 @@ Route::get('/test-redis', function () {
         return "Erreur Redis : " . $e->getMessage();
     }
 });
+
 
 // Route principale qui redirige en fonction de l'authentification
 Route::get('/', function () {

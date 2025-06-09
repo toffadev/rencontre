@@ -5,14 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     @auth
-    <meta name="client-id" content="{{ auth()->id() }}">
-    <script>
+    <meta name="user-id" content="{{ auth()->id() }}">
+    <meta name="user-type" content="{{ auth()->user()->type }}">
+    {{-- <script>
       window.Laravel = {
         user: {
           id: {{ auth()->id() }},
           type: "{{ auth()->user()->type }}"
         }
       };
+    </script> --}}
+    <script>
+        window.Laravel = {!! json_encode([
+            'csrfToken' => csrf_token(),
+            'user' => Auth::user() ? [
+                'id' => Auth::id(),
+                'type' => Auth::user()->type
+            ] : null
+        ]) !!};
     </script>
     @endauth
     <title>HeartMatch - Trouvez l'amour</title>
