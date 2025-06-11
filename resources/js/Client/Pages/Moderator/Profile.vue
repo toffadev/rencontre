@@ -85,6 +85,65 @@
                                         :selected-date-range="filters.dateRange"
                                     />
                                 </div>
+
+                                <!-- Revenus mensuels -->
+                                <div v-show="activeTab === 'earnings'">
+                                    <div class="bg-white p-6 rounded-lg shadow-sm">
+                                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+                                            <h3 class="text-xl font-semibold">Revenus mensuels</h3>
+                                            <div class="flex items-center gap-2">
+                                                <button 
+                                                    @click="changeYear(currentYear - 1)" 
+                                                    class="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                                                >
+                                                    <i class="fas fa-chevron-left"></i>
+                                                </button>
+                                                <span class="text-lg font-medium">{{ currentYear }}</span>
+                                                <button 
+                                                    @click="changeYear(currentYear + 1)" 
+                                                    :disabled="currentYear >= new Date().getFullYear()"
+                                                    class="p-2 bg-gray-100 hover:bg-gray-200 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    <i class="fas fa-chevron-right"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="bg-blue-50 border-l-4 border-blue-500 p-4 mb-6">
+                                            <p class="text-blue-700">
+                                                Vos revenus sont calculés sur la base de <span class="font-bold">50 points par message reçu</span> des clients.
+                                            </p>
+                                        </div>
+                                        
+                                        <div v-if="loadingMonthlyEarnings" class="flex justify-center py-8">
+                                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-pink-500"></div>
+                                        </div>
+                                        
+                                        <div v-else class="overflow-x-auto">
+                                            <table class="min-w-full bg-white">
+                                                <thead class="bg-gray-50">
+                                                    <tr>
+                                                        <th class="py-2 px-4 border-b text-left">Mois</th>
+                                                        <th class="py-2 px-4 border-b text-right">Messages reçus</th>
+                                                        <th class="py-2 px-4 border-b text-right">Revenus</th>
+                                                        <th class="py-2 px-4 border-b text-right">Statut</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr v-for="(month, index) in monthlyEarnings" :key="index">
+                                                        <td class="py-3 px-4 border-b">{{ month.name }}</td>
+                                                        <td class="py-3 px-4 border-b text-right">{{ month.messages }}</td>
+                                                        <td class="py-3 px-4 border-b text-right font-medium">{{ formatCurrency(month.earnings) }}</td>
+                                                        <td class="py-3 px-4 border-b text-right">
+                                                            <span :class="`px-2 py-1 rounded-full text-xs ${month.status === 'Payé' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`">
+                                                                {{ month.status }}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -95,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
 import { Head, Link } from "@inertiajs/vue3";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import FilterBar from "./Components/FilterBar.vue";
@@ -109,8 +168,10 @@ const statistics = ref({
     totalMessages: 0,
     shortMessages: 0,
     longMessages: 0,
+    receivedMessages: 0,
     pointsReceived: 0,
     earnings: 0,
+    receivedEarnings: 0,
     messageQualityRate: 0,
     dailyStats: [],
 });
@@ -125,7 +186,21 @@ const filters = ref({
 const tabs = [
     { id: "stats", label: "Statistiques", icon: "fas fa-chart-line" },
     { id: "messages", label: "Messages", icon: "fas fa-comments" },
+    { id: "earnings", label: "Revenus", icon: "fas fa-coins" },
 ];
+
+// Données pour les revenus mensuels (exemple)
+const monthlyEarnings = ref([]);
+const loadingMonthlyEarnings = ref(false);
+const currentYear = ref(new Date().getFullYear());
+
+// Formatage de la monnaie
+function formatCurrency(value) {
+    return new Intl.NumberFormat("fr-FR", {
+        style: "currency",
+        currency: "EUR",
+    }).format(value);
+}
 
 // Chargement des données
 async function loadData() {
@@ -133,6 +208,8 @@ async function loadData() {
     try {
         if (activeTab.value === "stats") {
             await loadStatistics();
+        } else if (activeTab.value === "earnings") {
+            await loadMonthlyEarnings();
         }
     } catch (error) {
         console.error("Erreur lors du chargement des données:", error);
@@ -152,6 +229,26 @@ async function loadStatistics() {
     if (response.ok) {
         const data = await response.json();
         statistics.value = data;
+    }
+}
+
+async function loadMonthlyEarnings() {
+    loadingMonthlyEarnings.value = true;
+    try {
+        const response = await fetch(
+            `/moderateur/profile/monthly-earnings?${new URLSearchParams({
+                year: currentYear.value,
+            })}`
+        );
+
+        if (response.ok) {
+            const data = await response.json();
+            monthlyEarnings.value = data.months;
+        }
+    } catch (error) {
+        console.error("Erreur lors du chargement des revenus mensuels:", error);
+    } finally {
+        loadingMonthlyEarnings.value = false;
     }
 }
 
@@ -179,4 +276,9 @@ onMounted(async () => {
     await loadProfiles();
     await loadData();
 });
+
+function changeYear(year) {
+    currentYear.value = year;
+    loadData();
+}
 </script>

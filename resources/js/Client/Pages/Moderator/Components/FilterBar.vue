@@ -51,8 +51,8 @@
                 @change="emitFilters"
             >
                 <option value="all">Tous les messages</option>
-                <option value="short">Messages courts</option>
-                <option value="long">Messages longs</option>
+                <option value="received">Messages reçus</option>
+                <option value="sent">Messages envoyés</option>
             </select>
         </div>
 

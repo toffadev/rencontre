@@ -128,7 +128,10 @@ class PointService
     public function getConsumptionHistory(User $user)
     {
         return PointConsumption::where('user_id', $user->id)
+            ->with(['consumable' => function ($query) {
+                $query->with('profile')->select('id', 'content', 'profile_id', 'read_at');
+            }])
             ->orderBy('created_at', 'desc')
-            ->get();
+            ->paginate(10);
     }
 }

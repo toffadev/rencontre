@@ -69,6 +69,18 @@
           <option value="low">Moyen/Faible</option>
         </select>
       </div>
+      
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-2">Type de revenus</label>
+        <select 
+          v-model="localRevenueType"
+          class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+        >
+          <option value="all">Tous les revenus</option>
+          <option value="messages">Messages reçus</option>
+          <option value="points">Points des profils</option>
+        </select>
+      </div>
     </div>
 
     <div class="mt-4 flex justify-end space-x-4">
@@ -111,6 +123,10 @@ const props = defineProps({
   performanceLevel: {
     type: String,
     default: ''
+  },
+  revenueType: {
+    type: String,
+    default: 'all'
   }
 })
 
@@ -120,6 +136,7 @@ const emit = defineEmits([
   'update:moderator',
   'update:profile',
   'update:performanceLevel',
+  'update:revenueType',
   'filter'
 ])
 
@@ -128,6 +145,7 @@ const localDateRange = ref(props.dateRange)
 const localModerator = ref(props.moderator)
 const localProfile = ref(props.profile)
 const localPerformanceLevel = ref(props.performanceLevel)
+const localRevenueType = ref('all')
 
 const moderators = ref([])
 const profiles = ref([])
@@ -179,12 +197,18 @@ watch(localPerformanceLevel, (newValue) => {
   emit('filter')
 })
 
+watch(localRevenueType, (newValue) => {
+  emit('update:revenueType', newValue)
+  emit('filter')
+})
+
 const resetFilters = () => {
   localPeriod.value = 'week'
   localDateRange.value = { start: null, end: null }
   localModerator.value = ''
   localProfile.value = ''
   localPerformanceLevel.value = ''
+  localRevenueType.value = 'all'
   emit('filter')
 }
 

@@ -57,7 +57,7 @@ window.axios.interceptors.response.use(
     }
 );
 
-function setupEcho() {
+/* function setupEcho() {
     // Récupérer le token CSRF et les données utilisateur
     const csrfToken = getCsrfToken();
     const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
@@ -128,7 +128,129 @@ function setupEcho() {
     // Initialiser Echo
     window.Echo = new Echo(echoOptions);
     console.log('🚀 Echo initialisé avec succès');
+} */
+
+function setupEcho() {
+    const csrfToken = getCsrfToken();
+    const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
+    const userType = document.querySelector('meta[name="user-type"]')?.getAttribute('content');
+
+    if (!csrfToken || !userId || !userType) {
+        console.warn('Données d\'authentification manquantes, réessai dans 1 seconde...');
+        setTimeout(setupEcho, 1000);
+        return;
+    }
+
+    configureAxios();
+    window.Pusher = Pusher;
+    window.clientId = parseInt(userId);
+    window.userType = userType;
+
+    // Configuration Echo AMÉLIORÉE avec reconnexion automatique
+    const echoOptions = {
+        broadcaster: 'reverb',
+        key: import.meta.env.VITE_REVERB_APP_KEY,
+        wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
+        wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
+        forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
+        enabledTransports: ['ws', 'wss'],
+        enableLogging: true,
+        // AJOUT: Options de reconnexion
+        reconnectOnDisconnect: true,
+        maxReconnectionAttempts: 5,
+        reconnectionDelay: 1000,
+        auth: {
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        },
+        authorizer: (channel, options) => {
+            return {
+                authorize: (socketId, callback) => {
+                    console.log(`🔐 Tentative d'autorisation du canal: ${channel.name}`);
+                    
+                    axios.post('/broadcasting/auth', {
+                        socket_id: socketId,
+                        channel_name: channel.name
+                    }, {
+                        headers: {
+                            'X-CSRF-TOKEN': getCsrfToken(), // Toujours récupérer le token frais
+                            'Accept': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 10000 // AJOUT: Timeout de 10 secondes
+                    })
+                    .then(response => {
+                        console.log(`✅ Autorisation réussie pour ${channel.name}`);
+                        callback(null, response.data);
+                    })
+                    .catch(error => {
+                        console.error(`❌ Erreur d'autorisation pour ${channel.name}:`, error);
+                        
+                        // AJOUT: Retry une fois avec un nouveau token CSRF
+                        if (error.response?.status === 419 || error.response?.status === 500) {
+                            console.log('🔄 Retry avec nouveau token CSRF...');
+                            axios.get('/sanctum/csrf-cookie').then(() => {
+                                const newToken = getCsrfToken();
+                                if (newToken) {
+                                    axios.post('/broadcasting/auth', {
+                                        socket_id: socketId,
+                                        channel_name: channel.name
+                                    }, {
+                                        headers: {
+                                            'X-CSRF-TOKEN': newToken,
+                                            'Accept': 'application/json',
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                            'Content-Type': 'application/json'
+                                        }
+                                    })
+                                    .then(response => {
+                                        console.log(`✅ Autorisation réussie après retry pour ${channel.name}`);
+                                        callback(null, response.data);
+                                    })
+                                    .catch(retryError => {
+                                        console.error(`❌ Échec définitif pour ${channel.name}:`, retryError);
+                                        callback(retryError);
+                                    });
+                                } else {
+                                    callback(error);
+                                }
+                            }).catch(() => callback(error));
+                        } else {
+                            callback(error);
+                        }
+                    });
+                }
+            };
+        }
+    };
+
+    window.Echo = new Echo(echoOptions);
+    
+    // AJOUT: Gestion des événements de connexion/déconnexion
+    if (window.Echo.connector && window.Echo.connector.socket) {
+        window.Echo.connector.socket.bind('pusher:connection_established', () => {
+            console.log('🟢 WebSocket connecté');
+            window.isWebSocketConnected = true;
+        });
+        
+        window.Echo.connector.socket.bind('pusher:error', (error) => {
+            console.error('🔴 Erreur WebSocket:', error);
+            window.isWebSocketConnected = false;
+        });
+        
+        window.Echo.connector.socket.bind('pusher:disconnected', () => {
+            console.warn('🟡 WebSocket déconnecté');
+            window.isWebSocketConnected = false;
+        });
+    }
+    
+    console.log('🚀 Echo initialisé avec succès');
 }
+//fin de la fonction setupEcho
 
 // Démarrer l'initialisation
 initializeEcho();

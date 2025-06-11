@@ -583,17 +583,6 @@ import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 import { Link } from "@inertiajs/vue3";
 
-// Créer une fonction pour configurer Axios
-/* const configureAxios = () => {
-    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    if (token) {
-        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-        axios.defaults.withCredentials = true;
-    } else {
-        console.warn('CSRF token not found');
-    }
-}; */
 
 const configureAxios = async () => {
     // Attendre que le DOM soit complètement chargé
@@ -634,52 +623,69 @@ const configureAxios = async () => {
 };
 
 const setupAxiosInterceptor = () => {
-    // Intercepteur pour les réponses
-    axios.interceptors.response.use(
-        response => response,
-        async error => {
-            if (error.response?.status === 419) {
-                console.log('Erreur 419 détectée, tentative de renouvellement du token...');
+    // Supprimer les anciens intercepteurs pour éviter les doublons
+    axios.interceptors.response.handlers = [];
+    axios.interceptors.request.handlers = [];
 
-                try {
-                    // Renouveler le token CSRF
-                    await axios.get('/sanctum/csrf-cookie');
-
-                    // Attendre un peu pour que le token soit bien défini
-                    await new Promise(resolve => setTimeout(resolve, 100));
-
-                    // Reconfigurer Axios avec le nouveau token
-                    await configureAxios();
-
-                    // Réessayer la requête originale
-                    const originalRequest = error.config;
-                    if (originalRequest) {
-                        return axios(originalRequest);
-                    }
-                } catch (retryError) {
-                    console.error('Échec du renouvellement du token:', retryError);
-                    // Afficher un message à l'utilisateur
-                    showAuthError();
-                }
-            }
-            return Promise.reject(error);
-        }
-    );
-
-    // Intercepteur pour les requêtes (s'assurer que le token est toujours présent)
+    // Intercepteur pour les requêtes
     axios.interceptors.request.use(
         config => {
-            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            const token = getCsrfToken();
             if (token) {
                 config.headers['X-CSRF-TOKEN'] = token;
             }
             config.headers['X-Requested-With'] = 'XMLHttpRequest';
+            config.headers['Accept'] = 'application/json';
+
+            // AJOUT: Timeout par défaut si pas spécifié
+            if (!config.timeout) {
+                config.timeout = 10000;
+            }
+
             return config;
         },
         error => Promise.reject(error)
     );
-};
 
+    // Intercepteur pour les réponses
+    axios.interceptors.response.use(
+        response => response,
+        async error => {
+            const originalRequest = error.config;
+
+            // Éviter les boucles infinies
+            if (originalRequest._retry) {
+                return Promise.reject(error);
+            }
+
+            if (error.response?.status === 419 ||
+                (error.response?.status === 500 && error.response?.data?.message?.includes('CSRF'))) {
+
+                console.log('🔄 Erreur CSRF détectée, renouvellement du token...');
+                originalRequest._retry = true;
+
+                try {
+                    await axios.get('/sanctum/csrf-cookie');
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    await configureAxios();
+
+                    // Mettre à jour le token dans la requête originale
+                    const newToken = getCsrfToken();
+                    if (newToken) {
+                        originalRequest.headers['X-CSRF-TOKEN'] = newToken;
+                        return axios(originalRequest);
+                    }
+                } catch (retryError) {
+                    console.error('Échec du renouvellement du token:', retryError);
+                    // Ne pas recharger automatiquement, laisser l'utilisateur décider
+                    console.error('Erreur d\'authentification persistante');
+                }
+            }
+
+            return Promise.reject(error);
+        }
+    );
+};
 // === SOLUTION 3: Fonction d'attente de l'authentification ===
 
 const waitForAuthentication = async (maxAttempts = 10, delay = 500) => {
@@ -702,16 +708,12 @@ const waitForAuthentication = async (maxAttempts = 10, delay = 500) => {
 };
 
 const showAuthError = () => {
-    // Vous pouvez adapter cette fonction selon votre UI
     console.error('Erreur d\'authentification persistante');
 
     // Option 1: Recharger automatiquement
     setTimeout(() => {
         window.location.reload();
     }, 2000);
-
-    // Option 2: Afficher un toast ou une notification
-    // showToast('Problème d\'authentification, rechargement...', 'error');
 };
 
 // État des données
@@ -736,6 +738,10 @@ const showActionModal = ref(false);
 const showReportModalFlag = ref(false);
 const selectedProfileForActions = ref(null);
 const selectedProfileForReport = ref(null);
+
+
+// 1. Ajouter ces refs dans la section script (après les autres refs)
+const isSendingMessage = ref(false);
 
 // Messages pour la conversation actuelle
 const currentChatMessages = computed(() => {
@@ -1034,140 +1040,6 @@ const handleScroll = async (event) => {
         await loadMoreMessages(selectedClient.value.id);
     }
 };
-
-// Configurer l'application et charger les données initiales
-/* onMounted(async () => {
-    try {
-        // Configurer Axios en premier
-        configureAxios();
-
-        // Ajouter un intercepteur pour renouveler le token si nécessaire
-        axios.interceptors.response.use(
-            response => response,
-            async error => {
-                if (error.response?.status === 419) {
-                    // Renouveler le token CSRF
-                    await axios.get('/sanctum/csrf-cookie');
-                    // Reconfigurer Axios avec le nouveau token
-                    configureAxios();
-                    // Réessayer la requête originale
-                    const originalRequest = error.config;
-                    return axios(originalRequest);
-                }
-                return Promise.reject(error);
-            }
-        );
-
-        // Charger les données depuis l'API
-        await loadAssignedData();
-
-        // Configurer Laravel Echo pour les communications en temps réel
-        if (window.Echo) {
-            console.log(
-                "Configuration de Laravel Echo pour recevoir les notifications en temps réel"
-            );
-
-            // Récupérer l'ID du modérateur depuis l'API
-            const userResponse = await axios.get("/api/user");
-            const moderatorId = userResponse.data.id;
-
-            if (!moderatorId) {
-                console.error("ID du modérateur non disponible");
-                return;
-            }
-
-            console.log(`ID du modérateur connecté: ${moderatorId}`);
-
-            // Écouter les notifications d'attribution de profil
-            console.log(`Souscription au canal: moderator.${moderatorId}`);
-
-            window.Echo.private(`moderator.${moderatorId}`)
-                .listen(".profile.assigned", async (data) => {
-                    console.log("Événement profile.assigned reçu:", data);
-                    
-                    // Recharger les données après l'attribution d'un profil
-                    await loadAssignedData();
-
-                    // Si le profil attribué est différent du profil actuel et qu'il est principal
-                    if (data.profile && 
-                        data.profile.id !== currentAssignedProfile.value?.id && 
-                        data.is_primary) {
-                        
-                        currentAssignedProfile.value = data.profile;
-                        
-                        // Si un client est associé à ce changement de profil
-                        if (data.client_id) {
-                            try {
-                                // Charger les messages du client
-                                const clientResponse = await axios.get("/moderateur/messages", {
-                                    params: {
-                                        client_id: data.client_id,
-                                        profile_id: data.profile.id,
-                                    },
-                                });
-
-                                if (clientResponse.data.messages) {
-                                    chatMessages.value[data.client_id] = clientResponse.data.messages;
-                                    
-                                    // Trouver et sélectionner le client
-                                    const clientInfo = assignedClient.value.find(
-                                        (c) => c.id === data.client_id
-                                    );
-                                    
-                                    if (clientInfo) {
-                                        selectedClient.value = clientInfo;
-                                        
-                                        // Faire défiler vers le bas du chat
-                                        nextTick(() => {
-                                            if (chatContainer.value) {
-                                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                                            }
-                                        });
-                                    }
-                                }
-                            } catch (error) {
-                                console.error("Erreur lors du chargement des messages:", error);
-                            }
-                        }
-                    }
-                })
-                .listen(".client.assigned", async (data) => {
-                    console.log("Événement client.assigned reçu:", data);
-                    // Recharger les données après l'attribution d'un client
-                    await loadAssignedData();
-
-                    // Si c'est un nouveau client et qu'il n'y a pas de client sélectionné,
-                    // on le sélectionne automatiquement
-                    if (!selectedClient.value && data.client) {
-                        const clientInfo = assignedClient.value.find(
-                            (c) => c.id === data.client.id
-                        );
-                        if (clientInfo) {
-                            selectedClient.value = clientInfo;
-                            await loadMessages(clientInfo.id);
-                        }
-                    }
-                })
-                .error((error) => {
-                    console.error(
-                        `Erreur sur le canal moderator.${moderatorId}:`,
-                        error
-                    );
-                });
-
-            // Si un profil est déjà attribué, écouter les messages sur son canal
-            if (currentAssignedProfile.value) {
-                listenToProfileMessages(currentAssignedProfile.value.id);
-            }
-        } else {
-            console.error(
-                "Laravel Echo n'est pas disponible, les notifications en temps réel ne fonctionneront pas"
-            );
-        }
-    } catch (error) {
-        console.error("Erreur lors de l'initialisation:", error);
-    }
-}); */
 
 onMounted(async () => {
     try {
@@ -1486,15 +1358,16 @@ function closeImagePreview() {
     previewImage.value = null;
 }
 
-// Modifier la fonction sendMessage pour inclure explicitement le CSRF token
-async function sendMessage() {
+async function sendMessage(retryCount = 0) {
     if ((!newMessage.value.trim() && !selectedFile.value) || !currentAssignedProfile.value || !selectedClient.value)
         return;
+
+    const maxRetries = 2;
 
     const formData = new FormData();
     formData.append('client_id', selectedClient.value.id);
     formData.append('profile_id', currentAssignedProfile.value.id);
-    
+
     if (newMessage.value.trim()) {
         formData.append('content', newMessage.value);
     }
@@ -1508,7 +1381,6 @@ async function sendMessage() {
         minute: "2-digit",
     });
 
-    // Créer le message local
     const localMessage = {
         id: "temp-" + Date.now(),
         content: newMessage.value,
@@ -1517,7 +1389,6 @@ async function sendMessage() {
         date: new Date().toISOString().split("T")[0],
     };
 
-    // Si une image est sélectionnée, ajouter la prévisualisation
     if (selectedFile.value) {
         localMessage.attachment = {
             url: previewUrl.value,
@@ -1526,18 +1397,33 @@ async function sendMessage() {
         };
     }
 
-    // Ajouter le message localement
     if (!chatMessages.value[selectedClient.value.id]) {
         chatMessages.value[selectedClient.value.id] = [];
     }
     chatMessages.value[selectedClient.value.id].push(localMessage);
 
-    // Réinitialiser les champs
+    // CORRECTION: Nettoyer les champs immédiatement après avoir créé le message local
+    const originalMessage = newMessage.value; // Sauvegarder pour retry si nécessaire
+    const originalFile = selectedFile.value; // Sauvegarder pour retry si nécessaire
+
     newMessage.value = "";
     removeSelectedFile();
 
     try {
-        const response = await axios.post("/moderateur/send-message", formData);
+        // AJOUT: S'assurer que le token CSRF est frais
+        const token = getCsrfToken();
+        if (!token) {
+            throw new Error('Token CSRF manquant');
+        }
+
+        const response = await axios.post("/moderateur/send-message", formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            timeout: 15000 // AJOUT: Timeout de 15 secondes
+        });
 
         if (response.data.success) {
             const index = chatMessages.value[selectedClient.value.id].findIndex(
@@ -1555,7 +1441,46 @@ async function sendMessage() {
             message: error.message,
             stack: error.stack
         });
-        
+
+        // AJOUT: Logique de retry améliorée
+        const shouldRetry = (
+            (error.response?.status === 500 ||
+                error.response?.status === 419 ||
+                error.code === 'NETWORK_ERROR' ||
+                error.message.includes('timeout')) &&
+            retryCount < maxRetries
+        );
+
+        if (shouldRetry) {
+            console.log(`🔄 Retry ${retryCount + 1}/${maxRetries} pour l'envoi du message...`);
+
+            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+
+            if (error.response?.status === 419 || error.response?.status === 500) {
+                try {
+                    await axios.get('/sanctum/csrf-cookie');
+                    await configureAxios();
+                    console.log('🔄 Token CSRF renouvelé');
+                } catch (tokenError) {
+                    console.error('Erreur lors du renouvellement du token:', tokenError);
+                }
+            }
+
+            // CORRECTION: Recréer le FormData pour le retry
+            const retryFormData = new FormData();
+            retryFormData.append('client_id', selectedClient.value.id);
+            retryFormData.append('profile_id', currentAssignedProfile.value.id);
+            if (originalMessage.trim()) {
+                retryFormData.append('content', originalMessage);
+            }
+            if (originalFile) {
+                retryFormData.append('attachment', originalFile);
+            }
+
+            // Remplacer formData par retryFormData pour le retry
+            return sendMessage(retryCount + 1);
+        }
+
         // Marquer le message comme échoué
         const index = chatMessages.value[selectedClient.value.id].findIndex(
             (msg) => msg.id === localMessage.id
@@ -1565,13 +1490,32 @@ async function sendMessage() {
         }
     }
 
-    // Faire défiler jusqu'au bas de la conversation
     nextTick(() => {
         if (chatContainer.value) {
             chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
         }
     });
 }
+
+const getCsrfToken = () => {
+    let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!token && window.Laravel && window.Laravel.csrfToken) {
+        token = window.Laravel.csrfToken;
+    }
+    return token;
+};
+
+// Fonction de vérification de la santé de la connexion
+const checkConnectionHealth = async () => {
+    try {
+        const response = await axios.get('/auth/check', { timeout: 5000 });
+        return response.status === 200;
+    } catch (error) {
+        console.warn('Vérification de connexion échouée:', error);
+        return false;
+    }
+};
+
 
 // Mettre en forme le genre
 function formatGender(gender) {

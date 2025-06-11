@@ -28,6 +28,6 @@ class PointConsumption extends Model
 
     public function consumable(): MorphTo
     {
-        return $this->morphTo();
+        return $this->morphTo()->with('profile');
     }
 }

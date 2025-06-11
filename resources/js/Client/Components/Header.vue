@@ -44,10 +44,7 @@
                                 <i class="fas fa-user-circle w-5 text-gray-400"></i>
                                 <span>Profil</span>
                             </Link>
-                            <a href="#" class="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition">
-                                <i class="fas fa-cog w-5 text-gray-400"></i>
-                                <span>Paramètres</span>
-                            </a>
+                            
                             <hr class="my-1">
                             <button @click="logout" class="w-full flex items-center px-4 py-2 text-sm text-red-600 hover:bg-gray-50 transition">
                                 <i class="fas fa-sign-out-alt w-5"></i>

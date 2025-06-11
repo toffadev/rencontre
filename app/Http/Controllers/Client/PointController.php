@@ -25,9 +25,10 @@ class PointController extends Controller
     /**
      * Obtient les données des points pour la page de profil
      */
-    public function getPointsData()
+    public function getPointsData(Request $request)
     {
         $user = Auth::user();
+        $page = $request->input('page', 1);
 
         return response()->json([
             'points' => $user->points,

@@ -1,31 +1,77 @@
 <template>
     <div>
         <!-- En-tête avec statistiques rapides -->
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             <div class="bg-white rounded-lg p-4 text-center">
                 <p class="text-sm text-gray-500">Total Messages</p>
                 <p class="text-2xl font-bold text-gray-700">
                     {{ totalMessages }}
                 </p>
             </div>
-            <div class="bg-white rounded-lg p-4 text-center">
-                <p class="text-sm text-gray-500">Messages Courts</p>
-                <p class="text-2xl font-bold text-pink-500">
-                    {{ shortMessages }}
+            <div class="bg-white rounded-lg p-4 text-center border-2 border-blue-200">
+                <p class="text-sm text-gray-500">Messages Reçus</p>
+                <p class="text-2xl font-bold text-blue-500">
+                    {{ receivedMessages }}
+                </p>
+                <p class="text-xs text-blue-600 mt-1">
+                    {{ formatCurrency(newEarnings) }} (50 pts/msg)
                 </p>
             </div>
             <div class="bg-white rounded-lg p-4 text-center">
-                <p class="text-sm text-gray-500">Messages Longs</p>
-                <p class="text-2xl font-bold text-green-500">
-                    {{ longMessages }}
+                <p class="text-sm text-gray-500">Messages Envoyés</p>
+                <p class="text-2xl font-bold text-pink-500">
+                    {{ sentMessages }}
+                </p>
+            </div>
+            <div class="bg-white rounded-lg p-4 text-center border-2 border-purple-200">
+                <p class="text-sm text-gray-500">Points Reçus (50%)</p>
+                <p class="text-2xl font-bold text-purple-500">
+                    {{ formatCurrency(moderatorShare) }}
                 </p>
             </div>
             <div class="bg-white rounded-lg p-4 text-center">
                 <p class="text-sm text-gray-500">Gains Totaux</p>
-                <p class="text-2xl font-bold text-purple-500">
+                <p class="text-2xl font-bold text-green-500">
                     {{ formatCurrency(totalEarnings) }}
                 </p>
             </div>
+        </div>
+
+        <!-- Filtre de type de message -->
+        <div class="mb-6 flex flex-wrap gap-2">
+            <button
+                @click="changeMessageType('all')"
+                :class="[
+                    'px-4 py-2 rounded-lg text-sm font-medium',
+                    messageType === 'all'
+                        ? 'bg-gray-700 text-white'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+                ]"
+            >
+                Tous les messages
+            </button>
+            <button
+                @click="changeMessageType('received')"
+                :class="[
+                    'px-4 py-2 rounded-lg text-sm font-medium',
+                    messageType === 'received'
+                        ? 'bg-blue-500 text-white'
+                        : 'bg-blue-100 text-blue-600 hover:bg-blue-200',
+                ]"
+            >
+                Messages reçus
+            </button>
+            <button
+                @click="changeMessageType('sent')"
+                :class="[
+                    'px-4 py-2 rounded-lg text-sm font-medium',
+                    messageType === 'sent'
+                        ? 'bg-pink-500 text-white'
+                        : 'bg-pink-100 text-pink-600 hover:bg-pink-200',
+                ]"
+            >
+                Messages envoyés
+            </button>
         </div>
 
         <!-- Tableau des messages -->
@@ -94,7 +140,10 @@
                             v-else
                             v-for="message in messages.data"
                             :key="message.id"
-                            class="hover:bg-gray-50"
+                            :class="[
+                                'hover:bg-gray-50',
+                                message.is_from_client ? 'bg-blue-50' : ''
+                            ]"
                         >
                             <td class="px-6 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
@@ -133,16 +182,17 @@
                                 <span
                                     :class="[
                                         'px-2 inline-flex text-xs leading-5 font-semibold rounded-full',
-                                        message.is_long
-                                            ? 'bg-green-100 text-green-800'
-                                            : 'bg-yellow-100 text-yellow-800',
+                                        message.is_from_client
+                                            ? 'bg-blue-100 text-blue-800'
+                                            : 'bg-gray-100 text-gray-800'
                                     ]"
                                 >
-                                    {{ message.is_long ? "Long" : "Court" }}
+                                    {{ message.is_from_client ? "Reçu" : "Envoyé" }}
                                 </span>
                             </td>
                             <td
-                                class="px-6 py-4 whitespace-nowrap text-sm text-gray-500"
+                                class="px-6 py-4 whitespace-nowrap text-sm"
+                                :class="message.is_from_client ? 'text-blue-600 font-medium' : 'text-gray-500'"
                             >
                                 {{ formatCurrency(message.earnings) }}
                             </td>
@@ -273,11 +323,18 @@ export default {
             },
         });
         const totalMessages = ref(0);
+        const receivedMessages = ref(0);
+        const sentMessages = ref(0);
         const shortMessages = ref(0);
         const longMessages = ref(0);
+        const oldEarnings = ref(0);
+        const newEarnings = ref(0);
+        const pointsAmount = ref(0);
+        const moderatorShare = ref(0);
         const totalEarnings = ref(0);
         const currentPage = ref(1);
         const loading = ref(false);
+        const messageType = ref('all'); // 'all', 'received', ou 'sent'
 
         const fetchMessages = async () => {
             try {
@@ -290,6 +347,7 @@ export default {
                             profileId: props.selectedProfileId,
                             limit: messages.value.pagination.per_page,
                             page: currentPage.value,
+                            messageType: messageType.value
                         },
                     }
                 );
@@ -297,8 +355,14 @@ export default {
                 messages.value.data = response.data.messages;
                 messages.value.pagination = response.data.pagination;
                 totalMessages.value = response.data.statistics.total_messages;
+                receivedMessages.value = response.data.statistics.received_messages;
+                sentMessages.value = response.data.statistics.sent_messages;
                 shortMessages.value = response.data.statistics.short_messages;
                 longMessages.value = response.data.statistics.long_messages;
+                oldEarnings.value = response.data.statistics.old_earnings;
+                newEarnings.value = response.data.statistics.new_earnings;
+                pointsAmount.value = response.data.statistics.points_amount;
+                moderatorShare.value = response.data.statistics.moderator_share;
                 totalEarnings.value = response.data.statistics.total_earnings;
             } catch (error) {
                 console.error(
@@ -314,6 +378,12 @@ export default {
             if (page >= 1 && page <= messages.value.pagination.last_page) {
                 currentPage.value = page;
             }
+        };
+
+        const changeMessageType = (type) => {
+            messageType.value = type;
+            currentPage.value = 1; // Réinitialiser la page
+            fetchMessages();
         };
 
         // Surveiller les changements de page
@@ -346,12 +416,20 @@ export default {
         return {
             messages,
             totalMessages,
+            receivedMessages,
+            sentMessages,
             shortMessages,
             longMessages,
+            oldEarnings,
+            newEarnings,
+            pointsAmount,
+            moderatorShare,
             totalEarnings,
             currentPage,
+            messageType,
             pageNumbers,
             changePage,
+            changeMessageType,
             formatCurrency,
             formatDate,
             loading,

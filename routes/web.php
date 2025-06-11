@@ -48,8 +48,8 @@ Route::get('/test-redis', function () {
 // Ajoutez cette route dans votre web.php :
 Route::get('/auth/check', function () {
     return response()->json([
-        'authenticated' => auth()->check(),
-        'user' => auth()->user(),
+        'authenticated' => Auth::check(),
+        'user' => Auth::user(),
         'csrf_token' => csrf_token()
     ]);
 })->middleware('web');
@@ -231,6 +231,15 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
         Route::get('/export', [ModeratorPerformanceController::class, 'export'])->name('moderator-performance.export');
         Route::get('/moderators', [App\Http\Controllers\Admin\ModeratorController::class, 'index'])->name('moderator-performance.moderators');
         Route::get('/profiles', [App\Http\Controllers\Admin\AdminProfileApiController::class, 'index'])->name('moderator-performance.profiles');
+
+        // Nouvelles routes pour les détails des modérateurs
+        Route::get('/moderator/{id}', [App\Http\Controllers\Admin\ModeratorDetailsController::class, 'show'])->name('moderator-performance.moderator.show');
+        Route::get('/moderator/{id}/details', [App\Http\Controllers\Admin\ModeratorDetailsController::class, 'getDetails'])->name('moderator-performance.moderator.details');
+        Route::get('/moderator/{id}/messages', [App\Http\Controllers\Admin\ModeratorDetailsController::class, 'getMessages'])->name('moderator-performance.moderator.messages');
+        Route::get('/moderator/{id}/payments', [App\Http\Controllers\Admin\ModeratorDetailsController::class, 'getPayments'])->name('moderator-performance.moderator.payments');
+
+        // Route pour mettre à jour le statut de paiement d'un modérateur
+        Route::post('/moderator/{id}/payment-status', [App\Http\Controllers\Admin\ModeratorDetailsController::class, 'updatePaymentStatus'])->name('moderator-performance.moderator.payment-status');
     });
 
     // Routes pour la gestion des messages des modérateurs
@@ -322,6 +331,7 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     Route::get('/profile/statistics', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getStatistics'])->name('profile.statistics');
     Route::get('/profile/messages', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getMessageHistory'])->name('profile.messages');
     Route::get('/profile/points', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getPointsReceived'])->name('profile.points');
+    Route::get('/profile/monthly-earnings', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getMonthlyEarnings'])->name('profile.monthly-earnings');
 
     // Moderator management routes will go here
 });
