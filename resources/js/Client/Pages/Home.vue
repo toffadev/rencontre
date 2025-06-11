@@ -1497,6 +1497,21 @@ watch([currentMessages, selectedProfile], () => {
     height: 100%;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(236, 72, 153, 0.5) rgba(243, 244, 246, 0.1);
+}
+
+.chat-container::-webkit-scrollbar {
+    width: 6px;
+}
+
+.chat-container::-webkit-scrollbar-track {
+    background: rgba(243, 244, 246, 0.1);
+}
+
+.chat-container::-webkit-scrollbar-thumb {
+    background-color: rgba(236, 72, 153, 0.5);
+    border-radius: 20px;
 }
 
 @media (max-width: 1024px) {
@@ -1509,12 +1524,14 @@ watch([currentMessages, selectedProfile], () => {
 .message-in {
     background-color: #f3f4f6;
     border-radius: 18px 18px 18px 4px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .message-out {
-    background-color: #ec4899;
+    background: linear-gradient(to right, #ec4899, #db2777);
     color: white;
     border-radius: 18px 18px 4px 18px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .message-out.pending {
@@ -1522,7 +1539,7 @@ watch([currentMessages, selectedProfile], () => {
 }
 
 .message-out.failed {
-    background-color: #ef4444;
+    background: linear-gradient(to right, #ef4444, #dc2626);
 }
 
 .online-dot {
@@ -1534,6 +1551,20 @@ watch([currentMessages, selectedProfile], () => {
     background-color: #10b981;
     border-radius: 50%;
     border: 2px solid white;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
 }
 
 /* Styles pour le scroll horizontal sur mobile */
@@ -1553,11 +1584,13 @@ watch([currentMessages, selectedProfile], () => {
     height: auto;
     border-radius: 8px;
     margin-top: 4px;
+    transition: transform 0.3s ease;
 }
 
 .message-in img:hover, .message-out img:hover {
     opacity: 0.9;
     cursor: zoom-in;
+    transform: scale(1.05);
 }
 
 /* Support pour le safe area sur iOS */
@@ -1620,5 +1653,43 @@ watch([currentMessages, selectedProfile], () => {
             opacity: 1;
         }
     }
+}
+
+/* Animations et effets visuels améliorés */
+.chat-input input:focus {
+    box-shadow: 0 0 0 3px rgba(236, 72, 153, 0.2);
+}
+
+.chat-input button:hover {
+    transform: translateY(-2px);
+}
+
+/* Style pour les profils dans le carousel */
+:deep(.profile-carousel .swiper-slide) {
+    transition: transform 0.3s ease, filter 0.3s ease;
+}
+
+:deep(.profile-carousel .swiper-slide:hover) {
+    transform: scale(1.02);
+    z-index: 10;
+}
+
+:deep(.profile-carousel .swiper-pagination-bullet-active) {
+    background-color: #ec4899;
+}
+
+/* Animation pour les nouveaux messages */
+@keyframes newMessage {
+    0% { transform: translateY(10px); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+}
+
+.message-animation-enter-active {
+    animation: newMessage 0.3s ease-out forwards;
+}
+
+/* Style pour le fond de la page principale */
+:deep(body) {
+    background: linear-gradient(135deg, #111827, #1f2937);
 }
 </style>

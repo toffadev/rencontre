@@ -11,12 +11,12 @@
     </header>
 
     <!-- Main Content -->
-    <main class="container mx-auto px-4 py-8">
+    <main class="min-h-[calc(100vh-132px)]">
       <slot />
     </main>
 
     <!-- Footer -->
-    <footer class="bg-white border-t border-gray-200 py-6 mt-8">
+    <footer class="bg-white border-t border-gray-200 py-6">
       <div class="container mx-auto px-4">
         <div class="flex flex-col md:flex-row justify-between items-center">
           <div class="flex items-center space-x-2 mb-4 md:mb-0">

@@ -68,8 +68,8 @@ Route::get('/', function () {
         // Si c'est un client, afficher la page d'accueil client
         return app()->make(HomeController::class)->index();
     } else {
-        // Si l'utilisateur n'est pas connecté, rediriger vers login
-        return redirect()->route('login');
+        // Si l'utilisateur n'est pas connecté, rediriger vers la landing page
+        return redirect()->route('landing');
     }
 })->name('home');
 
@@ -149,6 +149,11 @@ Route::middleware(['auth'])->group(function () {
 
 // Guest routes
 Route::middleware('guest')->group(function () {
+    // Landing page
+    Route::get('/welcome', function () {
+        return Inertia::render('Landing');
+    })->name('landing');
+
     // Registration Routes
     Route::get('/register', [RegisterController::class, 'showRegistrationForm'])->name('register');
     Route::post('/register', [RegisterController::class, 'register']);

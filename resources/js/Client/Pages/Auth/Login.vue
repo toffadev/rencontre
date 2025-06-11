@@ -1,101 +1,114 @@
 <template>
   <GuestLayout>
-    <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-8">
-      <div class="mb-4 text-center">
-        <h2 class="text-2xl font-bold text-center text-gray-800 mb-2">Content de vous revoir !</h2>
-        <p class="text-center text-gray-600 mb-8">Connectez-vous pour retrouver vos matches</p>
+    <div class="min-h-full flex items-center justify-center relative">
+      <!-- Image de fond -->
+      <div class="absolute inset-0 z-0">
+        <img src="/rencontre/imageregister.jpg" alt="Background" class="w-full h-full object-cover" />
+        <div class="absolute inset-0 bg-black/50"></div>
       </div>
+      
+      <!-- Contenu du formulaire -->
+      <div class="max-w-xs w-full mx-auto bg-white/90 backdrop-blur-sm rounded-xl shadow-xl overflow-hidden p-5 border border-pink-100 z-10 my-8">
+        <div class="mb-4 text-center">
+          <h2 class="text-2xl font-bold text-center text-gray-800 mb-1">Content de vous revoir !</h2>
+          <p class="text-center text-gray-600 text-sm mb-4">Connectez-vous pour retrouver vos matches</p>
+        </div>
 
-      <div v-if="status" class="mb-4 rounded-lg bg-green-100 p-3 text-sm font-medium text-green-700">
-        {{ status }}
-      </div>
-      
-      <!-- Social Login Buttons -->
-      <div class="space-y-3 mb-6">
-        <button class="w-full flex items-center justify-center space-x-2 bg-white border border-gray-300 rounded-lg py-3 px-4 hover:bg-gray-50 transition">
-          <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" class="w-5 h-5">
-          <span>Se connecter avec Google</span>
-        </button>
-        <button class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white rounded-lg py-3 px-4 hover:bg-blue-700 transition">
-          <i class="fab fa-facebook-f"></i>
-          <span>Se connecter avec Facebook</span>
-        </button>
-      </div>
-      
-      <!-- Divider -->
-      <div class="divider text-sm mb-6">OU</div>
-      
-      <!-- Login Form -->
-      <form @submit.prevent="submit">
-        <!-- Email Input -->
-        <div class="mb-4">
-          <label for="email" class="block text-sm font-medium text-gray-700 mb-1">Adresse email</label>
-          <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <i class="fas fa-envelope text-gray-400"></i>
-            </div>
-            <input 
-              type="email" 
-              id="email" 
-              v-model="form.email"
-              class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500"
-              placeholder="votre@email.com"
-              required
-              autofocus
-            >
-          </div>
-          <div v-if="form.errors.email" class="text-red-600 mt-1 text-sm">{{ form.errors.email }}</div>
+        <div v-if="status" class="mb-3 rounded-lg bg-green-100 p-2 text-sm font-medium text-green-700">
+          {{ status }}
         </div>
         
-        <!-- Password Input -->
-        <div class="mb-4">
-          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Mot de passe</label>
-          <div class="relative">
-            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <i class="fas fa-lock text-gray-400"></i>
-            </div>
-            <input 
-              type="password" 
-              id="password" 
-              v-model="form.password"
-              class="input-field w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:border-pink-500"
-              placeholder="••••••••"
-              required
-            >
-            <div class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer">
-              <i class="fas fa-eye-slash text-gray-400 hover:text-gray-600" @click="togglePassword"></i>
-            </div>
-          </div>
-          <div v-if="form.errors.password" class="text-red-600 mt-1 text-sm">{{ form.errors.password }}</div>
+        <!-- Social Login Buttons -->
+        <div class="space-y-2 mb-4">
+          <button class="w-full flex items-center justify-center space-x-2 bg-white border border-gray-300 rounded-lg py-2 px-3 hover:bg-gray-50 transition duration-300 transform hover:scale-[1.02] text-sm">
+            <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" class="w-4 h-4">
+            <span>Se connecter avec Google</span>
+          </button>
+          <button class="w-full flex items-center justify-center space-x-2 bg-blue-600 text-white rounded-lg py-2 px-3 hover:bg-blue-700 transition duration-300 transform hover:scale-[1.02] text-sm">
+            <i class="fab fa-facebook-f"></i>
+            <span>Se connecter avec Facebook</span>
+          </button>
         </div>
         
-        <!-- Remember me & Forgot password -->
-        <div class="flex items-center justify-between mb-6">
-          <div class="flex items-center">
-            <input id="remember" type="checkbox" v-model="form.remember" class="h-4 w-4 text-pink-600 focus:ring-pink-500 border-gray-300 rounded">
-            <label for="remember" class="ml-2 block text-sm text-gray-700">Se souvenir de moi</label>
-          </div>
+        <!-- Divider -->
+        <div class="flex items-center my-3">
+          <div class="flex-grow border-t border-gray-300"></div>
+          <span class="px-3 text-gray-500 text-xs">OU</span>
+          <div class="flex-grow border-t border-gray-300"></div>
+        </div>
+        
+        <!-- Login Form -->
+        <form @submit.prevent="submit" class="space-y-3">
+          <!-- Email Input -->
           <div>
-            <Link :href="route('password.request')" class="text-sm text-pink-600 hover:text-pink-700 forgot-password">Mot de passe oublié ?</Link>
+            <label for="email" class="block text-xs font-medium text-gray-700 mb-1">Adresse email</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-envelope text-pink-400 text-sm"></i>
+              </div>
+              <input 
+                type="email" 
+                id="email" 
+                v-model="form.email"
+                class="input-field w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
+                placeholder="votre@email.com"
+                required
+                autofocus
+              >
+            </div>
+            <div v-if="form.errors.email" class="text-red-600 mt-1 text-xs">{{ form.errors.email }}</div>
           </div>
-        </div>
-        
-        <!-- Submit Button -->
-        <button type="submit" class="login-btn w-full bg-pink-500 text-white py-3 px-4 rounded-lg font-medium hover:bg-pink-600 transition duration-300 mb-4" :disabled="form.processing">
-          Se connecter
-        </button>
-        
-        <!-- Signup Link -->
-        <p class="text-center text-sm text-gray-600">
-          Pas encore membre ? <Link :href="route('register')" class="text-pink-600 font-medium hover:text-pink-700">Créez un compte</Link>
-        </p>
-      </form>
+          
+          <!-- Password Input -->
+          <div>
+            <label for="password" class="block text-xs font-medium text-gray-700 mb-1">Mot de passe</label>
+            <div class="relative">
+              <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <i class="fas fa-lock text-pink-400 text-sm"></i>
+              </div>
+              <input 
+                type="password" 
+                id="password" 
+                v-model="form.password"
+                class="input-field w-full pl-9 pr-9 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-all"
+                placeholder="••••••••"
+                required
+              >
+              <div class="absolute inset-y-0 right-0 pr-3 flex items-center cursor-pointer">
+                <i class="fas fa-eye-slash text-gray-400 hover:text-pink-500 transition text-sm" @click="togglePassword"></i>
+              </div>
+            </div>
+            <div v-if="form.errors.password" class="text-red-600 mt-1 text-xs">{{ form.errors.password }}</div>
+          </div>
+          
+          <!-- Remember me & Forgot password -->
+          <div class="flex items-center justify-between">
+            <div class="flex items-center">
+              <input id="remember" type="checkbox" v-model="form.remember" class="h-3 w-3 text-pink-600 focus:ring-pink-500 border-gray-300 rounded">
+              <label for="remember" class="ml-2 block text-xs text-gray-700">Se souvenir de moi</label>
+            </div>
+            <div>
+              <Link :href="route('password.request')" class="text-xs text-pink-600 hover:text-pink-700 forgot-password font-medium">Mot de passe oublié ?</Link>
+            </div>
+          </div>
+          
+          <!-- Submit Button -->
+          <button type="submit" class="login-btn w-full bg-gradient-to-r from-pink-500 to-purple-600 text-white py-2 px-4 rounded-lg font-medium hover:from-pink-600 hover:to-purple-700 transition duration-300 transform hover:scale-[1.02] shadow-md text-sm" :disabled="form.processing">
+            Se connecter
+          </button>
+          
+          <!-- Signup Link -->
+          <p class="text-center text-xs text-gray-600">
+            Pas encore membre ? <Link :href="route('register')" class="text-pink-600 font-medium hover:text-pink-700">Créez un compte</Link>
+          </p>
+        </form>
 
-      <!-- Admin Login Link -->
-      <div class="mt-6 text-center border-t pt-4 border-gray-200">
-        <Link :href="route('admin.login')" class="text-sm text-gray-500 hover:text-pink-600">
-          Accès administration
-        </Link>
+        <!-- Admin Login Link -->
+        <div class="mt-4 text-center border-t pt-3 border-gray-200">
+          <Link :href="route('admin.login')" class="text-xs text-gray-500 hover:text-pink-600">
+            Accès administration
+          </Link>
+        </div>
       </div>
     </div>
   </GuestLayout>
@@ -130,4 +143,35 @@ const togglePassword = () => {
 const submit = () => {
   form.post(route('login'));
 };
-</script> 
+</script>
+
+<style scoped>
+.login-btn {
+  background-size: 200% auto;
+  transition: all 0.3s ease;
+}
+
+.login-btn:hover {
+  background-position: right center;
+}
+
+.forgot-password {
+  position: relative;
+  display: inline-block;
+}
+
+.forgot-password:after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 1px;
+  bottom: -1px;
+  left: 0;
+  background-color: #db2777;
+  transition: width 0.3s ease;
+}
+
+.forgot-password:hover:after {
+  width: 100%;
+}
+</style> 
