@@ -36,6 +36,32 @@ class ModeratorController extends Controller
     protected $attachmentService;
 
     /**
+     * Normalise un chemin de fichier pour éviter les problèmes de double slash
+     * 
+     * @param string $path
+     * @return string
+     */
+    private function normalizeFilePath($path)
+    {
+        // Si le chemin commence par /storage/, le convertir en storage/
+        if (strpos($path, '/storage/') === 0) {
+            return 'storage' . substr($path, 8);
+        }
+
+        // Si le chemin commence par storage/ (sans slash), le laisser tel quel
+        if (strpos($path, 'storage/') === 0) {
+            return $path;
+        }
+
+        // Sinon, ajouter storage/ au début si nécessaire
+        if (!str_starts_with($path, 'storage/') && !str_starts_with($path, '/storage/')) {
+            return 'storage/' . $path;
+        }
+
+        return $path;
+    }
+
+    /**
      * Créer une nouvelle instance du contrôleur.
      *
      * @param  \App\Services\ModeratorAssignmentService  $assignmentService
@@ -343,11 +369,12 @@ class ModeratorController extends Controller
                 $attachmentData = null;
                 if ($message->attachments->isNotEmpty()) {
                     $attachment = $message->attachments->first();
+                    $normalizedPath = $this->normalizeFilePath($attachment->file_path);
                     $attachmentData = [
                         'id' => $attachment->id,
                         'file_name' => $attachment->file_name,
                         'mime_type' => $attachment->mime_type,
-                        'url' => Storage::url($attachment->file_path)
+                        'url' => asset($normalizedPath)
                     ];
                 }
 
@@ -466,9 +493,10 @@ class ModeratorController extends Controller
                         'file_path' => $attachment->file_path
                     ]);
 
-                    // Ajouter l'URL de l'attachement à la réponse
+                    // Normaliser le chemin et ajouter l'URL de l'attachement à la réponse
+                    $normalizedPath = $this->normalizeFilePath($attachment->file_path);
                     $message->attachment = [
-                        'url' => Storage::url($attachment->file_path),
+                        'url' => asset($normalizedPath),
                         'file_name' => $attachment->file_name,
                         'mime_type' => $attachment->mime_type,
                     ];

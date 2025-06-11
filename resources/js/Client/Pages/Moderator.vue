@@ -470,13 +470,23 @@
                                         accept="image/*"
                                         @change="handleFileUpload"
                                     />
-                                    <button
+                                    <!-- Bouton d'upload d'image personnelle désactivé au profit du sélecteur de photos de profil -->
+                                    <!-- <button
                                         class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                                         title="Ajouter une image"
                                         @click="$refs.fileInput.click()"
                                     >
                                         <i class="fas fa-image"></i>
-                                    </button>
+                                    </button> -->
+                                    
+                                    <!-- Sélecteur de photos de profil -->
+                                    <ProfilePhotoSelector 
+                                        v-if="currentAssignedProfile && selectedClient"
+                                        :profile-id="currentAssignedProfile.id"
+                                        :client-id="selectedClient.id"
+                                        @photo-selected="handleProfilePhotoSelected"
+                                    />
+                                    
                                     <div class="flex-1 relative">
                                         <input
                                             v-model="newMessage"
@@ -581,6 +591,7 @@ import ClientInfoPanel from "@client/Components/ClientInfoPanel.vue";
 import ClientInfoDrawer from "@client/Components/ClientInfoDrawer.vue";
 import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
+import ProfilePhotoSelector from "@client/Components/ProfilePhotoSelector.vue";
 import { Link } from "@inertiajs/vue3";
 
 
@@ -1503,6 +1514,85 @@ const getCsrfToken = () => {
         token = window.Laravel.csrfToken;
     }
     return token;
+};
+
+// Fonction pour gérer la sélection d'une photo de profil
+async function handleProfilePhotoSelected(photo) {
+    try {
+        // Vérifier que les données nécessaires sont disponibles
+        if (!currentAssignedProfile.value || !selectedClient.value) {
+            console.error("Profil ou client non sélectionné");
+            return;
+        }
+        
+        // Afficher un indicateur de chargement local
+        const now = new Date();
+        const timeString = now.toLocaleTimeString([], {
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+
+        // Créer un message temporaire local
+        const localMessage = {
+            id: "temp-" + Date.now(),
+            content: "",
+            time: timeString,
+            isFromClient: false,
+            date: new Date().toISOString().split("T")[0],
+            attachment: {
+                url: photo.url,
+                file_name: photo.path.split('/').pop(),
+                mime_type: 'image/jpeg'
+            }
+        };
+
+        // Ajouter le message temporaire à la conversation
+        if (!chatMessages.value[selectedClient.value.id]) {
+            chatMessages.value[selectedClient.value.id] = [];
+        }
+        chatMessages.value[selectedClient.value.id].push(localMessage);
+        
+        // S'assurer que le token CSRF est disponible
+        const token = getCsrfToken();
+        if (!token) {
+            throw new Error('Token CSRF manquant');
+        }
+        
+        // Envoyer la requête au serveur
+        const response = await axios.post("/moderateur/send-profile-photo", {
+            profile_id: currentAssignedProfile.value.id,
+            client_id: selectedClient.value.id,
+            photo_id: photo.id
+        }, {
+            headers: {
+                'X-CSRF-TOKEN': token,
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+        
+        // Mettre à jour le message local avec les données du serveur
+        if (response.data.success) {
+            const index = chatMessages.value[selectedClient.value.id].findIndex(
+                (msg) => msg.id === localMessage.id
+            );
+            if (index !== -1) {
+                chatMessages.value[selectedClient.value.id][index] = response.data.messageData;
+            }
+        }
+        
+        // Faire défiler vers le bas du chat
+        nextTick(() => {
+            if (chatContainer.value) {
+                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+            }
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'envoi de la photo:", error);
+        console.error("Détails:", {
+            status: error.response?.status,
+            data: error.response?.data,
+        });
+    }
 };
 
 // Fonction de vérification de la santé de la connexion

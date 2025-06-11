@@ -320,6 +320,10 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
         ->middleware(['web', 'auth', 'moderator']);
     Route::post('/set-primary-profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
 
+    // Routes pour la gestion des photos de profil
+    Route::get('/profile-photos', [App\Http\Controllers\Moderator\ProfilePhotoController::class, 'getProfilePhotos'])->name('profile-photos');
+    Route::post('/send-profile-photo', [App\Http\Controllers\Moderator\ProfilePhotoController::class, 'sendProfilePhoto'])->name('send-profile-photo');
+
     // Routes pour les informations client
     Route::get('/clients/{client}/info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'getClientInfo'])->name('client.info');
     Route::post('/clients/{client}/basic-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'updateBasicInfo'])->name('client.basic-info.update');
