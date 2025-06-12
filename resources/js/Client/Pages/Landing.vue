@@ -51,7 +51,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
           <div class="text-center relative group overflow-hidden rounded-xl">
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-            <img src="/images/feature-privacy.jpg" alt="Anonymat" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
+            <img src="/rencontre/imageregister.jpg" alt="Anonymat" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
             <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
               <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                 <i class="fas fa-mask text-2xl text-white"></i>
@@ -63,7 +63,7 @@
           
           <div class="text-center relative group overflow-hidden rounded-xl">
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-            <img src="/images/feature-profiles.jpg" alt="Profils vérifiés" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
+            <img src="/rencontre/imageregister2.jpg" alt="Profils vérifiés" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
             <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
               <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                 <i class="fas fa-fire text-2xl text-white"></i>
@@ -75,7 +75,7 @@
           
           <div class="text-center relative group overflow-hidden rounded-xl">
             <div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-            <img src="/images/feature-local.jpg" alt="Rencontres locales" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
+            <img src="/rencontre/imageregister3.jpg" alt="Rencontres locales" class="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-500" />
             <div class="absolute bottom-0 left-0 right-0 p-6 z-20">
               <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
                 <i class="fas fa-map-marker-alt text-2xl text-white"></i>
@@ -98,7 +98,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700 transform transition-all hover:scale-[1.02]">
             <div class="flex items-center mb-4">
-              <img src="/images/testimonial-male.jpg" alt="Michael" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
+              <img src="/rencontre/imageregister4.jpg" alt="Michael" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
               <div>
                 <h4 class="text-white font-bold">Michael, 34</h4>
                 <div class="flex text-yellow-500">
@@ -115,7 +115,7 @@
           
           <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700 transform transition-all hover:scale-[1.02]">
             <div class="flex items-center mb-4">
-              <img src="/images/testimonial-female.jpg" alt="Sophie" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
+              <img src="/rencontre/imageregister5.jpg" alt="Sophie" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
               <div>
                 <h4 class="text-white font-bold">Sophie, 28</h4>
                 <div class="flex text-yellow-500">
@@ -132,7 +132,7 @@
           
           <div class="bg-gray-800/50 backdrop-blur-sm p-6 rounded-xl border border-gray-700 transform transition-all hover:scale-[1.02]">
             <div class="flex items-center mb-4">
-              <img src="/images/testimonial-couple.jpg" alt="Thomas et Julie" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
+              <img src="/rencontre/imageregister6.jpg" alt="Thomas et Julie" class="w-16 h-16 rounded-full object-cover mr-4 border-2 border-pink-500" />
               <div>
                 <h4 class="text-white font-bold">Thomas & Julie</h4>
                 <div class="flex text-yellow-500">
@@ -160,7 +160,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
           <div class="text-center relative">
             <div class="relative mx-auto mb-6 overflow-hidden rounded-xl w-48 h-48 group">
-              <img src="/images/step1-signup.jpg" alt="Inscription" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+              <img src="/rencontre/imageregister7.jpg" alt="Inscription" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-center p-4">
                 <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-12 h-12 rounded-full flex items-center justify-center absolute top-4 right-4">
                   <span class="text-white font-bold text-xl">1</span>
@@ -173,7 +173,7 @@
           
           <div class="text-center relative">
             <div class="relative mx-auto mb-6 overflow-hidden rounded-xl w-48 h-48 group">
-              <img src="/images/step2-explore.jpg" alt="Exploration" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+              <img src="/rencontre/imageregister.jpg" alt="Exploration" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-center p-4">
                 <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-12 h-12 rounded-full flex items-center justify-center absolute top-4 right-4">
                   <span class="text-white font-bold text-xl">2</span>
@@ -186,7 +186,7 @@
           
           <div class="text-center relative">
             <div class="relative mx-auto mb-6 overflow-hidden rounded-xl w-48 h-48 group">
-              <img src="/images/step3-chat.jpg" alt="Discussion" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+              <img src="/rencontre/imageregister2.jpg" alt="Discussion" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-center p-4">
                 <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-12 h-12 rounded-full flex items-center justify-center absolute top-4 right-4">
                   <span class="text-white font-bold text-xl">3</span>
@@ -199,7 +199,7 @@
           
           <div class="text-center relative">
             <div class="relative mx-auto mb-6 overflow-hidden rounded-xl w-48 h-48 group">
-              <img src="/images/step4-meet.jpg" alt="Rencontre" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+              <img src="/rencontre/imageregister3.jpg" alt="Rencontre" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
               <div class="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent flex items-end justify-center p-4">
                 <div class="bg-gradient-to-br from-pink-500 to-purple-600 w-12 h-12 rounded-full flex items-center justify-center absolute top-4 right-4">
                   <span class="text-white font-bold text-xl">4</span>
@@ -218,7 +218,7 @@
       <!-- Background image -->
       <div class="absolute inset-0 z-0">
         <div class="absolute inset-0 bg-gradient-to-r from-black/90 to-black/70 z-10"></div>
-        <img src="/images/cta-background.jpg" alt="Couple" class="w-full h-full object-cover" />
+        <img src="/rencontre/imageregister.jpg" alt="Couple" class="w-full h-full object-cover" />
       </div>
       
       <div class="relative z-20 max-w-4xl mx-auto text-center">

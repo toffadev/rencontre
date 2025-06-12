@@ -245,7 +245,7 @@ class ModeratorAssignmentService
      * @param int $inactiveMinutes Nombre de minutes d'inactivité avant réattribution
      * @return int Nombre de profils réattribués
      */
-    public function reassignInactiveProfiles(int $inactiveMinutes = 30): int
+    public function reassignInactiveProfiles(int $inactiveMinutes = 10): int
     {
         $cutoffTime = now()->subMinutes($inactiveMinutes);
 
@@ -289,7 +289,7 @@ class ModeratorAssignmentService
     }
 
     /**
-     * Find a moderator with the least workload to handle a new client message
+     * Find a moderator with the best availability score to handle a client message
      * 
      * @param int $clientId The client ID
      * @param int $profileId The profile ID
@@ -314,8 +314,8 @@ class ModeratorAssignmentService
             return null;
         }
 
-        // Calculate workload for each moderator based on unanswered messages
-        $workloads = [];
+        // Calculate availability score for each moderator
+        $moderatorScores = [];
         foreach ($onlineModerators as $moderator) {
             // Get all active profile assignments for this moderator
             $activeProfileIds = ModeratorProfileAssignment::where('user_id', $moderator->id)
@@ -323,8 +323,15 @@ class ModeratorAssignmentService
                 ->pluck('profile_id')
                 ->toArray();
 
-            // Count conversations without responses in the last 30 minutes
-            $unansweredConversations = DB::table('messages as m1')
+            // Count active conversations (conversations with messages in the last 10 minutes)
+            $activeConversations = DB::table('messages')
+                ->select(DB::raw('COUNT(DISTINCT CONCAT(client_id, "-", profile_id)) as count'))
+                ->whereIn('profile_id', $activeProfileIds)
+                ->where('created_at', '>', now()->subMinutes(10))
+                ->first()->count ?? 0;
+
+            // Count unanswered messages
+            $unansweredMessages = DB::table('messages as m1')
                 ->join(DB::raw('(
                     SELECT client_id, profile_id, MAX(created_at) as last_message_time
                     FROM messages
@@ -336,7 +343,7 @@ class ModeratorAssignmentService
                 })
                 ->whereIn('m1.profile_id', $activeProfileIds)
                 ->where('m1.is_from_client', true)
-                ->where('m1.created_at', '>', now()->subMinutes(30))
+                ->where('m1.created_at', '>', now()->subMinutes(10))
                 ->whereNotExists(function ($query) {
                     $query->select(DB::raw(1))
                         ->from('messages as m3')
@@ -345,13 +352,48 @@ class ModeratorAssignmentService
                         ->where('m3.is_from_client', false)
                         ->whereRaw('m3.created_at > m1.created_at');
                 })
-                ->count(DB::raw('DISTINCT m1.client_id'));
+                ->count();
 
-            $workloads[$moderator->id] = $unansweredConversations;
+            // Calculate availability score: 100 - (Conversations_actives × 20) - (Messages_en_attente × 10)
+            $score = 100 - ($activeConversations * 20) - ($unansweredMessages * 10);
+
+            // Ensure score is not negative
+            $score = max(0, $score);
+
+            // Déterminer le statut de charge
+            $status = 'disponible';  // Score > 50
+
+            if ($score <= 50) {
+                $status = 'occupé';   // Score entre 20 et 50
+            }
+
+            if ($score < 20) {
+                $status = 'surchargé'; // Score < 20
+            }
+
+            $moderatorScores[$moderator->id] = [
+                'score' => $score,
+                'moderator' => $moderator,
+                'status' => $status
+            ];
+
+            // Log détaillé du statut de charge
+            Log::info("[DEBUG] Statut de charge du modérateur", [
+                'moderator_id' => $moderator->id,
+                'score' => $score,
+                'status' => $status,
+                'active_conversations' => $activeConversations,
+                'unanswered_messages' => $unansweredMessages
+            ]);
         }
 
-        Log::info("[DEBUG] Charges de travail des modérateurs", [
-            'workloads' => $workloads
+        Log::info("[DEBUG] Scores de disponibilité des modérateurs", [
+            'scores' => collect($moderatorScores)->map(function ($item) {
+                return [
+                    'moderator_id' => $item['moderator']->id,
+                    'score' => $item['score']
+                ];
+            })->toArray()
         ]);
 
         // Check if any moderator already has this profile
@@ -359,41 +401,65 @@ class ModeratorAssignmentService
             ->where('is_active', true)
             ->first();
 
-        // If a moderator has this profile and their workload is not too high, keep it with them
+        // Step 1: If conversation exists AND moderator's score > 30, keep the same moderator
         if ($currentAssignment) {
-            $currentModeratorWorkload = $workloads[$currentAssignment->user_id] ?? PHP_INT_MAX;
-            $minWorkload = min($workloads);
+            $currentModeratorId = $currentAssignment->user_id;
+            $currentModeratorScore = $moderatorScores[$currentModeratorId]['score'] ?? 0;
 
-            // Only keep the profile with current moderator if their workload is not significantly higher
-            if ($currentModeratorWorkload <= $minWorkload + 1) {
-                Log::info("[DEBUG] Conservation du profil avec le modérateur actuel", [
-                    'moderator_id' => $currentAssignment->user_id,
-                    'workload' => $currentModeratorWorkload
+            // Check if there's a conversation between this client and profile
+            $hasExistingConversation = DB::table('messages')
+                ->where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->exists();
+
+            if ($hasExistingConversation && $currentModeratorScore > 30) {
+                Log::info("[DEBUG] Conservation du profil avec le modérateur actuel (score > 30)", [
+                    'moderator_id' => $currentModeratorId,
+                    'score' => $currentModeratorScore
                 ]);
-                return User::find($currentAssignment->user_id);
+                return User::find($currentModeratorId);
             }
         }
 
-        // Find moderator with minimum workload
-        $minWorkload = PHP_INT_MAX;
-        $selectedModeratorId = null;
+        // Step 2: Otherwise, select moderator with the best score
+        // Filtrer les modérateurs selon leur statut de charge
+        $availableModerators = array_filter($moderatorScores, function ($item) {
+            return $item['status'] === 'disponible'; // Score > 50
+        });
 
-        foreach ($workloads as $modId => $workload) {
-            if ($workload < $minWorkload) {
-                $minWorkload = $workload;
-                $selectedModeratorId = $modId;
-            }
+        // Si aucun modérateur n'est disponible, prendre les occupés
+        if (empty($availableModerators)) {
+            Log::info("[DEBUG] Aucun modérateur disponible, utilisation des modérateurs occupés");
+            $availableModerators = array_filter($moderatorScores, function ($item) {
+                return $item['status'] === 'occupé'; // Score entre 20 et 50
+            });
         }
 
-        if ($selectedModeratorId) {
-            Log::info("[DEBUG] Nouveau modérateur sélectionné", [
-                'moderator_id' => $selectedModeratorId,
-                'workload' => $minWorkload
+        // En dernier recours, prendre même les surchargés
+        if (empty($availableModerators)) {
+            Log::info("[DEBUG] Aucun modérateur occupé, utilisation des modérateurs surchargés");
+            $availableModerators = $moderatorScores;
+        }
+
+        // Sort filtered moderators by score (highest first)
+        uasort($availableModerators, function ($a, $b) {
+            return $b['score'] <=> $a['score'];
+        });
+
+        // Get moderator with highest score
+        $bestModerator = reset($availableModerators);
+
+        if ($bestModerator && $bestModerator['score'] > 0) {
+            $selectedModerator = $bestModerator['moderator'];
+            Log::info("[DEBUG] Nouveau modérateur sélectionné par score", [
+                'moderator_id' => $selectedModerator->id,
+                'score' => $bestModerator['score'],
+                'status' => $bestModerator['status']
             ]);
-            return User::find($selectedModeratorId);
+            return $selectedModerator;
         }
 
-        Log::warning("[DEBUG] Aucun modérateur n'a pu être sélectionné");
+        Log::warning("[DEBUG] Aucun modérateur disponible n'a pu être sélectionné");
         return null;
     }
 
@@ -415,7 +481,7 @@ class ModeratorAssignmentService
             $hasUnansweredMessages = DB::table('messages as m1')
                 ->where('profile_id', $assignment->profile_id)
                 ->where('is_from_client', true)
-                ->where('created_at', '>', now()->subMinutes(30))
+                ->where('created_at', '>', now()->subMinutes(10))
                 ->whereNotExists(function ($query) {
                     $query->select(DB::raw(1))
                         ->from('messages as m2')
@@ -441,13 +507,15 @@ class ModeratorAssignmentService
      * 
      * @param int $clientId The client ID
      * @param int $profileId The profile ID
+     * @param bool $forceReassign If true, force reassignment even if already assigned
      * @return User|null The assigned moderator or null if failed
      */
-    public function assignClientToModerator($clientId, $profileId)
+    public function assignClientToModerator($clientId, $profileId, $forceReassign = false)
     {
         Log::info("[DEBUG] Début assignClientToModerator", [
             'client_id' => $clientId,
-            'profile_id' => $profileId
+            'profile_id' => $profileId,
+            'force_reassign' => $forceReassign
         ]);
 
         // Find the most appropriate moderator based on load balancing
@@ -468,9 +536,13 @@ class ModeratorAssignmentService
             ->where('is_active', true)
             ->first();
 
-        // If another moderator has this profile, we need to transfer it
-        if ($currentAssignment && $currentAssignment->user_id !== $moderator->id) {
-            Log::info("[DEBUG] Transfert du profil d'un autre modérateur", [
+        // If another moderator has this profile, or if we force reassignment, transfer it
+        if (($currentAssignment && $currentAssignment->user_id !== $moderator->id) ||
+            ($currentAssignment && $forceReassign)
+        ) {
+
+            $reassignReason = $forceReassign ? "réattribution forcée (message urgent)" : "transfert normal";
+            Log::info("[DEBUG] Transfert du profil d'un autre modérateur - " . $reassignReason, [
                 'from_moderator' => $currentAssignment->user_id,
                 'to_moderator' => $moderator->id
             ]);
@@ -532,11 +604,14 @@ class ModeratorAssignmentService
     /**
      * Get all clients who need responses, ordered by priority
      * 
+     * @param bool $urgentOnly If true, only return clients with messages older than 2 minutes
      * @return \Illuminate\Support\Collection Collection of client IDs and profile IDs
      */
-    public function getClientsNeedingResponse()
+    public function getClientsNeedingResponse($urgentOnly = false)
     {
-        Log::info("[DEBUG] Recherche des clients nécessitant une réponse");
+        Log::info("[DEBUG] Recherche des clients nécessitant une réponse", [
+            'urgent_only' => $urgentOnly
+        ]);
 
         // Trouve les derniers messages pour chaque paire client-profil
         $latestClientMessages = DB::table('messages as m1')
@@ -567,34 +642,46 @@ class ModeratorAssignmentService
                 ->where('created_at', '>', $clientMessage->last_message_time)
                 ->exists();
 
-            // Si aucune réponse n'existe, ajouter à la liste
+            // Si aucune réponse n'existe, vérifier l'urgence si nécessaire
             if (!$hasResponse) {
-                $clientsNeedingResponse->push([
-                    'client_id' => $clientMessage->client_id,
-                    'profile_id' => $clientMessage->profile_id,
-                    'message_id' => $clientMessage->last_message_id,
-                    'created_at' => $clientMessage->last_message_time,
-                ]);
+                $messageTime = Carbon::parse($clientMessage->last_message_time);
+                $isUrgent = $messageTime->diffInMinutes(now()) >= 2;
+
+                // Ajouter à la liste si pas urgent_only OU si c'est urgent et urgent_only est true
+                if (!$urgentOnly || $isUrgent) {
+                    $clientsNeedingResponse->push([
+                        'client_id' => $clientMessage->client_id,
+                        'profile_id' => $clientMessage->profile_id,
+                        'message_id' => $clientMessage->last_message_id,
+                        'created_at' => $clientMessage->last_message_time,
+                        'is_urgent' => $isUrgent
+                    ]);
+                }
             }
         }
 
         Log::info("[DEBUG] Clients nécessitant une réponse identifiés", [
-            'count' => $clientsNeedingResponse->count()
+            'count' => $clientsNeedingResponse->count(),
+            'urgent_count' => $clientsNeedingResponse->where('is_urgent', true)->count()
         ]);
 
-        // Trier par ancienneté (les plus anciens en premier)
-        return $clientsNeedingResponse->sortBy('created_at')->values();
+        // Trier: d'abord les urgents, puis par ancienneté
+        return $clientsNeedingResponse
+            ->sortByDesc('is_urgent')
+            ->sortBy('created_at')
+            ->values();
     }
 
     /**
      * Process all unassigned client messages and assign them to moderators
      * 
+     * @param bool $urgentOnly If true, only process urgent messages (older than 2 minutes)
      * @return int Number of clients assigned
      */
-    public function processUnassignedMessages()
+    public function processUnassignedMessages($urgentOnly = false)
     {
         $clientsAssigned = 0;
-        $clientsNeedingResponse = $this->getClientsNeedingResponse();
+        $clientsNeedingResponse = $this->getClientsNeedingResponse($urgentOnly);
 
         // First, release any profiles that have been responded to
         $onlineModerators = User::where('type', 'moderateur')
@@ -606,10 +693,23 @@ class ModeratorAssignmentService
         }
 
         foreach ($clientsNeedingResponse as $client) {
-            $moderator = $this->assignClientToModerator($client['client_id'], $client['profile_id']);
+            // Pour les messages urgents, forcer la réattribution même si le modérateur actuel a le profil
+            $forceReassign = $urgentOnly || ($client['is_urgent'] ?? false);
+
+            $moderator = $this->assignClientToModerator($client['client_id'], $client['profile_id'], $forceReassign);
 
             if ($moderator) {
                 $clientsAssigned++;
+
+                // Log des messages urgents traités
+                if ($client['is_urgent'] ?? false) {
+                    Log::info("[DEBUG] Message urgent réattribué", [
+                        'client_id' => $client['client_id'],
+                        'profile_id' => $client['profile_id'],
+                        'message_age' => Carbon::parse($client['created_at'])->diffForHumans(),
+                        'assigned_to' => $moderator->id
+                    ]);
+                }
             }
         }
 

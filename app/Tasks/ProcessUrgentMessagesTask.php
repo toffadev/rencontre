@@ -3,10 +3,9 @@
 namespace App\Tasks;
 
 use App\Services\ModeratorAssignmentService;
-use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
-class ProcessUnassignedMessagesTask
+class ProcessUrgentMessagesTask
 {
     /**
      * Le service d'attribution des modérateurs.
@@ -39,18 +38,13 @@ class ProcessUnassignedMessagesTask
      */
     public function __invoke(): void
     {
-        Log::info('Traitement des messages non assignés...');
+        Log::info('Traitement des messages urgents (sans réponse depuis 2+ minutes)...');
 
-        // Libérer d'abord les profils des modérateurs inactifs
-        $releasedCount = $this->assignmentService->reassignInactiveProfiles(10); // 10 minutes d'inactivité
+        // Traiter seulement les messages urgents (non répondus depuis 2 minutes ou plus)
+        $assignedCount = $this->assignmentService->processUnassignedMessages(true);
 
-        if ($releasedCount > 0) {
-            Log::info("{$releasedCount} profil(s) libéré(s) de modérateurs inactifs.");
+        if ($assignedCount > 0) {
+            Log::info("{$assignedCount} client(s) urgent(s) réattribué(s) à des modérateurs.");
         }
-
-        // Traiter les messages non assignés
-        $assignedCount = $this->assignmentService->processUnassignedMessages();
-
-        Log::info("{$assignedCount} client(s) assigné(s) à des modérateurs.");
     }
 }

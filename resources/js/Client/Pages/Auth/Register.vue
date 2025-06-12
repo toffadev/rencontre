@@ -1,17 +1,25 @@
 <template>
   <GuestLayout>
-    <div class="min-h-full flex items-center justify-center relative">
-      <!-- Image de fond -->
+    <div class="min-h-full flex items-center justify-center relative overflow-hidden">
+      <!-- Carrousel d'images de fond -->
       <div class="absolute inset-0 z-0">
-        <img src="/rencontre/imageregister3.jpg" alt="Background" class="w-full h-full object-cover" />
-        <div class="absolute inset-0 bg-black/50"></div>
+        <div class="carousel-container">
+          <div v-for="(image, index) in backgroundImages" :key="index" 
+               :class="['carousel-slide', {'opacity-0': currentSlide !== index}]"
+               :style="{
+                 'background-image': `url(${image})`,
+                 'transform': `translateX(${getSlidePosition(index)})`
+               }">
+          </div>
+          <div class="absolute inset-0 bg-black/50"></div>
+        </div>
       </div>
       
       <!-- Contenu du formulaire -->
       <div class="max-w-xs w-full mx-auto bg-white/90 backdrop-blur-sm rounded-xl shadow-xl overflow-hidden p-5 border border-pink-100 z-10 my-8">
         <div class="mb-4 text-center">
-          <h2 class="text-2xl font-bold text-center text-gray-800 mb-1">Créez votre compte</h2>
-          <p class="text-center text-gray-600 text-sm mb-2">Rejoignez notre communauté</p>
+          <h2 class="text-2xl font-bold text-center text-gray-800 mb-1">Rejoins nous</h2>
+          <!-- <p class="text-center text-gray-600 text-sm mb-2">Rejoignez notre communauté</p> -->
         </div>
         
         <!-- Divider avec texte suggestif -->
@@ -170,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useForm, Link } from '@inertiajs/vue3';
 import GuestLayout from '@client/Layouts/GuestLayout.vue';
 import { route } from 'ziggy-js';
@@ -184,6 +192,31 @@ const form = useForm({
   gender: 'male',
   terms: false,
 });
+
+const backgroundImages = [
+  '/rencontre/imageregister1.jpg',
+  '/rencontre/imageregister2.jpg',
+  '/rencontre/imageregister3.jpg',
+  '/rencontre/imageregister4.jpg'
+];
+
+const currentSlide = ref(0);
+let intervalId = null;
+
+const getSlidePosition = (index) => {
+  // Alternance de la position (gauche/droite)
+  if (index === currentSlide.value) {
+    return '0%';
+  } else if ((index % 2) === 0) {
+    return '-100%';
+  } else {
+    return '100%';
+  }
+};
+
+const nextSlide = () => {
+  currentSlide.value = (currentSlide.value + 1) % backgroundImages.length;
+};
 
 const togglePassword = () => {
   const password = document.querySelector('#password');
@@ -211,6 +244,14 @@ onMounted(() => {
   
   // Set the form.dob value
   form.dob = maxDate.toISOString().split('T')[0];
+  
+  // Démarrer le carrousel
+  intervalId = setInterval(nextSlide, 5000);
+});
+
+onBeforeUnmount(() => {
+  // Nettoyer l'intervalle lors de la destruction du composant
+  clearInterval(intervalId);
 });
 
 const submit = () => {
@@ -242,5 +283,23 @@ const submit = () => {
 
 .input-field:focus {
   box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15);
+}
+
+.carousel-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  transition: transform 1.5s ease, opacity 1.5s ease;
 }
 </style> 

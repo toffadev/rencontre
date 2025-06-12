@@ -1,10 +1,18 @@
 <template>
   <GuestLayout>
-    <div class="min-h-full flex items-center justify-center relative">
-      <!-- Image de fond -->
+    <div class="min-h-full flex items-center justify-center relative overflow-hidden">
+      <!-- Carrousel d'images de fond -->
       <div class="absolute inset-0 z-0">
-        <img src="/rencontre/imageregister.jpg" alt="Background" class="w-full h-full object-cover" />
-        <div class="absolute inset-0 bg-black/50"></div>
+        <div class="carousel-container">
+          <div v-for="(image, index) in backgroundImages" :key="index" 
+               :class="['carousel-slide', {'opacity-0': currentSlide !== index}]"
+               :style="{
+                 'background-image': `url(${image})`,
+                 'transform': `translateX(${getSlidePosition(index)})`
+               }">
+          </div>
+          <div class="absolute inset-0 bg-black/50"></div>
+        </div>
       </div>
       
       <!-- Contenu du formulaire -->
@@ -19,7 +27,7 @@
         </div>
         
         <!-- Social Login Buttons -->
-        <div class="space-y-2 mb-4">
+        <!-- <div class="space-y-2 mb-4">
           <button class="w-full flex items-center justify-center space-x-2 bg-white border border-gray-300 rounded-lg py-2 px-3 hover:bg-gray-50 transition duration-300 transform hover:scale-[1.02] text-sm">
             <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google" class="w-4 h-4">
             <span>Se connecter avec Google</span>
@@ -30,12 +38,12 @@
           </button>
         </div>
         
-        <!-- Divider -->
+        
         <div class="flex items-center my-3">
           <div class="flex-grow border-t border-gray-300"></div>
           <span class="px-3 text-gray-500 text-xs">OU</span>
           <div class="flex-grow border-t border-gray-300"></div>
-        </div>
+        </div> -->
         
         <!-- Login Form -->
         <form @submit.prevent="submit" class="space-y-3">
@@ -115,7 +123,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useForm, Link } from '@inertiajs/vue3';
 import GuestLayout from '@client/Layouts/GuestLayout.vue';
 import { route } from 'ziggy-js';
@@ -128,6 +136,41 @@ const form = useForm({
   email: '',
   password: '',
   remember: false,
+});
+
+const backgroundImages = [
+  '/rencontre/imageregister1.jpg',
+  '/rencontre/imageregister2.jpg',
+  '/rencontre/imageregister3.jpg',
+  '/rencontre/imageregister4.jpg'
+];
+
+const currentSlide = ref(0);
+let intervalId = null;
+
+const getSlidePosition = (index) => {
+  // Alternance de la position (gauche/droite)
+  if (index === currentSlide.value) {
+    return '0%';
+  } else if ((index % 2) === 0) {
+    return '-100%';
+  } else {
+    return '100%';
+  }
+};
+
+const nextSlide = () => {
+  currentSlide.value = (currentSlide.value + 1) % backgroundImages.length;
+};
+
+onMounted(() => {
+  // Démarrer le carrousel
+  intervalId = setInterval(nextSlide, 5000);
+});
+
+onBeforeUnmount(() => {
+  // Nettoyer l'intervalle lors de la destruction du composant
+  clearInterval(intervalId);
 });
 
 const togglePassword = () => {
@@ -173,5 +216,23 @@ const submit = () => {
 
 .forgot-password:hover:after {
   width: 100%;
+}
+
+.carousel-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.carousel-slide {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  transition: transform 1.5s ease, opacity 1.5s ease;
 }
 </style> 
