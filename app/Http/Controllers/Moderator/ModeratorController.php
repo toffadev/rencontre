@@ -9,6 +9,7 @@ use App\Models\Profile;
 use App\Models\User;
 use App\Services\ModeratorAssignmentService;
 use App\Events\MessageSent;
+use App\Services\WebSocketHealthService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
@@ -34,6 +35,13 @@ class ModeratorController extends Controller
      * @var \App\Services\MessageAttachmentService
      */
     protected $attachmentService;
+
+    /**
+     * Le service de surveillance des WebSockets.
+     *
+     * @var \App\Services\WebSocketHealthService
+     */
+    protected $webSocketHealthService;
 
     /**
      * Normalise un chemin de fichier pour éviter les problèmes de double slash
@@ -66,12 +74,17 @@ class ModeratorController extends Controller
      *
      * @param  \App\Services\ModeratorAssignmentService  $assignmentService
      * @param  \App\Services\MessageAttachmentService  $attachmentService
+     * @param  \App\Services\WebSocketHealthService  $webSocketHealthService
      * @return void
      */
-    public function __construct(ModeratorAssignmentService $assignmentService, MessageAttachmentService $attachmentService)
-    {
+    public function __construct(
+        ModeratorAssignmentService $assignmentService,
+        MessageAttachmentService $attachmentService,
+        WebSocketHealthService $webSocketHealthService
+    ) {
         $this->assignmentService = $assignmentService;
         $this->attachmentService = $attachmentService;
+        $this->webSocketHealthService = $webSocketHealthService;
     }
 
     /**
@@ -100,7 +113,21 @@ class ModeratorController extends Controller
         // Cette étape est importante pour distribuer équitablement les messages entre modérateurs
         $this->assignmentService->processUnassignedMessages();
 
-        return Inertia::render('Moderator');
+        // Enregistrer la connexion WebSocket du modérateur
+        if (Auth::check()) {
+            $this->webSocketHealthService->registerConnection(
+                Auth::id(),
+                Auth::user()->type,
+                request()->header('X-Socket-ID') ?? uniqid('conn_')
+            );
+        }
+
+        // Passer explicitement l'utilisateur à Inertia
+        $user = Auth::user();
+
+        return Inertia::render('Moderator', [
+            'user' => $user // Ajouter explicitement l'utilisateur
+        ]);
     }
 
     /**
@@ -182,6 +209,7 @@ class ModeratorController extends Controller
                     'lastMessage' => $message->content,
                     'unreadCount' => $unreadCount,
                     'createdAt' => $message->created_at,
+                    'lastMessageAt' => $message->created_at, // Ajouté pour le tri
                     'profileId' => $profileId,
                     'profileName' => $profile->name,
                     'profilePhoto' => $profile->main_photo_path,
@@ -197,6 +225,13 @@ class ModeratorController extends Controller
         Log::info("[DEBUG] Clients nécessitant une réponse", [
             'client_count' => count($clientsNeedingResponse)
         ]);
+
+        // Mettre à jour l'activité du modérateur dans le service de surveillance
+        if (Auth::check()) {
+            $this->webSocketHealthService->updateActivity(
+                request()->header('X-Socket-ID') ?? uniqid('conn_')
+            );
+        }
 
         return response()->json([
             'clients' => $clientsNeedingResponse
@@ -343,9 +378,13 @@ class ModeratorController extends Controller
         $request->validate([
             'client_id' => 'required|exists:users,id',
             'profile_id' => 'required|exists:profiles,id',
+            'page' => 'nullable|integer|min:1',
+            'per_page' => 'nullable|integer|min:5|max:50',
         ]);
 
         $currentModeratorId = Auth::id();
+        $page = $request->input('page', 1);
+        $perPage = $request->input('per_page', 20);
 
         // Vérifier que ce modérateur a bien accès à ce profil
         $hasAccess = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
@@ -359,12 +398,15 @@ class ModeratorController extends Controller
             ], 403);
         }
 
-        // Récupérer les messages avec leurs pièces jointes
-        $messages = Message::with('attachments')
+        // Récupérer les messages avec pagination et leurs pièces jointes
+        $messagesQuery = Message::with('attachments')
             ->where('client_id', $request->client_id)
             ->where('profile_id', $request->profile_id)
-            ->orderBy('created_at')
-            ->get()
+            ->orderBy('created_at', 'desc')
+            ->skip(($page - 1) * $perPage)
+            ->take($perPage);
+
+        $messages = $messagesQuery->get()->sortBy('created_at')->values()
             ->map(function ($message) {
                 $attachmentData = null;
                 if ($message->attachments->isNotEmpty()) {
@@ -524,6 +566,13 @@ class ModeratorController extends Controller
 
             // Émettre l'événement en temps réel
             broadcast(new MessageSent($message))->toOthers();
+
+            // Mettre à jour l'activité du modérateur
+            if (Auth::check()) {
+                $this->webSocketHealthService->updateActivity(
+                    request()->header('X-Socket-ID') ?? uniqid('conn_')
+                );
+            }
 
             Log::info('Message envoyé avec succès', [
                 'message_id' => $message->id,
@@ -795,5 +844,254 @@ class ModeratorController extends Controller
                 'message' => 'Une erreur est survenue lors de la mise à jour du profil principal'
             ], 500);
         }
+    }
+
+    /**
+     * Envoie une photo de profil à un client
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function sendProfilePhoto(Request $request)
+    {
+        try {
+            $request->validate([
+                'profile_id' => 'required|exists:profiles,id',
+                'client_id' => 'required|exists:users,id',
+                'photo_id' => 'required|integer',
+            ]);
+
+            $moderatorId = Auth::id();
+
+            // Vérifier l'accès au profil
+            $hasAccess = ModeratorProfileAssignment::where('user_id', $moderatorId)
+                ->where('profile_id', $request->profile_id)
+                ->where('is_active', true)
+                ->exists();
+
+            if (!$hasAccess) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Accès non autorisé à ce profil'
+                ], 403);
+            }
+
+            // Récupérer le profil et vérifier si la photo existe
+            $profile = Profile::with('photos')->find($request->profile_id);
+
+            if (!$profile) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Profil non trouvé'
+                ], 404);
+            }
+
+            $photo = $profile->photos->firstWhere('id', $request->photo_id);
+
+            if (!$photo) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Photo non trouvée'
+                ], 404);
+            }
+
+            // Créer un message avec la photo comme pièce jointe
+            $message = Message::create([
+                'client_id' => $request->client_id,
+                'profile_id' => $request->profile_id,
+                'moderator_id' => $moderatorId,
+                'content' => '',
+                'is_from_client' => false,
+            ]);
+
+            // Créer une pièce jointe à partir de la photo de profil
+            $attachment = MessageAttachment::create([
+                'message_id' => $message->id,
+                'file_path' => $photo->photo_path,
+                'file_name' => basename($photo->photo_path),
+                'mime_type' => 'image/jpeg', // Supposons que toutes les photos de profil sont des JPEG
+                'size' => 0, // Taille inconnue
+            ]);
+
+            // Formater la réponse
+            $messageData = [
+                'id' => $message->id,
+                'content' => '',
+                'isFromClient' => false,
+                'time' => $message->created_at->format('H:i'),
+                'date' => $message->created_at->format('Y-m-d'),
+                'created_at' => $message->created_at->toISOString(),
+                'attachment' => [
+                    'url' => asset($this->normalizeFilePath($photo->photo_path)),
+                    'file_name' => basename($photo->photo_path),
+                    'mime_type' => 'image/jpeg',
+                ],
+            ];
+
+            // Émettre l'événement en temps réel
+            broadcast(new MessageSent($message))->toOthers();
+
+            return response()->json([
+                'success' => true,
+                'messageId' => $message->id,
+                'messageData' => $messageData,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Erreur lors de l\'envoi de la photo de profil', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Endpoint pour rafraîchir l'authentification WebSocket
+     */
+    public function refreshAuth(Request $request)
+    {
+        try {
+            // Régénérer la session
+            $request->session()->regenerate();
+
+            // Récupérer l'utilisateur actuel
+            $user = Auth::user();
+
+            // Enregistrer la nouvelle connexion dans le service de surveillance
+            if ($user) {
+                $connectionId = $request->input('connection_id', uniqid('conn_'));
+                $this->webSocketHealthService->registerConnection(
+                    $user->id,
+                    $user->type,
+                    $connectionId
+                );
+            }
+
+            return response()->json([
+                'success' => true,
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'type' => $user->type
+                ],
+                'connection_id' => $connectionId ?? null,
+                'timestamp' => now()->toDateTimeString()
+            ]);
+        } catch (\Exception $e) {
+            $this->logAuthError('Erreur lors du rafraîchissement de l\'authentification WebSocket', [
+                'exception' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Erreur d\'authentification: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Diagnostic des connexions WebSocket
+     */
+    public function diagnosticWebSocket(Request $request)
+    {
+        try {
+            // Récupérer l'utilisateur actuel
+            $user = Auth::user();
+
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Utilisateur non authentifié'
+                ], 401);
+            }
+
+            // Récupérer les connexions de l'utilisateur
+            $connections = $this->webSocketHealthService->getUserConnections($user->id, $user->type);
+
+            // Vérifier la santé globale des WebSockets
+            $healthCheck = $this->webSocketHealthService->checkHealth();
+
+            // Collecter des informations supplémentaires pour le diagnostic
+            $diagnosticData = [
+                'user' => [
+                    'id' => $user->id,
+                    'type' => $user->type,
+                    'name' => $user->name
+                ],
+                'connections' => $connections,
+                'system_health' => $healthCheck,
+                'reverb_status' => $this->webSocketHealthService->isReverbRunning() ? 'running' : 'not_running',
+                'server_info' => [
+                    'php_version' => phpversion(),
+                    'laravel_version' => app()->version(),
+                    'memory_usage' => memory_get_usage(true),
+                    'server_time' => now()->toDateTimeString()
+                ]
+            ];
+
+            // Si le serveur Reverb n'est pas en cours d'exécution, tenter de le redémarrer
+            if ($healthCheck['status'] === 'unhealthy') {
+                $restartResult = $this->webSocketHealthService->restartReverbIfNeeded();
+                $diagnosticData['reverb_restart'] = $restartResult ? 'success' : 'failed';
+            }
+
+            return response()->json([
+                'success' => true,
+                'diagnostic' => $diagnosticData
+            ]);
+        } catch (\Exception $e) {
+            $this->logAuthError('Erreur lors du diagnostic WebSocket', [
+                'exception' => $e->getMessage()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Erreur de diagnostic: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Journalisation détaillée des erreurs d'authentification
+     */
+    protected function logAuthError($message, $context = [])
+    {
+        // Récupérer des informations supplémentaires sur la requête
+        $requestInfo = [
+            'ip' => request()->ip(),
+            'user_agent' => request()->userAgent(),
+            'session_id' => session()->getId(),
+            'url' => request()->fullUrl(),
+            'method' => request()->method(),
+            'timestamp' => now()->toDateTimeString()
+        ];
+
+        // Récupérer l'utilisateur si disponible
+        $user = Auth::user();
+        if ($user) {
+            $requestInfo['user'] = [
+                'id' => $user->id,
+                'type' => $user->type,
+                'name' => $user->name
+            ];
+        }
+
+        // Fusionner les contextes
+        $fullContext = array_merge($context, ['request' => $requestInfo]);
+
+        // Journaliser l'erreur avec tous les détails
+        Log::error('Erreur d\'authentification WebSocket: ' . $message, $fullContext);
+
+        // Si configuré, envoyer une alerte aux administrateurs
+        if (config('app.env') === 'production') {
+            // Implémentation d'alertes (email, SMS, Slack, etc.)
+        }
+
+        return $fullContext;
     }
 }

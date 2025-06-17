@@ -311,6 +311,10 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
         return Inertia::render('Admin/Dashboard');
     })->name('dashboard'); */
 
+    Route::get('/user-data', function () {
+        return Auth::user();
+    })->name('user-data');
+
     // Page principale des modérateurs
     Route::get('/chat', [App\Http\Controllers\Moderator\ModeratorController::class, 'index'])->name('chat');
 
@@ -347,3 +351,11 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
 
 Route::get('/check-active-discussion/{profileId}', [ProfileDiscussionController::class, 'checkActiveDiscussion'])
     ->name('profile.check-discussion');
+
+// Routes pour les diagnostics WebSocket (à ajouter à la fin du fichier)
+Route::middleware(['auth'])->prefix('api/websocket')->name('websocket.')->group(function () {
+    Route::get('/health', [App\Http\Controllers\WebSocketDiagnosticController::class, 'health'])->name('health');
+    Route::post('/cleanup', [App\Http\Controllers\WebSocketDiagnosticController::class, 'cleanup'])->name('cleanup');
+    Route::get('/statistics', [App\Http\Controllers\WebSocketDiagnosticController::class, 'statistics'])->name('statistics');
+    Route::post('/refresh-auth', [App\Http\Controllers\WebSocketDiagnosticController::class, 'refreshAuth'])->name('refresh-auth');
+});

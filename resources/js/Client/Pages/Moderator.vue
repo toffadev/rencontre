@@ -15,6 +15,18 @@
                             </p>
                         </div>
                         <div class="flex items-center gap-4">
+                            <!-- Indicateur d'état WebSocket -->
+                                <div class="flex items-center gap-2" @click="checkWebSocketConnection" title="Vérifier la connexion">                                <div class="w-3 h-3 rounded-full" 
+                                     :class="{
+                                        'bg-green-500': connectionState === 'healthy',
+                                        'bg-yellow-500': connectionState === 'degraded',
+                                        'bg-red-500': connectionState === 'disconnected',
+                                        'bg-blue-500 animate-pulse': connectionState === 'connecting'
+                                     }">
+                                </div>
+                                <span class="text-xs text-gray-600">{{ connectionStateLabel }}</span>
+                            </div>
+                            
                             <!-- Bouton de notifications -->
                             <div class="relative">
                                 <button @click="showNotifications = !showNotifications"
@@ -22,7 +34,7 @@
                                     <i class="fas fa-bell"></i>
                                     <span v-if="notifications.filter(n => !n.read).length > 0"
                                         class="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                        {{ notifications.filter(n => !n.read).length }}
+                                        {{notifications.filter(n => !n.read).length}}
                                     </span>
                                 </button>
                                 
@@ -39,10 +51,14 @@
                                             :class="{ 'bg-pink-50': !notification.read }">
                                             <div class="flex items-start gap-3">
                                                 <div class="flex-1">
-                                                    <p class="font-medium text-gray-800">{{ notification.clientName }}</p>
-                                                    <p class="text-sm text-gray-600 truncate">{{ notification.message }}</p>
+                                                    <p class="font-medium text-gray-800">{{ notification.clientName }}
+                                                    </p>
+                                                    <p class="text-sm text-gray-600 truncate">{{ notification.message }}
+                                                    </p>
                                                     <p class="text-xs text-gray-400 mt-1">
-                                                        {{ new Date(notification.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }}
+                                                        {{ new Date(notification.timestamp).toLocaleTimeString([], {
+                                                            hour: '2-digit', minute: '2-digit'
+                                                        }) }}
                                                     </p>
                                                 </div>
                                                 <div v-if="!notification.read"
@@ -81,6 +97,24 @@
                                 <div class="h-4 bg-pink-200 rounded w-3/4"></div>
                                 <div class="h-4 bg-pink-200 rounded w-1/2"></div>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Alerte d'erreur WebSocket -->
+                <div v-if="webSocketErrors" class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md mb-4">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div class="ml-3">
+                            <p class="font-medium">Problème de connexion WebSocket</p>
+                            <p class="text-sm">{{ webSocketErrors }}</p>
+                        </div>
+                        <div class="ml-auto">
+                            <button @click="forceReconnect" class="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm">
+                                <i class="fas fa-sync-alt mr-1"></i> Reconnecter
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -136,14 +170,12 @@
                                     ]">
                                         <div class="relative">
                                             <template v-if="client.avatar">
-                                                <img
-                                                    :src="client.avatar"
-                                                    :alt="client.name"
-                                                    class="w-12 h-12 rounded-full object-cover"
-                                                />
+                                                <img :src="client.avatar" :alt="client.name"
+                                                    class="w-12 h-12 rounded-full object-cover" />
                                             </template>
                                             <template v-else>
-                                                <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                <div
+                                                    class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
                                                     <i class="fas fa-user text-gray-400 text-xl"></i>
                                                 </div>
                                             </template>
@@ -159,7 +191,8 @@
                                                 }}</span>
                                             </div>
                                             <p class="text-sm text-gray-500">
-                                                <span v-if="client.lastMessage" class="truncate block">{{ client.lastMessage
+                                                <span v-if="client.lastMessage" class="truncate block">{{
+                                                    client.lastMessage
                                                     }}</span>
                                                 <span v-else class="text-gray-400 italic">Nouvelle conversation</span>
                                             </p>
@@ -216,14 +249,12 @@
                                         class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200">
                                         <div class="relative">
                                             <template v-if="client.avatar">
-                                                <img
-                                                    :src="client.avatar"
-                                                    :alt="client.name"
-                                                    class="w-12 h-12 rounded-full object-cover"
-                                                />
+                                                <img :src="client.avatar" :alt="client.name"
+                                                    class="w-12 h-12 rounded-full object-cover" />
                                             </template>
                                             <template v-else>
-                                                <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                <div
+                                                    class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
                                                     <i class="fas fa-user text-gray-400 text-xl"></i>
                                                 </div>
                                             </template>
@@ -234,7 +265,8 @@
                                                 {{ client.name }}
                                             </h3>
                                             <p class="text-sm text-gray-500">
-                                                <span v-if="client.lastMessage" class="truncate block">{{ client.lastMessage
+                                                <span v-if="client.lastMessage" class="truncate block">{{
+                                                    client.lastMessage
                                                     }}</span>
                                                 <span v-else-if="client.hasHistory"
                                                     class="text-gray-400 italic">Conversation précédente</span>
@@ -281,20 +313,15 @@
                 <div class="w-full lg:w-2/4 flex flex-col" ref="chatSection">
                     <!-- Version mobile du ClientInfoPanel -->
                     <div class="lg:hidden">
-                        <ClientInfoDrawer 
-                            v-if="selectedClient"
-                            :key="`drawer-${selectedClient.id}`"
-                            :client-id="selectedClient.id"
-                            @edit="openFullInfoModal"
-                        />
+                        <ClientInfoDrawer v-if="selectedClient" :key="`drawer-${selectedClient.id}`"
+                            :client-id="selectedClient.id" @edit="openFullInfoModal" />
                     </div>
 
                     <!-- Profil attribué -->
                     <div v-if="currentAssignedProfile" class="bg-white rounded-xl shadow-md p-4 mb-4">
                         <div class="flex items-center space-x-4">
                             <img :src="currentAssignedProfile.main_photo_path || '/images/default-avatar.png'"
-                                 :alt="currentAssignedProfile.name"
-                                 class="w-16 h-16 rounded-full object-cover" />
+                                :alt="currentAssignedProfile.name" class="w-16 h-16 rounded-full object-cover" />
                             <div>
                                 <h3 class="text-lg font-semibold text-gray-800">
                                     {{ currentAssignedProfile.name }}
@@ -317,16 +344,14 @@
                     </div>
 
                     <!-- Chat Content -->
-                    <div v-if="selectedClient" class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col h-[calc(100vh-theme(spacing.32))]">
+                    <div v-if="selectedClient"
+                        class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col h-[calc(100vh-theme(spacing.32))]">
                         <!-- Chat Header -->
                         <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
                             <div class="relative">
                                 <template v-if="selectedClient.avatar">
-                                    <img
-                                        :src="selectedClient.avatar"
-                                        :alt="selectedClient.name"
-                                        class="w-12 h-12 rounded-full object-cover"
-                                    />
+                                    <img :src="selectedClient.avatar" :alt="selectedClient.name"
+                                        class="w-12 h-12 rounded-full object-cover" />
                                 </template>
                                 <template v-else>
                                     <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
@@ -356,15 +381,19 @@
                         </div>
 
                         <!-- Chat Messages -->
-                        <div class="chat-container flex-1 overflow-y-auto p-4 space-y-3" ref="chatContainer" @scroll="handleScroll">
+                        <div class="chat-container flex-1 overflow-y-auto p-4 space-y-3" ref="chatContainer"
+                            @scroll="handleScroll">
                             <!-- Indicateur de chargement des messages plus anciens -->
                             <div v-if="isLoadingMore" class="text-center py-2">
-                                <div class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent"></div>
+                                <div
+                                    class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent">
+                                </div>
                                 <span class="text-xs text-gray-500 ml-2">Chargement des messages...</span>
                             </div>
 
                             <!-- Indicateur de messages plus anciens disponibles -->
-                            <div v-if="hasMoreMessages && !isLoadingMore" class="text-center text-xs text-gray-500 my-2">
+                            <div v-if="hasMoreMessages && !isLoadingMore"
+                                class="text-center text-xs text-gray-500 my-2">
                                 Faites défiler vers le haut pour charger plus de messages
                             </div>
 
@@ -373,17 +402,16 @@
                                 Aujourd'hui
                             </div>
 
-                            <div v-for="(message, index) in currentChatMessages" :key="message.id || index" :class="`flex space-x-2 ${message.isFromClient ? '' : 'justify-end'}`">
+                            <div v-for="(message, index) in currentChatMessages" :key="message.id || index"
+                                :class="`flex space-x-2 ${message.isFromClient ? '' : 'justify-end'}`">
                                 <template v-if="message.isFromClient">
                                     <template v-if="selectedClient.avatar">
-                                        <img
-                                            :src="selectedClient.avatar"
-                                            :alt="selectedClient.name"
-                                            class="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                        />
+                                        <img :src="selectedClient.avatar" :alt="selectedClient.name"
+                                            class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                     </template>
                                     <template v-else>
-                                        <div class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                        <div
+                                            class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
                                             <i class="fas fa-user text-gray-400 text-sm"></i>
                                         </div>
                                     </template>
@@ -393,13 +421,11 @@
                                             <div v-if="message.content">{{ message.content }}</div>
                                             
                                             <!-- Image attachée -->
-                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
-                                                <img
-                                                    :src="message.attachment.url"
-                                                    :alt="message.attachment.file_name"
+                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')"
+                                                class="mt-2">
+                                                <img :src="message.attachment.url" :alt="message.attachment.file_name"
                                                     class="max-w-full rounded-lg cursor-pointer"
-                                                    @click="showImagePreview(message.attachment)"
-                                                />
+                                                    @click="showImagePreview(message.attachment)" />
                                             </div>
                                         </div>
                                         <div class="flex items-center mt-1 text-xs text-gray-500">
@@ -416,13 +442,11 @@
                                             <div v-if="message.content">{{ message.content }}</div>
                                             
                                             <!-- Image attachée -->
-                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')" class="mt-2">
-                                                <img
-                                                    :src="message.attachment.url"
-                                                    :alt="message.attachment.file_name"
+                                            <div v-if="message.attachment && message.attachment.mime_type.startsWith('image/')"
+                                                class="mt-2">
+                                                <img :src="message.attachment.url" :alt="message.attachment.file_name"
                                                     class="max-w-full rounded-lg cursor-pointer"
-                                                    @click="showImagePreview(message.attachment)"
-                                                />
+                                                    @click="showImagePreview(message.attachment)" />
                                             </div>
                                         </div>
                                         <div class="flex items-center justify-end mt-1 text-xs text-gray-500">
@@ -448,58 +472,30 @@
                                 <!-- Prévisualisation de l'image -->
                                 <div v-if="selectedFile" class="flex justify-end">
                                     <div class="relative inline-block">
-                                        <img
-                                            :src="previewUrl"
-                                            class="max-h-32 rounded-lg"
-                                            alt="Preview"
-                                        />
-                                        <button
-                                            @click="removeSelectedFile"
-                                            class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
-                                        >
+                                        <img :src="previewUrl" class="max-h-32 rounded-lg" alt="Preview" />
+                                        <button @click="removeSelectedFile"
+                                            class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
                                             <i class="fas fa-times"></i>
                                         </button>
                                     </div>
                                 </div>
                                 
                                 <div class="flex items-center space-x-2">
-                                    <input
-                                        type="file"
-                                        ref="fileInput"
-                                        class="hidden"
-                                        accept="image/*"
-                                        @change="handleFileUpload"
-                                    />
-                                    <!-- Bouton d'upload d'image personnelle désactivé au profit du sélecteur de photos de profil -->
-                                    <!-- <button
-                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                        title="Ajouter une image"
-                                        @click="$refs.fileInput.click()"
-                                    >
-                                        <i class="fas fa-image"></i>
-                                    </button> -->
+                                    <input type="file" ref="fileInput" class="hidden" accept="image/*"
+                                        @change="handleFileUpload" />
                                     
                                     <!-- Sélecteur de photos de profil -->
-                                    <ProfilePhotoSelector 
-                                        v-if="currentAssignedProfile && selectedClient"
-                                        :profile-id="currentAssignedProfile.id"
-                                        :client-id="selectedClient.id"
-                                        @photo-selected="handleProfilePhotoSelected"
-                                    />
+                                    <ProfilePhotoSelector v-if="currentAssignedProfile && selectedClient"
+                                        :profile-id="currentAssignedProfile.id" :client-id="selectedClient.id"
+                                        @photo-selected="handleProfilePhotoSelected" />
                                     
                                     <div class="flex-1 relative">
-                                        <input
-                                            v-model="newMessage"
-                                            type="text"
-                                            placeholder="Écrire un message..."
+                                        <input v-model="newMessage" type="text" placeholder="Écrire un message..."
                                             class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                            @keyup.enter="sendMessage"
-                                        />
+                                            @keyup.enter="sendMessage" />
                                     </div>
-                                    <button
-                                        class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
-                                        @click="sendMessage"
-                                    >
+                                    <button class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
+                                        @click="sendMessage">
                                         <i class="fas fa-paper-plane"></i>
                                     </button>
                                 </div>
@@ -533,13 +529,12 @@
             <!-- Modals -->
             <Teleport to="body">
                 <!-- Modal pour édition complète sur mobile -->
-                <div v-if="showFullInfoModal" 
-                     class="fixed inset-0 z-50 lg:hidden bg-white">
+                <div v-if="showFullInfoModal" class="fixed inset-0 z-50 lg:hidden bg-white">
                     <div class="h-full overflow-y-auto">
-                        <div class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
+                        <div
+                            class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
                             <h2 class="text-lg font-semibold text-gray-800">Informations du client</h2>
-                            <button @click="showFullInfoModal = false" 
-                                    class="p-2 rounded-full hover:bg-gray-100">
+                            <button @click="showFullInfoModal = false" class="p-2 rounded-full hover:bg-gray-100">
                                 <i class="fas fa-times"></i>
                             </button>
                         </div>
@@ -554,29 +549,18 @@
                      class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" 
                      @click="closeImagePreview">
                     <div class="max-w-4xl max-h-full p-4">
-                        <img :src="previewImage.url" 
-                             :alt="previewImage.file_name" 
+                        <img :src="previewImage.url" :alt="previewImage.file_name"
                              class="max-w-full max-h-[90vh] object-contain" />
                     </div>
                 </div>
 
                 <!-- Autres modals existants -->
-                <ProfileActionModal
-                    v-if="showActionModal"
-                    :show="showActionModal"
-                    :profile="selectedProfileForActions"
-                    @close="closeActionModal"
-                    @chat="startChat"
-                />
+                <ProfileActionModal v-if="showActionModal" :show="showActionModal" :profile="selectedProfileForActions"
+                    @close="closeActionModal" @chat="startChat" />
 
-                <ProfileReportModal
-                    v-if="showReportModalFlag && selectedProfileForReport"
-                    :show="showReportModalFlag"
-                    :user-id="selectedProfileForReport.userId"
-                    :profile-id="selectedProfileForReport.profileId"
-                    @close="closeReportModal"
-                    @reported="handleReported"
-                />
+                <ProfileReportModal v-if="showReportModalFlag && selectedProfileForReport" :show="showReportModalFlag"
+                    :user-id="selectedProfileForReport.userId" :profile-id="selectedProfileForReport.profileId"
+                    @close="closeReportModal" @reported="handleReported" />
             </Teleport>
         </div>
     </MainLayout>
@@ -586,285 +570,472 @@
 import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
 import MainLayout from "@client/Layouts/MainLayout.vue";
 import axios from "axios";
-import Echo from "laravel-echo";
+import webSocketManager from '@/services/WebSocketManager';
+import { useModeratorStore } from "@/stores/moderatorStore";
 import ClientInfoPanel from "@client/Components/ClientInfoPanel.vue";
 import ClientInfoDrawer from "@client/Components/ClientInfoDrawer.vue";
 import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 import ProfilePhotoSelector from "@client/Components/ProfilePhotoSelector.vue";
 import { Link } from "@inertiajs/vue3";
+import { useWebSocketHealth } from "@/composables/useWebSocketHealth";
 
+// Ajouter un écouteur pour détecter quand Echo est prêt
+document.addEventListener('echo:initialized', () => {
+    console.log('🔄 Echo initialisé, vérification du token CSRF...');
+    checkEchoCSRFToken();
+    setupWebSocketAuthInterceptor();
+});
 
-const configureAxios = async () => {
-    // Attendre que le DOM soit complètement chargé
-    await new Promise(resolve => {
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', resolve);
-        } else {
-            resolve();
-        }
-    });
+// Ajouter un écouteur pour détecter quand Echo est connecté
+document.addEventListener('echo:connected', () => {
+    console.log('🔄 Echo connecté, vérification du token CSRF...');
+    checkEchoCSRFToken();
+});
 
-    // Récupérer le token CSRF depuis les métadonnées
-    let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+// Initialiser les stores
+const moderatorStore = useModeratorStore();
+const { connectionStatus, connectionState, isHealthy, forceReconnect, checkConnection } = useWebSocketHealth();
 
-    // Si pas de token, essayer de le récupérer depuis window.Laravel
-    if (!token && window.Laravel && window.Laravel.csrfToken) {
-        token = window.Laravel.csrfToken;
-    }
+// Props
+const props = defineProps({
+    auth: {
+        type: Object,
+        default: () => ({}), // Valeur par défaut vide pour éviter les erreurs
+    },
+    user: {
+        type: Object,
+        default: () => ({}), // Valeur par défaut vide pour éviter les erreurs
+    },
+});
 
-    // Si toujours pas de token, faire une requête pour l'obtenir
-    if (!token) {
-        try {
-            await axios.get('/sanctum/csrf-cookie');
-            token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-        } catch (error) {
-            console.error('Impossible de récupérer le token CSRF:', error);
-        }
-    }
-
-    if (token) {
-        axios.defaults.headers.common['X-CSRF-TOKEN'] = token;
-        axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
-        axios.defaults.withCredentials = true;
-        console.log('Axios configuré avec le token CSRF');
-    } else {
-        console.error('CSRF token introuvable après toutes les tentatives');
-    }
-};
-
-const setupAxiosInterceptor = () => {
-    // Supprimer les anciens intercepteurs pour éviter les doublons
-    axios.interceptors.response.handlers = [];
-    axios.interceptors.request.handlers = [];
-
-    // Intercepteur pour les requêtes
-    axios.interceptors.request.use(
-        config => {
-            const token = getCsrfToken();
-            if (token) {
-                config.headers['X-CSRF-TOKEN'] = token;
-            }
-            config.headers['X-Requested-With'] = 'XMLHttpRequest';
-            config.headers['Accept'] = 'application/json';
-
-            // AJOUT: Timeout par défaut si pas spécifié
-            if (!config.timeout) {
-                config.timeout = 10000;
-            }
-
-            return config;
-        },
-        error => Promise.reject(error)
-    );
-
-    // Intercepteur pour les réponses
-    axios.interceptors.response.use(
-        response => response,
-        async error => {
-            const originalRequest = error.config;
-
-            // Éviter les boucles infinies
-            if (originalRequest._retry) {
-                return Promise.reject(error);
-            }
-
-            if (error.response?.status === 419 ||
-                (error.response?.status === 500 && error.response?.data?.message?.includes('CSRF'))) {
-
-                console.log('🔄 Erreur CSRF détectée, renouvellement du token...');
-                originalRequest._retry = true;
-
-                try {
-                    await axios.get('/sanctum/csrf-cookie');
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    await configureAxios();
-
-                    // Mettre à jour le token dans la requête originale
-                    const newToken = getCsrfToken();
-                    if (newToken) {
-                        originalRequest.headers['X-CSRF-TOKEN'] = newToken;
-                        return axios(originalRequest);
-                    }
-                } catch (retryError) {
-                    console.error('Échec du renouvellement du token:', retryError);
-                    // Ne pas recharger automatiquement, laisser l'utilisateur décider
-                    console.error('Erreur d\'authentification persistante');
-                }
-            }
-
-            return Promise.reject(error);
-        }
-    );
-};
-// === SOLUTION 3: Fonction d'attente de l'authentification ===
-
-const waitForAuthentication = async (maxAttempts = 10, delay = 500) => {
-    for (let i = 0; i < maxAttempts; i++) {
-        // Vérifier si l'utilisateur est authentifié
-        const isAuthenticated = window.Laravel && window.Laravel.user && window.Laravel.user.id;
-        const hasCSRFToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        if (isAuthenticated && hasCSRFToken) {
-            console.log('Authentification confirmée');
-            return true;
-        }
-
-        console.log(`Attente de l'authentification... tentative ${i + 1}/${maxAttempts}`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-    }
-
-    console.error('Timeout: authentification non confirmée après', maxAttempts, 'tentatives');
-    return false;
-};
-
-const showAuthError = () => {
-    console.error('Erreur d\'authentification persistante');
-
-    // Option 1: Recharger automatiquement
-    setTimeout(() => {
-        window.location.reload();
-    }, 2000);
-};
-
-// État des données
-const currentAssignedProfile = ref(null);
-const assignedClient = ref([]);
-const selectedClient = ref(null);
-const availableClients = ref([]);
-const newMessage = ref("");
-const chatMessages = ref({});
-const chatContainer = ref(null);
-const loading = ref(false);
+// État local du composant
 const activeTab = ref("assigned");
+const selectedClient = ref(null);
+const newMessage = ref("");
+const chatContainer = ref(null);
+const chatSection = ref(null);
 const notifications = ref([]);
 const showNotifications = ref(false);
-const isLoadingMore = ref(false);
-const hasMoreMessages = ref(true);
-const currentPage = ref({});
-const messagesPerPage = 20;
-
-// Ajouter les refs manquantes
+const fileInput = ref(null);
+const selectedFile = ref(null);
+const previewUrl = ref(null);
+const showPreview = ref(false);
+const previewImage = ref(null);
+const showFullInfoModal = ref(false);
 const showActionModal = ref(false);
 const showReportModalFlag = ref(false);
 const selectedProfileForActions = ref(null);
 const selectedProfileForReport = ref(null);
 
-
-// 1. Ajouter ces refs dans la section script (après les autres refs)
-const isSendingMessage = ref(false);
-
 // Messages pour la conversation actuelle
 const currentChatMessages = computed(() => {
     if (!selectedClient.value) return [];
-    return chatMessages.value[selectedClient.value.id] || [];
+    return moderatorStore.getMessagesForClient(selectedClient.value.id) || [];
 });
 
 // Clients triés par date de dernier message
 const sortedAssignedClients = computed(() => {
-    if (!assignedClient.value) return [];
-    return [...assignedClient.value].sort((a, b) => {
-        const dateA = new Date(a.createdAt);
-        const dateB = new Date(b.createdAt);
-        return dateB - dateA; // Tri décroissant (plus récent au plus ancien)
-    });
+    return moderatorStore.getSortedAssignedClients();
 });
 
-// Charger les données réelles depuis l'API (profil et client attribués)
-const loadAssignedData = async () => {
+// Données du modérateur
+const currentAssignedProfile = computed(() => moderatorStore.currentAssignedProfile);
+const assignedClient = computed(() => moderatorStore.assignedClients);
+const availableClients = computed(() => moderatorStore.availableClients);
+const loading = computed(() => moderatorStore.loading);
+const isLoadingMore = computed(() => moderatorStore.isLoadingMore);
+const hasMoreMessages = computed(() => {
+    if (!selectedClient.value) return false;
+    return moderatorStore.hasMoreMessages(selectedClient.value.id);
+});
+
+// Étiquette pour l'état de connexion
+const connectionStateLabel = computed(() => {
+    switch (connectionState.value) {
+        case 'healthy': return 'Connecté';
+        case 'degraded': return 'Connexion instable';
+        case 'connecting': return 'Connexion en cours...';
+        case 'disconnected': return 'Déconnecté';
+        default: return 'Inconnu';
+    }
+});
+
+// Erreurs WebSocket
+const webSocketErrors = computed(() => moderatorStore.errors.websocket);
+// Fonction pour initialiser ou vérifier la connexion WebSocket
+async function ensureWebSocketConnection() {
     try {
-        console.log("Chargement des données du modérateur...");
+        // Vérifier l'état des données utilisateur pour le debug
+        console.log('🔍 État des données utilisateur:');
+        console.log('  → window.Laravel.user:', window.Laravel?.user || 'Non disponible');
+        console.log('  → meta[user-id]:', document.querySelector('meta[name="user-id"]')?.getAttribute('content') || 'Non disponible');
+        console.log('  → props.auth:', props.auth || 'Non disponible');
 
-        // Charger le profil attribué
-        const profileResponse = await axios.get("/moderateur/profile");
-        console.log("Réponse des profils:", profileResponse.data);
+        // Synchroniser immédiatement les données utilisateur si disponibles dans props
+        if (props.auth && props.auth.user && (!window.Laravel || !window.Laravel.user)) {
+            console.log('🔄 Synchronisation immédiate des données utilisateur depuis props...');
+            if (!window.Laravel) window.Laravel = {};
+            window.Laravel.user = {
+                id: props.auth.user.id,
+                type: props.auth.user.type,
+                name: props.auth.user.name
+            };
 
-        if (profileResponse.data.primaryProfile) {
-            currentAssignedProfile.value = profileResponse.data.primaryProfile;
-            console.log(
-                "Profil principal attribué:",
-                currentAssignedProfile.value
-            );
+            // Définir également les variables globales
+            window.clientId = parseInt(props.auth.user.id);
+            window.userType = props.auth.user.type;
+        }
 
-            // Charger le client attribué
-            const clientsResponse = await axios.get("/moderateur/clients");
-            console.log("Réponse des clients:", clientsResponse.data);
+        // Attendre un court instant pour que les scripts soient chargés
+        await new Promise(resolve => setTimeout(resolve, 100));
 
-            if (
-                clientsResponse.data.clients &&
-                clientsResponse.data.clients.length > 0
-            ) {
-                // Au lieu de prendre juste le premier client, on garde tous les clients
-                const newClients = clientsResponse.data.clients;
+        // Vérifier si nous avons besoin de rafraîchir le token CSRF
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            console.warn('⚠️ Token CSRF manquant, tentative de rafraîchissement...');
+            try {
+                await axios.get('/sanctum/csrf-cookie');
+                console.log('✅ Token CSRF rafraîchi');
+            } catch (error) {
+                console.error('❌ Échec du rafraîchissement du token CSRF:', error);
+            }
+        }
 
-                // Mettre à jour la liste des clients attribués
-                assignedClient.value = newClients;
+        if (!window.Echo) {
+            console.log('🔄 Initialisation des services WebSocket depuis Moderator.vue...');
+            try {
+                // Initialiser avec un timeout plus court pour une meilleure UX
+                const initPromise = initializeWebSocketServices();
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Timeout local')), 3000)
+                );
 
-                // Si aucun client n'est sélectionné, sélectionner le plus récent
-                if (!selectedClient.value && newClients.length > 0) {
-                    selectedClient.value = newClients[0];
-                    await loadMessages(newClients[0].id);
+                await Promise.race([initPromise, timeoutPromise]);
+                console.log('✅ Services WebSocket initialisés avec succès depuis Moderator.vue');
+            } catch (error) {
+                if (error.message === 'Timeout local') {
+                    console.warn('⚠️ Timeout local atteint, continuons avec fonctionnalités limitées');
+                } else {
+                    console.warn('⚠️ Initialisation des WebSockets échouée:', error);
                 }
 
-                console.log("Clients attribués:", newClients);
-            } else {
-                console.log("Aucun client attribué");
-                assignedClient.value = [];
+                // Continuer avec l'initialisation du store même si Echo a échoué
             }
+        }
+
+        // Vérifier si le moderator store est initialisé - toujours tenter ceci
+        if (!moderatorStore.initialized) {
+            console.log('🔄 Initialisation du store modérateur depuis Moderator.vue...');
+            try {
+                await moderatorStore.initialize();
+                console.log('✅ Store modérateur initialisé avec succès depuis Moderator.vue');
+            } catch (error) {
+                console.warn('⚠️ Initialisation du store modérateur échouée:', error);
+            }
+        }
+
+        // Considérer la connexion comme prête même si Echo n'est pas disponible
+        return webSocketManager.isConnected() || (window.Echo && window.echoReady) || !!window.Laravel?.user;
+    } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation WebSocket depuis Moderator.vue:', error);
+        // Même en cas d'erreur, essayer de continuer avec les fonctionnalités de base
+        return !!window.Laravel?.user;
+    }
+}
+
+// Dans checkWebSocketConnection()
+// Dans checkWebSocketConnection()
+function checkWebSocketConnection() {
+    if (window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
+        const pusherState = window.Echo.connector.pusher.connection.state;
+
+        // Mettre à jour l'état de connexion directement sans utiliser updateConnectionState
+        if (pusherState === 'connected') {
+            connectionState.value = 'healthy';
+        } else if (pusherState === 'connecting') {
+            connectionState.value = 'connecting';
+        } else if (pusherState === 'unavailable' || pusherState === 'failed') {
+            connectionState.value = 'degraded';
+        } else if (pusherState === 'disconnected') {
+            connectionState.value = 'disconnected';
+        }
+
+        console.log('État WebSocket vérifié:', pusherState, '→', connectionState.value);
+        return pusherState;
+    }
+
+    // Si Echo n'est pas disponible
+    connectionState.value = 'disconnected';
+    return 'not_available';
+}
+
+// Fonction pour vérifier et corriger le token CSRF dans Echo
+function checkEchoCSRFToken() {
+    if (!window.Echo || !window.Echo.connector || !window.Echo.connector.options) {
+        return false;
+    }
+
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!csrfToken) {
+        return false;
+    }
+
+    // Vérifier si le token CSRF dans Echo correspond au token actuel
+    const echoToken = window.Echo.connector.options.auth?.headers?.['X-CSRF-TOKEN'];
+    if (echoToken !== csrfToken) {
+        console.log('🔄 Mise à jour du token CSRF dans Echo...');
+        window.Echo.connector.options.auth.headers['X-CSRF-TOKEN'] = csrfToken;
+
+        // Mettre également à jour dans Pusher si disponible
+        if (window.Echo.connector.pusher && window.Echo.connector.pusher.config) {
+            window.Echo.connector.pusher.config.auth.headers['X-CSRF-TOKEN'] = csrfToken;
+        }
+
+        return true;
+    }
+
+    return false;
+}
+// Fonction pour rafraîchir le token CSRF
+async function refreshCSRFToken() {
+    try {
+        console.log('🔄 Rafraîchissement du token CSRF...');
+
+        // Appeler l'endpoint sanctum/csrf-cookie
+        await axios.get('/sanctum/csrf-cookie', {
+            withCredentials: true,
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        });
+
+        // Attendre un peu pour s'assurer que le cookie est bien défini
+        await new Promise(r => setTimeout(r, 300));
+
+        // Récupérer le nouveau token depuis les meta tags
+        const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        if (newToken) {
+            // Mettre à jour le token dans les en-têtes Axios
+            axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
+
+            // Mettre à jour le token dans Echo si disponible
+            if (window.Echo && window.Echo.connector && window.Echo.connector.options && window.Echo.connector.options.auth) {
+                window.Echo.connector.options.auth.headers['X-CSRF-TOKEN'] = newToken;
+
+                // Forcer la reconnexion de Pusher pour utiliser le nouveau token
+                if (window.Echo.connector.pusher && window.Echo.connector.pusher.connection) {
+                    // Mettre à jour le token dans les options de connexion Pusher
+                    window.Echo.connector.pusher.config.auth.headers['X-CSRF-TOKEN'] = newToken;
+                }
+            }
+
+            console.log('✅ Token CSRF rafraîchi:', newToken);
+            return true;
         } else {
-            console.log("Aucun profil attribué");
-            currentAssignedProfile.value = null;
-            assignedClient.value = [];
+            console.warn('⚠️ Impossible de rafraîchir le token CSRF: token non trouvé');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Erreur lors du rafraîchissement du token CSRF:', error);
+        return false;
+    }
+}
+
+// Fonction pour configurer l'intercepteur d'authentification WebSocket
+function setupWebSocketAuthInterceptor() {
+    if (!window.Echo || !window.Echo.connector || !window.Echo.connector.pusher) {
+        console.warn('⚠️ Echo ou Pusher non disponible pour configurer l\'intercepteur d\'authentification');
+        return;
+    }
+
+    // Remplacer la méthode d'authentification par défaut de Pusher
+    const originalAuthorizer = window.Echo.connector.pusher.config.authorizer;
+
+    if (!originalAuthorizer) {
+        console.warn('⚠️ Authorizer Pusher non disponible');
+        return;
+    }
+
+    // Remplacer l'authorizer par notre version personnalisée
+    window.Echo.connector.pusher.config.authorizer = function (channel) {
+        return {
+            authorize: async function (socketId, callback) {
+                try {
+                    // Rafraîchir le token CSRF avant chaque tentative d'authentification
+                    await refreshCSRFToken();
+
+                    // Récupérer le token CSRF actuel
+                    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                    // Mettre à jour les en-têtes de l'authentification
+                    if (window.Echo.connector.options.auth && csrfToken) {
+                        window.Echo.connector.options.auth.headers['X-CSRF-TOKEN'] = csrfToken;
+                    }
+
+                    // Utiliser l'authorizer original avec les en-têtes mis à jour
+                    const authorizerInstance = originalAuthorizer(channel);
+                    authorizerInstance.authorize(socketId, function (err, data) {
+                        if (err && err.status === 419) {
+                            console.warn('⚠️ Erreur CSRF 419 malgré le rafraîchissement du token');
+                        }
+                        callback(err, data);
+                    });
+                } catch (error) {
+                    console.error('❌ Erreur lors de l\'autorisation du canal:', error);
+                    callback(error, null);
+                }
+            }
+        };
+    };
+
+    console.log('✅ Intercepteur d\'authentification WebSocket configuré');
+}
+
+// Fonction pour détecter et gérer les erreurs 419
+function setupCSRFErrorHandler() {
+    if (window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
+        const originalAuthorizer = window.Echo.connector.pusher.config.authorizer;
+
+        if (originalAuthorizer) {
+            window.Echo.connector.pusher.config.authorizer = function (channel) {
+                return {
+                    authorize: async (socketId, callback) => {
+                        try {
+                            // Utiliser l'authorizer original
+                            const originalAuth = originalAuthorizer(channel);
+
+                            originalAuth.authorize(socketId, async (error, data) => {
+                                if (error && (error.status === 419 || error.code === 4019)) {
+                                    console.warn('⚠️ Erreur CSRF 419 détectée, rafraîchissement du token...');
+
+                                    try {
+                                        // Rafraîchir le token CSRF
+                                        await refreshCSRFToken();
+
+                                        // Réessayer l'autorisation avec le nouveau token
+                                        const retryAuth = originalAuthorizer(channel);
+                                        retryAuth.authorize(socketId, (retryError, retryData) => {
+                                            callback(retryError, retryData);
+                                        });
+                                    } catch (refreshError) {
+                                        console.error('❌ Échec du rafraîchissement du token CSRF:', refreshError);
+                                        callback(error, null);
+                                    }
+                                } else {
+                                    callback(error, data);
+                                }
+                            });
+                        } catch (err) {
+                            console.error('❌ Erreur dans l\'authorizer:', err);
+                            callback(err, null);
+                        }
+                    }
+                };
+            };
+        }
+    }
+}
+
+// Variables pour le nettoyage
+let csrfRefreshInterval;
+let axiosInterceptorId;
+
+// Configurer l'intercepteur Axios pour les erreurs CSRF
+axiosInterceptorId = axios.interceptors.response.use(
+    response => response,
+    async error => {
+        // Si l'erreur est une erreur CSRF (419)
+        if (error.response && error.response.status === 419) {
+            console.warn('⚠️ Erreur CSRF 419 détectée dans la réponse Axios, rafraîchissement du token...');
+
+            try {
+                // Rafraîchir le token CSRF
+                await refreshCSRFToken();
+
+                // Récupérer la requête originale et réessayer
+                const originalRequest = error.config;
+                originalRequest._retry = true; // Marquer comme réessayée pour éviter les boucles infinies
+
+                // Mettre à jour le token dans la requête
+                originalRequest.headers['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+                return axios(originalRequest);
+            } catch (refreshError) {
+                console.error('❌ Échec du rafraîchissement du token CSRF:', refreshError);
+                return Promise.reject(error);
+            }
         }
 
-        // Charger les clients disponibles
-        await loadAvailableClients();
-    } catch (error) {
-        console.error("Erreur lors du chargement des données:", error);
+        return Promise.reject(error);
     }
-};
+);
 
-// Charger les clients disponibles
-const loadAvailableClients = async () => {
-    if (!currentAssignedProfile.value) return;
-
+// Initialisation
+onMounted(async () => {
     try {
-        loading.value = true;
-        const response = await axios.get("/moderateur/available-clients");
-        if (response.data.availableClients) {
-            availableClients.value = response.data.availableClients;
+        console.log('🚀 Initialisation du composant Moderator...');
+
+        // S'assurer que la connexion WebSocket est établie
+        const connected = await ensureWebSocketConnection();
+        const connectionCheckInterval = setInterval(checkWebSocketConnection, 5000);
+
+        if (connected) {
+            console.log('✅ Connexion WebSocket établie avec succès');
+
+            // Configurer l'intercepteur d'authentification WebSocket
+            setupWebSocketAuthInterceptor();
+        } else {
+            console.warn('⚠️ Connexion WebSocket non établie, fonctionnalités limitées');
         }
+
+        // Initialiser le store du modérateur
+        await moderatorStore.initialize();
+
+        // Configurer les écouteurs spécifiques au modérateur
+        if (currentAssignedProfile.value) {
+            moderatorStore.setupProfileListeners(currentAssignedProfile.value.id);
+        }
+
+        // Vérifier l'état de la connexion WebSocket
+        checkWebSocketConnection();
+
+        // Configurer un intervalle pour rafraîchir le token CSRF périodiquement
+        csrfRefreshInterval = setInterval(refreshCSRFToken, 30 * 60 * 1000); // 30 minutes
     } catch (error) {
-        console.error(
-            "Erreur lors du chargement des clients disponibles:",
-            error
-        );
-    } finally {
-        loading.value = false;
+        console.error('❌ Erreur lors de l\'initialisation du composant Moderator:', error);
     }
-};
+});
 
-// Dans la section script, ajoutons la ref
-const chatSection = ref(null);
+// Nettoyage lors du démontage
+onUnmounted(() => {
+    console.log('🧹 Nettoyage du composant Moderator...');
+    clearInterval(connectionCheckInterval);
+    // Nettoyer l'intervalle de rafraîchissement CSRF
+    if (csrfRefreshInterval) {
+        clearInterval(csrfRefreshInterval);
+    }
 
-// Modifions la fonction selectClient
-const selectClient = async (client) => {
+    // Supprimer l'intercepteur Axios
+    if (axiosInterceptorId !== undefined) {
+        axios.interceptors.response.eject(axiosInterceptorId);
+    }
+
+    // Nettoyer le store
+    moderatorStore.cleanup();
+});
+
+// Sélectionner un client
+async function selectClient(client) {
     selectedClient.value = client;
-    hasMoreMessages.value = true;
-    currentPage.value[client.id] = 1;
 
     try {
-        // S'assurer que nous avons le bon profil pour ce client
-        const profileId = currentAssignedProfile.value?.id;
-        if (!profileId) {
-            console.error("Aucun profil attribué");
-            return;
-        }
+        // Charger les messages
+        await moderatorStore.loadMessages(client.id);
 
-        // Charger les messages initiaux
-        await loadMessages(client.id, 1, false);
-
-        // Marquer la notification comme lue si elle existe
+        // Marquer les notifications comme lues
         const notification = notifications.value.find(
             n => n.clientId === client.id && !n.read
         );
@@ -874,7 +1045,7 @@ const selectClient = async (client) => {
 
         // Faire défiler jusqu'à la section de chat sur mobile
         nextTick(() => {
-            if (window.innerWidth < 1024) { // Vérifier si on est sur mobile
+            if (window.innerWidth < 1024) {
                 chatSection.value?.scrollIntoView({ behavior: 'smooth' });
             }
             // Faire défiler le conteneur de messages vers le bas
@@ -885,48 +1056,27 @@ const selectClient = async (client) => {
     } catch (error) {
         console.error("Erreur lors de la sélection du client:", error);
     }
-};
+}
 
-// Modifions la fonction startConversation
-const startConversation = async (client) => {
+// Démarrer une conversation
+async function startConversation(client) {
     try {
         loading.value = true;
 
-        // Vérifier qu'un profil est attribué
-        if (!currentAssignedProfile.value) {
-            console.error(
-                "Impossible de démarrer une conversation: aucun profil attribué"
-            );
-            return;
-        }
-
-        const profileId = currentAssignedProfile.value.id;
-        console.log(
-            `Démarrage d'une conversation avec client_id=${client.id} et profile_id=${profileId}`
-        );
-
-        const response = await axios.post("/moderateur/start-conversation", {
-            client_id: client.id,
-            profile_id: profileId,
-        });
-
-        if (response.data.success) {
-            console.log("Conversation démarrée avec succès:", response.data);
-            // Stocker les messages
-            chatMessages.value[client.id] = response.data.messages;
+        await moderatorStore.startConversation(client.id);
 
             // Sélectionner ce client
-            selectedClient.value = {
-                ...client,
-                ...response.data.client,
-            };
+        const updatedClient = moderatorStore.getClientById(client.id);
+        if (updatedClient) {
+            selectedClient.value = updatedClient;
+        }
 
             // Changer l'onglet
             activeTab.value = "assigned";
 
             // Faire défiler jusqu'à la section de chat sur mobile
             nextTick(() => {
-                if (window.innerWidth < 1024) { // Vérifier si on est sur mobile
+            if (window.innerWidth < 1024) {
                     chatSection.value?.scrollIntoView({ behavior: 'smooth' });
                 }
                 // Faire défiler le conteneur de messages vers le bas
@@ -934,403 +1084,56 @@ const startConversation = async (client) => {
                     chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
                 }
             });
-        }
     } catch (error) {
         console.error("Erreur lors du démarrage de la conversation:", error);
-        console.error("Détails:", {
-            status: error.response?.status,
-            data: error.response?.data,
-        });
     } finally {
         loading.value = false;
     }
-};
+}
 
-// Charger les messages pour un client spécifique
-const loadMessages = async (clientId, page = 1, append = false) => {
-    try {
-        if (!currentAssignedProfile.value) {
-            console.error("Impossible de charger les messages: aucun profil attribué");
-            return;
-        }
-
-        if (isLoadingMore.value) return;
-        isLoadingMore.value = true;
-
-        const profileId = currentAssignedProfile.value.id;
-        console.log(`Chargement des messages pour client_id=${clientId} et profile_id=${profileId}, page=${page}`);
-
-        const response = await axios.get("/moderateur/messages", {
-            params: {
-                client_id: clientId,
-                profile_id: profileId,
-                page: page,
-                per_page: messagesPerPage
-            },
-        });
-
-        if (response.data.messages) {
-            console.log(`${response.data.messages.length} messages chargés`);
-            
-            // Initialiser si nécessaire
-            if (!chatMessages.value[clientId]) {
-                chatMessages.value[clientId] = [];
-            }
-            if (!currentPage.value[clientId]) {
-                currentPage.value[clientId] = 1;
-            }
-
-            // Sauvegarder la position de défilement actuelle
-            const container = chatContainer.value;
-            const previousScrollHeight = container?.scrollHeight || 0;
-            const previousScrollTop = container?.scrollTop || 0;
-
-            // Mettre à jour les messages
-            if (append) {
-                // Ajouter au début pour les messages plus anciens
-                chatMessages.value[clientId] = [...response.data.messages, ...chatMessages.value[clientId]];
-            } else {
-                chatMessages.value[clientId] = response.data.messages;
-            }
-
-            // Mettre à jour la pagination
-            hasMoreMessages.value = response.data.messages.length >= messagesPerPage;
-            currentPage.value[clientId] = page;
-
-            // Attendre que le DOM soit mis à jour
-            await nextTick();
-
-            // Restaurer la position de défilement ou défiler vers le bas
-            if (container) {
-                if (append && previousScrollHeight > 0) {
-                    const newScrollHeight = container.scrollHeight;
-                    container.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
-                } else {
-                    container.scrollTop = container.scrollHeight;
-                }
-            }
-        } else {
-            console.log("Aucun message trouvé");
-            chatMessages.value[clientId] = [];
-            hasMoreMessages.value = false;
-        }
-    } catch (error) {
-        console.error("Erreur lors du chargement des messages:", error);
-        console.error("Détails:", {
-            status: error.response?.status,
-            data: error.response?.data,
-        });
-    } finally {
-        isLoadingMore.value = false;
-    }
-};
-
-// Ajouter la fonction de chargement des messages plus anciens
-const loadMoreMessages = async (clientId) => {
-    if (!hasMoreMessages.value || isLoadingMore.value) return;
-    
-    const nextPage = (currentPage.value[clientId] || 1) + 1;
-    const previousScrollHeight = chatContainer.value?.scrollHeight;
-    const previousScrollTop = chatContainer.value?.scrollTop;
-    
-    await loadMessages(clientId, nextPage, true);
-
-    // Maintenir la position de défilement après le chargement
-    nextTick(() => {
-        if (chatContainer.value && previousScrollHeight) {
-            const newScrollHeight = chatContainer.value.scrollHeight;
-            chatContainer.value.scrollTop = previousScrollTop + (newScrollHeight - previousScrollHeight);
-        }
-    });
-};
-
-// Ajouter la fonction de gestion du défilement
-const handleScroll = async (event) => {
+// Gérer le défilement pour charger plus de messages
+function handleScroll(event) {
     const container = event.target;
-    if (container.scrollTop <= 100 && selectedClient.value) { // Déclencher quand on est proche du haut
-        await loadMoreMessages(selectedClient.value.id);
+    if (container.scrollTop <= 100 && selectedClient.value && !isLoadingMore.value) {
+        moderatorStore.loadMoreMessages(selectedClient.value.id);
     }
-};
+}
 
-onMounted(async () => {
+// Envoyer un message
+async function sendMessage() {
+    if ((!newMessage.value.trim() && !selectedFile.value) || !currentAssignedProfile.value || !selectedClient.value) {
+        return;
+    }
+
+    const messageContent = newMessage.value.trim();
+
     try {
-        console.log('Initialisation du composant modérateur...');
+        // Effacer le champ avant d'envoyer pour éviter les doublons visuels
+        newMessage.value = "";
 
-        // Attendre que l'authentification soit prête
-        const isReady = await waitForAuthentication();
-        if (!isReady) {
-            console.error('Authentification non prête, rechargement de la page...');
-            window.location.reload();
-            return;
-        }
-
-        // Configurer Axios
-        await configureAxios();
-
-        // Configurer l'intercepteur
-        setupAxiosInterceptor();
-
-        // Petite pause pour s'assurer que tout est bien initialisé
-        await new Promise(resolve => setTimeout(resolve, 200));
-
-        // Charger les données depuis l'API
-        await loadAssignedData();
-
-        // Configurer Laravel Echo
-        if (window.Echo) {
-            console.log(
-                "Configuration de Laravel Echo pour recevoir les notifications en temps réel"
-            );
-
-            // Récupérer l'ID du modérateur depuis l'API
-            const userResponse = await axios.get("/api/user");
-            const moderatorId = userResponse.data.id;
-
-            if (!moderatorId) {
-                console.error("ID du modérateur non disponible");
-                return;
-            }
-
-            console.log(`ID du modérateur connecté: ${moderatorId}`);
-
-            // Écouter les notifications d'attribution de profil
-            console.log(`Souscription au canal: moderator.${moderatorId}`);
-
-            window.Echo.private(`moderator.${moderatorId}`)
-                .listen(".profile.assigned", async (data) => {
-                    console.log("Événement profile.assigned reçu:", data);
-
-                    // Recharger les données après l'attribution d'un profil
-                    await loadAssignedData();
-
-                    // Si le profil attribué est différent du profil actuel et qu'il est principal
-                    if (data.profile &&
-                        data.profile.id !== currentAssignedProfile.value?.id &&
-                        data.is_primary) {
-
-                        currentAssignedProfile.value = data.profile;
-
-                        // Si un client est associé à ce changement de profil
-                        if (data.client_id) {
-                            try {
-                                // Charger les messages du client
-                                const clientResponse = await axios.get("/moderateur/messages", {
-                                    params: {
-                                        client_id: data.client_id,
-                                        profile_id: data.profile.id,
-                                    },
-                                });
-
-                                if (clientResponse.data.messages) {
-                                    chatMessages.value[data.client_id] = clientResponse.data.messages;
-
-                                    // Trouver et sélectionner le client
-                                    const clientInfo = assignedClient.value.find(
-                                        (c) => c.id === data.client_id
-                                    );
-
-                                    if (clientInfo) {
-                                        selectedClient.value = clientInfo;
-
-                                        // Faire défiler vers le bas du chat
-                                        nextTick(() => {
-                                            if (chatContainer.value) {
-                                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                                            }
-                                        });
-                                    }
-                                }
-                            } catch (error) {
-                                console.error("Erreur lors du chargement des messages:", error);
-                            }
-                        }
-                    }
-                })
-                .listen(".client.assigned", async (data) => {
-                    console.log("Événement client.assigned reçu:", data);
-                    // Recharger les données après l'attribution d'un client
-                    await loadAssignedData();
-
-                    // Si c'est un nouveau client et qu'il n'y a pas de client sélectionné,
-                    // on le sélectionne automatiquement
-                    if (!selectedClient.value && data.client) {
-                        const clientInfo = assignedClient.value.find(
-                            (c) => c.id === data.client.id
-                        );
-                        if (clientInfo) {
-                            selectedClient.value = clientInfo;
-                            await loadMessages(clientInfo.id);
-                        }
-                    }
-                })
-                .error((error) => {
-                    console.error(
-                        `Erreur sur le canal moderator.${moderatorId}:`,
-                        error
-                    );
-                });
-
-            // Si un profil est déjà attribué, écouter les messages sur son canal
-            if (currentAssignedProfile.value) {
-                listenToProfileMessages(currentAssignedProfile.value.id);
-            }
-        } else {
-            console.error("Laravel Echo n'est pas disponible, les notifications en temps réel ne fonctionneront pas");
-        }
-
-        console.log('Initialisation du composant modérateur terminée');
-
-    } catch (error) {
-        console.error("Erreur lors de l'initialisation:", error);
-        // En cas d'erreur, proposer de recharger
-        if (confirm('Une erreur s\'est produite lors de l\'initialisation. Recharger la page ?')) {
-            window.location.reload();
-        }
-    }
-});
-// Ajouter la fonction de gestion des notifications
-const addNotification = (message, clientId, clientName) => {
-    const notification = {
-        id: Date.now(),
-        message,
-        clientId,
-        clientName,
-        timestamp: new Date(),
-        read: false
-    };
-    notifications.value.unshift(notification);
-    // Limiter à 50 notifications maximum
-    if (notifications.value.length > 50) {
-        notifications.value = notifications.value.slice(0, 50);
-    }
-};
-
-// Modifier la fonction listenToProfileMessages pour ajouter la notification
-const listenToProfileMessages = (profileId) => {
-    console.log(`Écoute des messages pour le profil ${profileId}`);
-    console.log(`Souscription au canal: profile.${profileId}`);
-
-    // Désabonner des anciens listeners s'ils existent pour éviter les doublons
-    if (window.Echo) {
-        window.Echo.leave(`profile.${profileId}`);
-    }
-
-    window.Echo.private(`profile.${profileId}`)
-        .listen(".message.sent", async (data) => {
-            console.log("Nouveau message reçu sur le canal profile:", data);
-            // Ajouter la notification
-            if (data.is_from_client) {
-                const clientId = data.client_id;
-
-                // Vérifier si le message n'existe pas déjà
-                if (chatMessages.value[clientId]?.some(msg => msg.id === data.id)) {
-                    console.log("Message déjà existant, ignoré");
-                    return;
-                }
-
-                // Ajouter la notification
-                const clientName = assignedClient.value.find(c => c.id === clientId)?.name || 'Client';
-                addNotification(data.content, clientId, clientName);
-
-                // Formater le message
-                const message = {
-                    id: data.id,
-                    content: data.content,
-                    isFromClient: true,
-                    time: new Date(data.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                    }),
-                };
-
-                // Initialiser le tableau de messages si nécessaire
-                if (!chatMessages.value[clientId]) {
-                    chatMessages.value[clientId] = [];
-                }
-
-                // Ajouter directement le nouveau message
-                chatMessages.value[clientId].push(message);
-
-                try {
-                    // Mettre à jour la liste des clients en arrière-plan
-                    const clientExists = assignedClient.value.some(c => c.id === clientId);
-                    
-                    if (!clientExists) {
-                        await loadAssignedData();
-                    } else {
-                        // Mettre à jour le dernier message et le compteur dans la liste des clients
-                        const clientIndex = assignedClient.value.findIndex(c => c.id === clientId);
-                        if (clientIndex !== -1) {
-                            assignedClient.value[clientIndex] = {
-                                ...assignedClient.value[clientIndex],
-                                lastMessage: message.content,
-                                unreadCount: (assignedClient.value[clientIndex].unreadCount || 0) + 1,
-                                createdAt: new Date().toISOString() // Mettre à jour la date pour le tri
-                            };
-                        }
-                    }
-
-                    // Faire défiler si c'est la conversation actuelle
-                    if (selectedClient.value && selectedClient.value.id === clientId) {
-                        nextTick(() => {
-                            if (chatContainer.value) {
-                                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                            }
-                        });
-                    }
-                } catch (error) {
-                    console.error("Erreur lors de la mise à jour des données:", error);
-                }
-            } else {
-                console.log("Message ignoré car non provenant d'un client");
-            }
-        })
-        .error((error) => {
-            console.error(`Erreur sur le canal profile.${profileId}:`, error);
+        await moderatorStore.sendMessage({
+            clientId: selectedClient.value.id,
+            profileId: currentAssignedProfile.value.id,
+            content: messageContent,
+            file: selectedFile.value
         });
-};
 
-// Nettoyer les listeners lors du démontage du composant
-onUnmounted(() => {
-    if (currentAssignedProfile.value && window.Echo) {
-        window.Echo.leave(`profile.${currentAssignedProfile.value.id}`);
-    }
-});
+        // Réinitialiser le fichier sélectionné
+        removeSelectedFile();
 
-// Modifier le watch sur currentAssignedProfile pour gérer automatiquement les changements de profil
-watch(currentAssignedProfile, async (newProfile, oldProfile) => {
-    if (newProfile && window.Echo) {
-        listenToProfileMessages(newProfile.id);
-
-        // Si le profil a changé, mettre à jour l'interface
-        if (oldProfile && newProfile.id !== oldProfile.id) {
-            // Récupérer les clients pour le nouveau profil
-            await loadAssignedData();
-
-            // Si nous avons des clients attribués, sélectionner automatiquement le plus récent
-            if (assignedClient.value.length > 0) {
-                const mostRecentClient = assignedClient.value[0];
-                await selectClient(mostRecentClient);
-
-                // Faire défiler vers le bas du chat
-                nextTick(() => {
-                    if (chatContainer.value) {
-                        chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-                    }
-                });
+        // Faire défiler vers le bas
+        nextTick(() => {
+            if (chatContainer.value) {
+                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
             }
-        }
+        });
+    } catch (error) {
+        console.error("Erreur lors de l'envoi du message:", error);
+        // Ne pas restaurer le message en cas d'erreur, l'utilisateur peut le retaper
     }
-});
+}
 
-// Ajouter ces refs dans la section script
-const fileInput = ref(null);
-const selectedFile = ref(null);
-const previewUrl = ref(null);
-const showPreview = ref(false);
-const previewImage = ref(null);
-
-// Ajouter ces fonctions dans la section script
+// Gestion des fichiers
 function handleFileUpload(event) {
     const file = event.target.files[0];
     if (file) {
@@ -1369,218 +1172,22 @@ function closeImagePreview() {
     previewImage.value = null;
 }
 
-async function sendMessage(retryCount = 0) {
-    if ((!newMessage.value.trim() && !selectedFile.value) || !currentAssignedProfile.value || !selectedClient.value)
-        return;
-
-    const maxRetries = 2;
-
-    const formData = new FormData();
-    formData.append('client_id', selectedClient.value.id);
-    formData.append('profile_id', currentAssignedProfile.value.id);
-
-    if (newMessage.value.trim()) {
-        formData.append('content', newMessage.value);
-    }
-    if (selectedFile.value) {
-        formData.append('attachment', selectedFile.value);
-    }
-
-    const now = new Date();
-    const timeString = now.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-
-    const localMessage = {
-        id: "temp-" + Date.now(),
-        content: newMessage.value,
-        time: timeString,
-        isFromClient: false,
-        date: new Date().toISOString().split("T")[0],
-    };
-
-    if (selectedFile.value) {
-        localMessage.attachment = {
-            url: previewUrl.value,
-            file_name: selectedFile.value.name,
-            mime_type: selectedFile.value.type
-        };
-    }
-
-    if (!chatMessages.value[selectedClient.value.id]) {
-        chatMessages.value[selectedClient.value.id] = [];
-    }
-    chatMessages.value[selectedClient.value.id].push(localMessage);
-
-    // CORRECTION: Nettoyer les champs immédiatement après avoir créé le message local
-    const originalMessage = newMessage.value; // Sauvegarder pour retry si nécessaire
-    const originalFile = selectedFile.value; // Sauvegarder pour retry si nécessaire
-
-    newMessage.value = "";
-    removeSelectedFile();
-
-    try {
-        // AJOUT: S'assurer que le token CSRF est frais
-        const token = getCsrfToken();
-        if (!token) {
-            throw new Error('Token CSRF manquant');
-        }
-
-        const response = await axios.post("/moderateur/send-message", formData, {
-            headers: {
-                'Content-Type': 'multipart/form-data',
-                'X-CSRF-TOKEN': token,
-                'X-Requested-With': 'XMLHttpRequest'
-            },
-            timeout: 15000 // AJOUT: Timeout de 15 secondes
-        });
-
-        if (response.data.success) {
-            const index = chatMessages.value[selectedClient.value.id].findIndex(
-                (msg) => msg.id === localMessage.id
-            );
-            if (index !== -1) {
-                chatMessages.value[selectedClient.value.id][index] = response.data.messageData;
-            }
-        }
-    } catch (error) {
-        console.error("Erreur lors de l'envoi du message:", error);
-        console.error("Détails de l'erreur:", {
-            status: error.response?.status,
-            data: error.response?.data,
-            message: error.message,
-            stack: error.stack
-        });
-
-        // AJOUT: Logique de retry améliorée
-        const shouldRetry = (
-            (error.response?.status === 500 ||
-                error.response?.status === 419 ||
-                error.code === 'NETWORK_ERROR' ||
-                error.message.includes('timeout')) &&
-            retryCount < maxRetries
-        );
-
-        if (shouldRetry) {
-            console.log(`🔄 Retry ${retryCount + 1}/${maxRetries} pour l'envoi du message...`);
-
-            await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
-
-            if (error.response?.status === 419 || error.response?.status === 500) {
-                try {
-                    await axios.get('/sanctum/csrf-cookie');
-                    await configureAxios();
-                    console.log('🔄 Token CSRF renouvelé');
-                } catch (tokenError) {
-                    console.error('Erreur lors du renouvellement du token:', tokenError);
-                }
-            }
-
-            // CORRECTION: Recréer le FormData pour le retry
-            const retryFormData = new FormData();
-            retryFormData.append('client_id', selectedClient.value.id);
-            retryFormData.append('profile_id', currentAssignedProfile.value.id);
-            if (originalMessage.trim()) {
-                retryFormData.append('content', originalMessage);
-            }
-            if (originalFile) {
-                retryFormData.append('attachment', originalFile);
-            }
-
-            // Remplacer formData par retryFormData pour le retry
-            return sendMessage(retryCount + 1);
-        }
-
-        // Marquer le message comme échoué
-        const index = chatMessages.value[selectedClient.value.id].findIndex(
-            (msg) => msg.id === localMessage.id
-        );
-        if (index !== -1) {
-            chatMessages.value[selectedClient.value.id][index].failed = true;
-        }
-    }
-
-    nextTick(() => {
-        if (chatContainer.value) {
-            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-        }
-    });
-}
-
-const getCsrfToken = () => {
-    let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    if (!token && window.Laravel && window.Laravel.csrfToken) {
-        token = window.Laravel.csrfToken;
-    }
-    return token;
-};
-
-// Fonction pour gérer la sélection d'une photo de profil
+// Gestion des photos de profil
 async function handleProfilePhotoSelected(photo) {
     try {
-        // Vérifier que les données nécessaires sont disponibles
         if (!currentAssignedProfile.value || !selectedClient.value) {
             console.error("Profil ou client non sélectionné");
             return;
         }
         
-        // Afficher un indicateur de chargement local
-        const now = new Date();
-        const timeString = now.toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
+        await moderatorStore.sendProfilePhoto({
+            profileId: currentAssignedProfile.value.id,
+            clientId: selectedClient.value.id,
+            photoId: photo.id,
+            photoUrl: photo.url
         });
 
-        // Créer un message temporaire local
-        const localMessage = {
-            id: "temp-" + Date.now(),
-            content: "",
-            time: timeString,
-            isFromClient: false,
-            date: new Date().toISOString().split("T")[0],
-            attachment: {
-                url: photo.url,
-                file_name: photo.path.split('/').pop(),
-                mime_type: 'image/jpeg'
-            }
-        };
-
-        // Ajouter le message temporaire à la conversation
-        if (!chatMessages.value[selectedClient.value.id]) {
-            chatMessages.value[selectedClient.value.id] = [];
-        }
-        chatMessages.value[selectedClient.value.id].push(localMessage);
-        
-        // S'assurer que le token CSRF est disponible
-        const token = getCsrfToken();
-        if (!token) {
-            throw new Error('Token CSRF manquant');
-        }
-        
-        // Envoyer la requête au serveur
-        const response = await axios.post("/moderateur/send-profile-photo", {
-            profile_id: currentAssignedProfile.value.id,
-            client_id: selectedClient.value.id,
-            photo_id: photo.id
-        }, {
-            headers: {
-                'X-CSRF-TOKEN': token,
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        // Mettre à jour le message local avec les données du serveur
-        if (response.data.success) {
-            const index = chatMessages.value[selectedClient.value.id].findIndex(
-                (msg) => msg.id === localMessage.id
-            );
-            if (index !== -1) {
-                chatMessages.value[selectedClient.value.id][index] = response.data.messageData;
-            }
-        }
-        
-        // Faire défiler vers le bas du chat
+        // Faire défiler vers le bas
         nextTick(() => {
             if (chatContainer.value) {
                 chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
@@ -1588,102 +1195,99 @@ async function handleProfilePhotoSelected(photo) {
         });
     } catch (error) {
         console.error("Erreur lors de l'envoi de la photo:", error);
-        console.error("Détails:", {
-            status: error.response?.status,
-            data: error.response?.data,
-        });
     }
-};
-
-// Fonction de vérification de la santé de la connexion
-const checkConnectionHealth = async () => {
-    try {
-        const response = await axios.get('/auth/check', { timeout: 5000 });
-        return response.status === 200;
-    } catch (error) {
-        console.warn('Vérification de connexion échouée:', error);
-        return false;
-    }
-};
-
-
-// Mettre en forme le genre
-function formatGender(gender) {
-    const genders = {
-        male: "Homme",
-        female: "Femme",
-        other: "Autre",
-    };
-    return genders[gender] || "Non spécifié";
 }
 
-// Surveiller les onglets pour recharger les données si nécessaire
-watch(activeTab, (newTab) => {
-    if (newTab === "available") {
-        loadAvailableClients();
-    }
-});
-
-// Surveiller les nouveaux messages et faire défiler vers le bas
-watch(currentChatMessages, () => {
-    nextTick(() => {
-        if (chatContainer.value) {
-            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
-        }
-    });
-});
-
-// Ajouter cette fonction dans la partie script
-function formatTime(timestamp) {
-    const date = new Date(timestamp);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-// Ajouter la fonction pour marquer une notification comme lue
-const markNotificationAsRead = (notificationId) => {
+// Gestion des notifications
+function markNotificationAsRead(notificationId) {
     const index = notifications.value.findIndex(n => n.id === notificationId);
     if (index !== -1) {
         notifications.value[index].read = true;
     }
-};
+}
 
-// Ajouter la fonction pour naviguer vers une conversation depuis une notification
-const goToConversation = (clientId) => {
+function goToConversation(clientId) {
     const client = assignedClient.value.find(c => c.id === clientId);
     if (client) {
         selectClient(client);
         activeTab.value = 'assigned';
     }
-};
+}
 
-// Ajouter ces nouvelles refs
-const showFullInfoModal = ref(false);
-
-// Ajouter cette nouvelle fonction
+// Fonctions pour les modals
 function openFullInfoModal() {
     showFullInfoModal.value = true;
 }
 
-// Fonctions pour gérer les modals
-const closeActionModal = () => {
+function closeActionModal() {
     showActionModal.value = false;
     selectedProfileForActions.value = null;
-};
+}
 
-const closeReportModal = () => {
+function closeReportModal() {
     showReportModalFlag.value = false;
     selectedProfileForReport.value = null;
-};
+}
 
-const startChat = (profile) => {
+function startChat(profile) {
     // Implémenter la logique pour démarrer un chat
     closeActionModal();
-};
+}
 
-const handleReported = () => {
+function handleReported() {
     // Implémenter la logique après un rapport
     closeReportModal();
-};
+}
+
+// Utilitaires
+function formatTime(timestamp) {
+    const date = new Date(timestamp);
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+// Charger les clients disponibles
+function loadAvailableClients() {
+    moderatorStore.loadAvailableClients();
+}
+
+// Observer les changements de profil attribué
+watch(() => moderatorStore.currentAssignedProfile, async (newProfile, oldProfile) => {
+    if (newProfile && newProfile.id !== oldProfile?.id) {
+        // Configurer les écouteurs pour le nouveau profil
+        moderatorStore.setupProfileListeners(newProfile.id);
+    }
+});
+
+// Surveiller l'état de la connexion WebSocket
+watch(connectionState, (newState) => {
+    console.log(`État WebSocket changé: ${newState}`);
+    
+    if (newState === 'disconnected') {
+        // Afficher une notification
+        const notification = {
+            id: Date.now(),
+            message: 'Connexion WebSocket perdue. Les messages en temps réel ne sont plus disponibles.',
+            clientId: null,
+            clientName: 'Système',
+            timestamp: new Date(),
+            read: false
+        };
+        
+        notifications.value.unshift(notification);
+    } else if (newState === 'healthy') {
+        // Ajouter une notification de reconnexion
+        const notification = {
+            id: Date.now(),
+            message: 'Connexion WebSocket rétablie.',
+            clientId: null,
+            clientName: 'Système',
+            timestamp: new Date(),
+            read: false
+        };
+        
+        notifications.value.unshift(notification);
+    }
+});
 </script>
 
 <style scoped>
@@ -1720,14 +1324,16 @@ const handleReported = () => {
     border: 2px solid white;
 }
 
-.message-in img, .message-out img {
+.message-in img,
+.message-out img {
     max-width: 200px;
     height: auto;
     border-radius: 8px;
     margin-top: 4px;
 }
 
-.message-in img:hover, .message-out img:hover {
+.message-in img:hover,
+.message-out img:hover {
     opacity: 0.9;
     cursor: zoom-in;
 }
@@ -1735,7 +1341,8 @@ const handleReported = () => {
 /* Ajustement des styles pour le mobile */
 @media (max-width: 1024px) {
     .chat-container {
-        height: calc(100vh - 20rem); /* Augmenté pour tenir compte du menu mobile */
+        height: calc(100vh - 20rem);
+        /* Augmenté pour tenir compte du menu mobile */
     }
 }
 

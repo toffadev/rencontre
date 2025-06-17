@@ -3,27 +3,29 @@ import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
 
 /**
- * Configuration d'Axios avec le token CSRF
+ * Configuration d'Axios
  */
 window.axios = axios;
 window.axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-// Fonction pour initialiser Echo de manière sécurisée
-function initializeEcho() {
-    // Attendre que le DOM soit chargé
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', setupEcho);
-    } else {
-        setupEcho();
-    }
-}
+/**
+ * Configuration de Pusher
+ */
+window.Pusher = Pusher;
 
-// Fonction pour obtenir le token CSRF
+// Créer un événement personnalisé pour signaler que Echo est prêt
+window.echoReady = false;
+
+/**
+ * Fonction pour obtenir le token CSRF
+ */
 function getCsrfToken() {
     return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
 }
 
-// Fonction pour configurer Axios
+/**
+ * Configurer Axios avec le token CSRF
+ */
 function configureAxios() {
     const token = getCsrfToken();
     if (token) {
@@ -32,232 +34,180 @@ function configureAxios() {
     }
 }
 
-// Configurer l'intercepteur Axios pour gérer les erreurs CSRF
+/**
+ * Configurer l'intercepteur Axios pour gérer les erreurs CSRF
+ */
 window.axios.interceptors.response.use(
     response => response,
     async error => {
         if (error.response?.status === 419) {
-            // Récupérer un nouveau token CSRF
             try {
                 await window.axios.get('/sanctum/csrf-cookie');
                 const newToken = getCsrfToken();
                 if (newToken) {
-                    // Mettre à jour le token dans les headers
                     window.axios.defaults.headers.common['X-CSRF-TOKEN'] = newToken;
-                    // Réessayer la requête originale avec le nouveau token
                     error.config.headers['X-CSRF-TOKEN'] = newToken;
                     return window.axios(error.config);
                 }
             } catch (refreshError) {
                 console.error('Erreur lors du rafraîchissement du token CSRF:', refreshError);
-                window.location.reload(); // Recharger la page en dernier recours
             }
         }
         return Promise.reject(error);
     }
 );
 
-/* function setupEcho() {
-    // Récupérer le token CSRF et les données utilisateur
-    const csrfToken = getCsrfToken();
-    const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
-    const userType = document.querySelector('meta[name="user-type"]')?.getAttribute('content');
-
-    // S'assurer que nous avons toutes les données nécessaires
-    if (!csrfToken || !userId || !userType) {
-        console.warn('Données d\'authentification manquantes, réessai dans 1 seconde...');
-        setTimeout(setupEcho, 1000);
-        return;
-    }
-
-    // Configurer Axios
-    configureAxios();
-
-    // Configuration de Pusher
-    window.Pusher = Pusher;
-
-    // Stocker les données utilisateur
-    window.clientId = parseInt(userId);
-    window.userType = userType;
-
-    // Configuration Echo
-    const echoOptions = {
-        broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
-        wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
-        wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
-        enabledTransports: ['ws', 'wss'],
-        enableLogging: true,
-        auth: {
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        },
-        authorizer: (channel, options) => {
-            return {
-                authorize: (socketId, callback) => {
-                    console.log(`🔐 Tentative d'autorisation du canal: ${channel.name}`);
-                    
-                    axios.post('/broadcasting/auth', {
-                        socket_id: socketId,
-                        channel_name: channel.name
-                    }, {
-                        headers: {
-                            'X-CSRF-TOKEN': getCsrfToken(),
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Content-Type': 'application/json'
-                        }
-                    })
-                    .then(response => {
-                        console.log(`✅ Autorisation réussie pour ${channel.name}`);
-                        callback(null, response.data);
-                    })
-                    .catch(error => {
-                        console.error(`❌ Erreur d'autorisation pour ${channel.name}:`, error);
-                        callback(error);
-                    });
-                }
-            };
-        }
-    };
-
-    // Initialiser Echo
-    window.Echo = new Echo(echoOptions);
-    console.log('🚀 Echo initialisé avec succès');
-} */
+/**
+ * Initialisation d'Echo avec Pusher
+ */
+// Au lieu d'attendre le DOMContentLoaded, utiliser une approche plus proactive
+let echoInitAttempts = 0;
+const maxEchoInitAttempts = 5;
 
 function setupEcho() {
-    const csrfToken = getCsrfToken();
-    const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
-    const userType = document.querySelector('meta[name="user-type"]')?.getAttribute('content');
-
-    if (!csrfToken || !userId || !userType) {
-        console.warn('Données d\'authentification manquantes, réessai dans 1 seconde...');
-        setTimeout(setupEcho, 1000);
-        return;
-    }
-
-    configureAxios();
-    window.Pusher = Pusher;
-    window.clientId = parseInt(userId);
-    window.userType = userType;
-
-    // Configuration Echo AMÉLIORÉE avec reconnexion automatique
-    const echoOptions = {
-        broadcaster: 'reverb',
-        key: import.meta.env.VITE_REVERB_APP_KEY,
-        wsHost: import.meta.env.VITE_REVERB_HOST || window.location.hostname,
-        wsPort: import.meta.env.VITE_REVERB_PORT || 8080,
-        forceTLS: (import.meta.env.VITE_REVERB_SCHEME || 'https') === 'https',
-        enabledTransports: ['ws', 'wss'],
-        enableLogging: true,
-        // AJOUT: Options de reconnexion
-        reconnectOnDisconnect: true,
-        maxReconnectionAttempts: 5,
-        reconnectionDelay: 1000,
-        auth: {
-            headers: {
-                'X-CSRF-TOKEN': csrfToken,
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        },
-        authorizer: (channel, options) => {
-            return {
-                authorize: (socketId, callback) => {
-                    console.log(`🔐 Tentative d'autorisation du canal: ${channel.name}`);
-                    
-                    axios.post('/broadcasting/auth', {
-                        socket_id: socketId,
-                        channel_name: channel.name
-                    }, {
-                        headers: {
-                            'X-CSRF-TOKEN': getCsrfToken(), // Toujours récupérer le token frais
-                            'Accept': 'application/json',
-                            'X-Requested-With': 'XMLHttpRequest',
-                            'Content-Type': 'application/json'
-                        },
-                        timeout: 10000 // AJOUT: Timeout de 10 secondes
-                    })
-                    .then(response => {
-                        console.log(`✅ Autorisation réussie pour ${channel.name}`);
-                        callback(null, response.data);
-                    })
-                    .catch(error => {
-                        console.error(`❌ Erreur d'autorisation pour ${channel.name}:`, error);
-                        
-                        // AJOUT: Retry une fois avec un nouveau token CSRF
-                        if (error.response?.status === 419 || error.response?.status === 500) {
-                            console.log('🔄 Retry avec nouveau token CSRF...');
-                            axios.get('/sanctum/csrf-cookie').then(() => {
-                                const newToken = getCsrfToken();
-                                if (newToken) {
-                                    axios.post('/broadcasting/auth', {
-                                        socket_id: socketId,
-                                        channel_name: channel.name
-                                    }, {
-                                        headers: {
-                                            'X-CSRF-TOKEN': newToken,
-                                            'Accept': 'application/json',
-                                            'X-Requested-With': 'XMLHttpRequest',
-                                            'Content-Type': 'application/json'
-                                        }
-                                    })
-                                    .then(response => {
-                                        console.log(`✅ Autorisation réussie après retry pour ${channel.name}`);
-                                        callback(null, response.data);
-                                    })
-                                    .catch(retryError => {
-                                        console.error(`❌ Échec définitif pour ${channel.name}:`, retryError);
-                                        callback(retryError);
-                                    });
-                                } else {
-                                    callback(error);
-                                }
-                            }).catch(() => callback(error));
-                        } else {
-                            callback(error);
-                        }
-                    });
-                }
-            };
+    try {
+        echoInitAttempts++;
+        console.log(`🚀 Tentative d'initialisation d'Echo (${echoInitAttempts}/${maxEchoInitAttempts})...`);
+        
+        // Vérifier si nous sommes sur une page d'authentification
+        const isAuthPage = window.location.pathname.includes('/login') || 
+                          window.location.pathname.includes('/register') ||
+                          window.location.pathname === '/welcome';
+        
+        if (isAuthPage) {
+            console.log('📝 Page d\'authentification détectée, initialisation d\'Echo ignorée');
+            return false;
         }
-    };
-
-    window.Echo = new Echo(echoOptions);
-    
-    // AJOUT: Gestion des événements de connexion/déconnexion
-    if (window.Echo.connector && window.Echo.connector.socket) {
-        window.Echo.connector.socket.bind('pusher:connection_established', () => {
-            console.log('🟢 WebSocket connecté');
-            window.isWebSocketConnected = true;
-        });
         
-        window.Echo.connector.socket.bind('pusher:error', (error) => {
-            console.error('🔴 Erreur WebSocket:', error);
-            window.isWebSocketConnected = false;
-        });
+        // Récupérer les informations utilisateur de toutes les sources possibles
+        let userInfo = null;
         
-        window.Echo.connector.socket.bind('pusher:disconnected', () => {
-            console.warn('🟡 WebSocket déconnecté');
-            window.isWebSocketConnected = false;
-        });
+        // 1. Vérifier d'abord les props Inertia (le plus fiable après login)
+        if (window.page && window.page.props && window.page.props.auth && window.page.props.auth.user) {
+            userInfo = window.page.props.auth.user;
+            console.log('✅ Utilisateur trouvé dans les props Inertia:', userInfo);
+        }
+        // 2. Ensuite vérifier window.Laravel
+        else if (window.Laravel && window.Laravel.user) {
+            userInfo = window.Laravel.user;
+            console.log('✅ Utilisateur trouvé dans window.Laravel:', userInfo);
+        }
+        // 3. Enfin vérifier les meta tags
+        else {
+            const userId = document.querySelector('meta[name="user-id"]')?.getAttribute('content');
+            const userType = document.querySelector('meta[name="user-type"]')?.getAttribute('content');
+            
+            if (userId && userType) {
+                userInfo = { id: userId, type: userType };
+                console.log('✅ Utilisateur trouvé dans les meta tags:', userInfo);
+            }
+        }
+        
+        // Si aucune information utilisateur n'est disponible et que nous n'avons pas atteint le max de tentatives
+        if (!userInfo) {
+            if (echoInitAttempts < maxEchoInitAttempts) {
+                console.warn(`⚠️ Informations utilisateur non disponibles, nouvelle tentative dans 300ms (${echoInitAttempts}/${maxEchoInitAttempts})...`);
+                setTimeout(setupEcho, 300);
+                return false;
+            } else {
+                console.error('❌ Impossible de récupérer les informations utilisateur après plusieurs tentatives');
+                return false;
+            }
+        }
+        
+        // Récupérer le token CSRF
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            console.warn('⚠️ Token CSRF non disponible');
+            if (echoInitAttempts < maxEchoInitAttempts) {
+                setTimeout(setupEcho, 300);
+                return false;
+            } else {
+                return false;
+            }
+        }
+        
+        // Configurer Axios avec le token CSRF
+        configureAxios();
+        
+        // Synchroniser les données utilisateur dans window.Laravel pour cohérence
+        if (!window.Laravel) window.Laravel = {};
+        window.Laravel.user = window.Laravel.user || userInfo;
+        
+        // Définir les variables globales
+        window.clientId = parseInt(userInfo.id);
+        window.userType = userInfo.type;
+        
+        // Configuration Echo avec Pusher
+        const echoConfig = {
+            broadcaster: 'pusher',
+            key: '6ae46164b8889f3914b1', // Votre clé Pusher
+            cluster: 'eu',
+            forceTLS: true,
+            encrypted: true,
+            auth: {
+                headers: {
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            },
+            authEndpoint: '/broadcasting/auth',
+        };
+        
+        console.log('Configuration Echo avec Pusher:', echoConfig);
+        window.Echo = new Echo(echoConfig);
+        
+        // Signaler que Echo est initialisé
+        document.dispatchEvent(new CustomEvent('echo:initialized'));
+        
+        // Configurer les gestionnaires d'événements
+        if (window.Echo.connector && window.Echo.connector.pusher) {
+            window.Echo.connector.pusher.connection.bind('connected', () => {
+                console.log('🟢 WebSocket connecté via Pusher');
+                window.isWebSocketConnected = true;
+                window.echoReady = true;
+                document.dispatchEvent(new CustomEvent('echo:connected'));
+            });
+            
+            window.Echo.connector.pusher.connection.bind('disconnected', () => {
+                console.log('🔴 WebSocket déconnecté');
+                window.isWebSocketConnected = false;
+                window.echoReady = false;
+                window.dispatchEvent(new Event('echo:disconnected'));
+            });
+            
+            window.Echo.connector.pusher.connection.bind('error', (error) => {
+                console.error('❌ Erreur de connexion Pusher:', error);
+            });
+        }
+        
+        console.log('✅ Echo initialisé avec Pusher, test de connexion...');
+        window.isWebSocketConnected = true;
+        window.echoReady = true;
+        window.dispatchEvent(new Event('echo:initialized'));
+        
+        return true;
+    } catch (error) {
+        console.error('❌ Erreur lors de l\'initialisation d\'Echo avec Pusher:', error);
+        if (echoInitAttempts < maxEchoInitAttempts) {
+            setTimeout(setupEcho, 500);
+        }
+        return false;
     }
-    
-    console.log('🚀 Echo initialisé avec succès');
 }
-//fin de la fonction setupEcho
 
-// Démarrer l'initialisation
-initializeEcho();
+// Initialiser Echo dès que possible
+setupEcho();
 
-// Reconfigurer Axios après chaque navigation
-document.addEventListener('inertia:navigate', () => {
-    configureAxios();
+// Ajouter un événement pour Inertia.js qui se déclenche après chaque navigation
+document.addEventListener('inertia:success', () => {
+    // Réinitialiser le compteur et réessayer l'initialisation d'Echo
+    echoInitAttempts = 0;
+    if (!window.Echo) {
+        console.log('🔄 Page Inertia chargée, tentative d\'initialisation d\'Echo...');
+        setupEcho();
+    }
 });
 
 // Fonction utilitaire pour s'abonner aux canaux clients
@@ -273,26 +223,14 @@ window.subscribeToClientChannel = function() {
     return window.Echo.private(channelName)
         .listen('.message.sent', (e) => {
             console.log('💬 Nouveau message reçu:', e);
-        })
-        .error((error) => {
-            console.error(`❌ Erreur sur le canal ${channelName}:`, error);
         });
 };
 
-/**
- * Test de connexion Echo
- */
-if (window.clientId) {
-    setTimeout(() => {
-        console.log('🧪 Test de la connexion Echo...');
-        try {
-            window.Echo.private('test-channel')
-                .listen('.test', () => {})
-                .error((error) => {
-                    console.warn('⚠️ Erreur sur le canal de test (normal):', error);
-                });
-        } catch (error) {
-            console.error('❌ Erreur lors du test Echo:', error);
-        }
-    }, 1000);
-}
+// Tester la connexion Pusher
+setTimeout(() => {
+    if (window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
+        console.log('État de la connexion Pusher:', window.Echo.connector.pusher.connection.state);
+    } else {
+        console.warn('La connexion Pusher n\'est pas disponible');
+    }
+}, 3000);

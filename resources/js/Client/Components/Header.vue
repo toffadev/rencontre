@@ -62,6 +62,7 @@
             </div>
         </div>
     </header>
+    
 </template>
 
 <script setup>
@@ -102,28 +103,28 @@ onBeforeUnmount(() => {
 
 const logout = async () => {
     try {
-        // Récupérer un nouveau token CSRF avant la déconnexion
-        await axios.get('/sanctum/csrf-cookie');
-        
-        // Effectuer la déconnexion
-        await router.post(route('logout'), {}, {
-            onSuccess: () => {
-                // Nettoyer Echo et les abonnements WebSocket
-                if (window.Echo) {
-                    window.Echo.disconnect();
-                }
-                // Rediriger vers la page de connexion
-                window.location.href = route('login');
-            },
-            onError: (error) => {
-                console.error('Erreur lors de la déconnexion:', error);
-                // En cas d'erreur, forcer la redirection
-                window.location.href = route('login');
-            }
-        });
+        // Récupérer d'abord le jeton CSRF actuel du serveur
+        const response = await axios.get('/auth/check');
+        const serverToken = response.data.csrf_token;
+
+        // Créer un formulaire dynamiquement
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = route('logout');
+
+        // Ajouter le token CSRF du serveur
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_token';
+        csrfInput.value = serverToken;
+
+        // Ajouter au DOM et soumettre
+        form.appendChild(csrfInput);
+        document.body.appendChild(form);
+        form.submit();
     } catch (error) {
         console.error('Erreur lors de la déconnexion:', error);
-        // En cas d'erreur, forcer la redirection
+        // Redirection de secours
         window.location.href = route('login');
     }
 };

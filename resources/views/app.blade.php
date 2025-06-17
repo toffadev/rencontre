@@ -7,7 +7,7 @@
     @auth
     <meta name="user-id" content="{{ auth()->id() }}">
     <meta name="user-type" content="{{ auth()->user()->type }}">
-   
+
     <script>
     // S'assurer que les données d'authentification sont disponibles immédiatement
     document.addEventListener('DOMContentLoaded', function() {
@@ -29,6 +29,15 @@
             ],
             'appUrl' => config('app.url')
         ]) !!};
+        
+        // Ajouter également les données utilisateur depuis les props Inertia si disponibles
+        document.addEventListener('DOMContentLoaded', function() {
+            if (window.page && window.page.props && window.page.props.user) {
+                if (!window.Laravel) window.Laravel = {};
+                window.Laravel.user = window.Laravel.user || window.page.props.user;
+                console.log('Données utilisateur synchronisées depuis Inertia:', window.Laravel.user);
+            }
+        });
     </script>
     @endauth
     @guest

@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\TestEventController;
 use App\Http\Controllers\Client\ProfilePointController;
+use Illuminate\Support\Facades\Auth;
 /*
 |--------------------------------------------------------------------------
 | API Routes
@@ -21,6 +22,16 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 
 // Route pour tester l'envoi d'événements
 Route::post('/test-event', [TestEventController::class, 'sendTestEvent']);
+
+// Dans routes/api.php
+Route::get('/auth-test', function (Request $request) {
+    return [
+        'authenticated' => Auth::check(),
+        'user' => Auth::user(),
+        'session_id' => session()->getId(),
+        'cookies' => $request->cookies->all(),
+    ];
+})->middleware('web');
 
 // Stripe webhook route for profile points
 Route::post('/stripe/profile-points/webhook', [ProfilePointController::class, 'handleWebhook'])
