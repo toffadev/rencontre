@@ -177,14 +177,12 @@ messagesForDate, date
                                     </div>
 
                                     <!-- Messages pour cette date -->
-                                    <div v-for="message in messagesForDate" :key="message.id" :class="`flex space-x-2 mb-3 ${message.isOutgoing ? 'justify-end' : ''
-                                        }`">
+                                    <div v-for="message in messagesForDate" :key="message.id"
+                                        :class="`flex space-x-2 mb-3 ${message.isOutgoing ? 'justify-end' : ''}`">
                                         <template v-if="!message.isOutgoing">
                                             <div class="relative">
-                                                <img v-if="
-                                                    selectedProfile.main_photo_path
-                                                " :src="selectedProfile.main_photo_path
-                                                        " :alt="selectedProfile.name"
+                                                <img v-if="selectedProfile.main_photo_path"
+                                                    :src="selectedProfile.main_photo_path" :alt="selectedProfile.name"
                                                     class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                                 <div v-else
                                                     class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
@@ -193,12 +191,10 @@ messagesForDate, date
                                             </div>
                                         </template>
                                         <div>
-                                            <div :class="`${message.isOutgoing
-                                                    ? 'message-out'
-                                                    : 'message-in'
-                                                } px-4 py-2 max-w-xs lg:max-w-md ${message.pending ? 'pending' : ''
-                                                } ${message.failed ? 'failed' : ''
-                                                }`">
+                                            <div :class="`${message.isOutgoing ? 'message-out' : 'message-in'} px-4 py-2 max-w-xs lg:max-w-md ${message.pending ? 'pending' : ''} ${message.failed ? 'failed' : ''}`"
+                                                :data-message-id="message.id" :data-profile-id="selectedProfile.id"
+                                                :data-is-from-client="message.isOutgoing"
+                                                :data-is-read="message.read_at ? 'true' : 'false'">
                                                 <!-- Contenu du message -->
                                                 <div v-if="message.content" class="mb-2">{{ message.content }}</div>
 
@@ -215,24 +211,20 @@ messagesForDate, date
                                                 <span v-if="message.failed" class="ml-2 inline-block text-xs">❌</span>
                                             </div>
                                             <div class="flex items-center mt-1 text-xs text-gray-500" :class="{
-                                                'justify-end':
-                                                    message.isOutgoing,
+                                                'justify-end': message.isOutgoing,
                                             }">
                                                 <span class="font-medium mr-2">{{
                                                     message.isOutgoing
                                                         ? auth?.user?.name || "Vous"
-                                                        : selectedProfile.name
-                                                }}</span>
+                                                    : selectedProfile.name
+                                                    }}</span>
                                                 <span>{{ message.time }}</span>
                                             </div>
                                         </div>
                                         <template v-if="message.isOutgoing">
                                             <div class="relative">
-                                                <img v-if="
-                                                    auth?.user
-                                                        ?.profile_photo_url
-                                                " :src="auth.user.profile_photo_url
-                                                        " :alt="auth.user.name"
+                                                <img v-if="auth?.user?.profile_photo_url"
+                                                    :src="auth.user.profile_photo_url" :alt="auth.user.name"
                                                     class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                                 <div v-else
                                                     class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
@@ -623,6 +615,19 @@ async function selectProfile(profile) {
 
 // Envoyer un message
 async function sendMessage() {
+
+    // Vérifier le token CSRF
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    if (!csrfToken) {
+        console.warn('⚠️ Token CSRF manquant, tentative de rafraîchissement...');
+        try {
+            await axios.get('/sanctum/csrf-cookie');
+            console.log('✅ Token CSRF rafraîchi');
+        } catch (error) {
+            console.error('❌ Échec du rafraîchissement du token CSRF:', error);
+            return; // Ne pas continuer si le token n'est pas disponible
+        }
+    }
     if ((!newMessage.value.trim() && !selectedFile.value) || !selectedProfile.value || remainingPoints.value < 5) {
         if (remainingPoints.value < 5) {
             showPointsAlert.value = true;

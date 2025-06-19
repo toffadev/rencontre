@@ -41,6 +41,24 @@ L'application HeartMatch est une plateforme de rencontres utilisant Laravel comm
 -   **routes/web.php** : Définit les routes HTTP pour l'application, séparant les accès clients, modérateurs et administrateurs.
 -   **routes/channels.php** : Configure les canaux de diffusion WebSocket pour la communication en temps réel.
 
+#### Modèles (Models)
+
+-   **User** : Modèle principal représentant tous les utilisateurs (clients, modérateurs, administrateurs) avec leurs informations d'authentification.
+-   **Profile** : Représente les profils fictifs gérés par les modérateurs pour interagir avec les clients.
+-   **Message** : Stocke les messages échangés entre clients et profils, avec référence au modérateur responsable.
+-   **ClientProfile** : Contient les informations complètes du profil d'un client (orientation, âge, préférences).
+-   **ClientInfo** : Stocke des informations basiques sur les clients (ville, profession, etc.).
+-   **ClientCustomInfo** : Permet aux modérateurs d'ajouter des notes personnalisées sur les clients.
+-   **ConversationState** : Gère l'état des conversations (messages non lus, attente de réponse).
+-   **ModeratorProfileAssignment** : Établit la relation entre modérateurs et profils qu'ils gèrent.
+-   **ModeratorStatistic** : Enregistre les statistiques de performance des modérateurs.
+-   **PointConsumption** : Trace l'utilisation des points par les clients.
+-   **PointTransaction** : Enregistre les achats de points par les clients.
+-   **ProfilePointTransaction** : Gère les transferts de points des clients vers des profils spécifiques.
+-   **ProfilePhoto** : Stocke les photos associées aux profils.
+-   **ProfileReport** : Enregistre les signalements de profils par les clients.
+-   **MessageAttachment** : Gère les pièces jointes des messages.
+
 ## Flux de fonctionnement
 
 1. L'utilisateur se connecte via le **LoginController**, qui l'authentifie et le redirige selon son type.
@@ -52,5 +70,15 @@ L'application HeartMatch est une plateforme de rencontres utilisant Laravel comm
 7. Pour les modérateurs, **Moderator.vue** permet de voir les clients assignés et d'interagir avec eux.
 8. Les messages sont échangés via WebSockets à travers les canaux définis dans **channels.php**.
 9. **WebSocketHealthService** surveille la santé des connexions pour assurer la stabilité.
+
+## Relations entre les modèles
+
+-   Un **User** peut avoir différents rôles : client, modérateur ou administrateur.
+-   Les **Modérateurs** sont assignés à des **Profils** via **ModeratorProfileAssignment**.
+-   Les **Clients** communiquent avec des **Profils** en envoyant des **Messages**.
+-   Les **Messages** peuvent contenir des **MessageAttachments** (pièces jointes).
+-   Les **Clients** achètent des **Points** via des **PointTransactions**.
+-   Les **Points** sont dépensés pour envoyer des messages via **PointConsumption**.
+-   L'état des conversations est suivi via **ConversationState** pour gérer les notifications.
 
 Cette architecture permet une communication en temps réel efficace entre clients et modérateurs, avec une séparation claire des responsabilités entre les différentes couches de l'application.

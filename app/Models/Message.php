@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\Log;
 
 class Message extends Model
 {
@@ -61,5 +62,24 @@ class Message extends Model
     public function attachments(): HasMany
     {
         return $this->hasMany(MessageAttachment::class);
+    }
+
+    /**
+     * Get the notifications associated with this message
+     */
+    public function notifications()
+    {
+        return $this->hasMany(ClientNotification::class);
+    }
+
+    /**
+     * Mark as notification sent
+     */
+    public function markNotificationSent()
+    {
+        $this->notification_sent_at = now();
+        $this->notification_count = $this->notification_count + 1;
+        $this->save();
+        return $this;
     }
 }

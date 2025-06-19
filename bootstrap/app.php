@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Foundation\Http\Middleware\VerifyCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
+            \App\Http\Middleware\TrackUserActivity::class,
         ]);
 
         // API Middleware
@@ -43,8 +44,11 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withSchedule(function ($schedule) {
         // Exécuter la commande de traitement des messages toutes les minutes
         $schedule->command('messages:process')->everyMinute();
+        // Exécuter la commande de traitement des notifications toutes les 15 minutes
+        $schedule->command('app:process-notifications')->everyMinute();
     })
     ->withCommands([
         \App\Console\Commands\UpdateModeratorStatistics::class,
+        \App\Console\Commands\ProcessNotifications::class,
     ])
     ->create();

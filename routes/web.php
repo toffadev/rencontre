@@ -29,6 +29,20 @@ use App\Models\User;
 |--------------------------------------------------------------------------
 */
 
+// Dans routes/web.php
+Route::get('/test-reactivation', function () {
+    Log::info('Test manuel du job de réactivation');
+
+    // Forcer l'exécution synchrone
+    try {
+        $job = new \App\Jobs\SendReactivationNotification();
+        $job->handle();
+        return 'Job de réactivation exécuté. Vérifiez les logs.';
+    } catch (\Exception $e) {
+        return 'Erreur: ' . $e->getMessage();
+    }
+});
+
 // Route d'authentification pour les broadcasts
 Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
     return Illuminate\Support\Facades\Broadcast::auth($request);
@@ -134,6 +148,15 @@ Route::middleware(['auth', 'client_only'])->group(function () {
         Route::get('/transactions/client', [App\Http\Controllers\Client\ProfilePointController::class, 'getClientTransactionHistory'])->name('transactions.client');
     });
 });
+
+// Route pour le heartbeat d'activité utilisateur
+Route::middleware(['auth', 'client_only'])->post('/user/heartbeat', function () {
+    auth()->user()->updateLastActivity();
+    return response()->json(['success' => true]);
+})->name('client.heartbeat');
+
+// Route pour marquer un message spécifique comme lu
+Route::middleware(['auth', 'client_only'])->post('/messages/mark-as-read-single', [App\Http\Controllers\Client\MessageController::class, 'markSingleMessageAsRead'])->name('client.messages.mark-single-as-read');
 
 // Routes pour les points
 Route::middleware(['auth'])->group(function () {

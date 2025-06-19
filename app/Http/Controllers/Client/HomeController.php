@@ -35,7 +35,7 @@ class HomeController extends Controller
      *
      * @return \Inertia\Response
      */
-    public function index()
+    public function index(Request $request)
     {
         $user = auth()->user();
         $clientProfile = $user->clientProfile;
@@ -43,6 +43,23 @@ class HomeController extends Controller
         // Redirect to profile setup if not completed
         if (!$clientProfile || !$clientProfile->profile_completed) {
             return redirect()->route('profile.setup');
+        }
+
+        // Traiter les paramètres UTM pour les notifications
+        if ($request->has('notification_id')) {
+            $notificationId = $request->input('notification_id');
+            $notification = \App\Models\ClientNotification::find($notificationId);
+
+            if ($notification && $notification->user_id === $user->id && !$notification->opened_at) {
+                $notification->markAsOpened();
+
+                // Si la notification est liée à un message, rediriger vers ce message
+                if ($notification->message_id) {
+                    $message = $notification->message;
+                    // Stocker l'ID du profil pour l'ouvrir automatiquement
+                    session()->flash('open_profile_id', $message->profile_id);
+                }
+            }
         }
 
         // Get active profiles with their photos and user (moderator)
@@ -77,7 +94,7 @@ class HomeController extends Controller
         return Inertia::render('Home', [
             'profiles' => $profiles,
             'user' => $user,
-            //'csrf_token' => csrf_token()
+            'openProfileId' => session('open_profile_id'),
         ]);
     }
 

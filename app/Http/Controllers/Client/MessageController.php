@@ -308,37 +308,92 @@ class MessageController extends Controller
     }
 
     /**
-     * Mark messages as read for a specific profile
+     * Marque les messages comme lus
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
      */
     public function markAsRead(Request $request)
     {
+        // Valider les données de la requête
         $request->validate([
             'profile_id' => 'required|exists:profiles,id',
-            'last_message_id' => 'required|exists:messages,id'
         ]);
 
-        $clientId = Auth::id();
-        $profileId = $request->profile_id;
+        // Si c'est une requête pour un seul message
+        if ($request->has('is_single') && $request->has('message_id')) {
+            $message = Message::find($request->message_id);
 
-        // Marquer tous les messages non lus comme lus
-        Message::where('client_id', $clientId)
+            // Vérifier que le message appartient bien à ce client
+            if ($message && $message->client_id === auth()->id() && $message->profile_id == $request->profile_id) {
+                // Marquer le message comme lu s'il ne l'est pas déjà
+                if (!$message->read_at) {
+                    $message->read_at = now();
+                    $message->save();
+                }
+
+                return response()->json(['success' => true]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Non autorisé'], 403);
+        }
+
+        // Sinon, c'est une requête pour marquer toute la conversation comme lue
+        $profileId = $request->profile_id;
+        $lastMessageId = $request->last_message_id;
+
+        // Vérifier que le dernier message existe
+        $lastMessage = Message::find($lastMessageId);
+        if (!$lastMessage) {
+            return response()->json(['success' => false, 'message' => 'Message non trouvé'], 404);
+        }
+
+        // Mettre à jour l'état de la conversation
+        $conversationState = ConversationState::firstOrNew([
+            'client_id' => auth()->id(),
+            'profile_id' => $profileId
+        ]);
+
+        $conversationState->last_read_message_id = $lastMessageId;
+        $conversationState->has_been_opened = true;
+        $conversationState->awaiting_reply = true;
+        $conversationState->save();
+
+        // Marquer tous les messages comme lus
+        Message::where('client_id', auth()->id())
             ->where('profile_id', $profileId)
-            ->where('is_from_client', false)
+            ->where('is_from_client', false) // Ne marquer que les messages reçus
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
-        // Mettre à jour l'état de la conversation
-        ConversationState::updateOrCreate(
-            [
-                'client_id' => $clientId,
-                'profile_id' => $profileId
-            ],
-            [
-                'last_read_message_id' => $request->last_message_id,
-                'has_been_opened' => true,
-                'awaiting_reply' => true
-            ]
-        );
+        return response()->json(['success' => true]);
+    }
+
+    /**
+     * Marque un message spécifique comme lu
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function markSingleMessageAsRead(Request $request)
+    {
+        $request->validate([
+            'message_id' => 'required|exists:messages,id',
+            'profile_id' => 'required|exists:profiles,id',
+        ]);
+
+        $message = Message::find($request->message_id);
+
+        // Vérifier que le message appartient bien à ce client et ce profil
+        if ($message->client_id !== auth()->id() || $message->profile_id != $request->profile_id) {
+            return response()->json(['success' => false, 'message' => 'Non autorisé'], 403);
+        }
+
+        // Marquer le message comme lu s'il ne l'est pas déjà
+        if (!$message->read_at) {
+            $message->read_at = now();
+            $message->save();
+        }
 
         return response()->json(['success' => true]);
     }

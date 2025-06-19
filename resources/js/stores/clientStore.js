@@ -21,7 +21,10 @@ export const useClientStore = defineStore('client', {
         blockedProfileIds: [],
         reportedProfiles: [],
         channelSubscribed: false,
-        errors: {}
+        errors: {},
+        lastActivity: Date.now(),
+        activityInterval: null,
+        heartbeatInterval: null,
     }),
 
     getters: {
@@ -85,6 +88,12 @@ export const useClientStore = defineStore('client', {
                 
                 // Configurer les écouteurs WebSocket
                 this.setupClientListeners();
+                
+                // Configurer le tracking d'activité
+                this.setupActivityTracking();
+                
+                // Configurer le tracking de lecture des messages
+                this.setupMessageReadTracking();
                 
                 this.loading = false;
                 this.initialized = true;
@@ -390,70 +399,70 @@ export const useClientStore = defineStore('client', {
          * Marque une conversation comme lue
          */
         async markConversationAsRead(profileId) {
-    if (!profileId || !this.conversationStates[profileId]) {
-        return;
-    }
-    
-    const state = this.conversationStates[profileId];
-    const messages = this.messagesMap[profileId] || [];
-    const lastMessage = messages[messages.length - 1];
-    
-    if (lastMessage) {
-        try {
-            console.log(`🔍 Marquage de la conversation avec le profil ${profileId} comme lue...`);
-            
-            // Mettre à jour l'état local immédiatement pour une meilleure UX
-            state.lastReadMessageId = lastMessage.id;
-            state.hasBeenOpened = true;
-            state.isOpen = true;
-            state.unreadCount = 0;
-            
-            // Récupérer le token CSRF actuel
-            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-            
-            // Appeler l'API pour persister l'état
-            await axios.post('/messages/mark-as-read', {
-                profile_id: profileId,
-                last_message_id: lastMessage.id
-            }, {
-                headers: {
-                    'X-CSRF-TOKEN': token,
-                    'Accept': 'application/json'
-                }
-            });
-            
-            console.log(`✅ Conversation avec le profil ${profileId} marquée comme lue`);
-        } catch (error) {
-            if (error.response?.status === 419) {
-                console.warn(`⚠️ Erreur CSRF lors du marquage de la conversation ${profileId}, tentative de rafraîchissement du token...`);
-                try {
-                    // Rafraîchir le token CSRF
-                    await axios.get('/sanctum/csrf-cookie');
-                    
-                    // Réessayer avec le nouveau token
-                    const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                    
-                    if (newToken) {
-                        await axios.post('/messages/mark-as-read', {
-                            profile_id: profileId,
-                            last_message_id: lastMessage.id
-                        }, {
-                            headers: {
-                                'X-CSRF-TOKEN': newToken,
-                                'Accept': 'application/json'
-                            }
-                        });
-                        console.log(`✅ Conversation avec le profil ${profileId} marquée comme lue après rafraîchissement du token`);
-                    }
-                } catch (retryError) {
-                    console.error(`❌ Échec après tentative de rafraîchissement du token:`, retryError);
-                }
-            } else {
-                console.error(`❌ Erreur lors du marquage de la conversation avec le profil ${profileId} comme lue:`, error);
+            if (!profileId || !this.conversationStates[profileId]) {
+                return;
             }
-        }
-    }
-},
+            
+            const state = this.conversationStates[profileId];
+            const messages = this.messagesMap[profileId] || [];
+            const lastMessage = messages[messages.length - 1];
+            
+            if (lastMessage) {
+                try {
+                    console.log(`🔍 Marquage de la conversation avec le profil ${profileId} comme lue...`);
+                    
+                    // Mettre à jour l'état local immédiatement pour une meilleure UX
+                    state.lastReadMessageId = lastMessage.id;
+                    state.hasBeenOpened = true;
+                    state.isOpen = true;
+                    state.unreadCount = 0;
+                    
+                    // Récupérer le token CSRF actuel
+                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                    
+                    // Appeler l'API pour persister l'état
+                    await axios.post('/messages/mark-as-read', {
+                        profile_id: profileId,
+                        last_message_id: lastMessage.id
+                    }, {
+                        headers: {
+                            'X-CSRF-TOKEN': token,
+                            'Accept': 'application/json'
+                        }
+                    });
+                    
+                    console.log(`✅ Conversation avec le profil ${profileId} marquée comme lue`);
+                } catch (error) {
+                    if (error.response?.status === 419) {
+                        console.warn(`⚠️ Erreur CSRF lors du marquage de la conversation ${profileId}, tentative de rafraîchissement du token...`);
+                        try {
+                            // Rafraîchir le token CSRF
+                            await axios.get('/sanctum/csrf-cookie');
+                            
+                            // Réessayer avec le nouveau token
+                            const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                            
+                            if (newToken) {
+                                await axios.post('/messages/mark-as-read', {
+                                    profile_id: profileId,
+                                    last_message_id: lastMessage.id
+                                }, {
+                                    headers: {
+                                        'X-CSRF-TOKEN': newToken,
+                                        'Accept': 'application/json'
+                                    }
+                                });
+                                console.log(`✅ Conversation avec le profil ${profileId} marquée comme lue après rafraîchissement du token`);
+                            }
+                        } catch (retryError) {
+                            console.error(`❌ Échec après tentative de rafraîchissement du token:`, retryError);
+                        }
+                    } else {
+                        console.error(`❌ Erreur lors du marquage de la conversation avec le profil ${profileId} comme lue:`, error);
+                    }
+                }
+            }
+        },
         
         /**
          * Initialise l'état d'une conversation
@@ -589,12 +598,150 @@ export const useClientStore = defineStore('client', {
                 console.error('❌ Erreur lors de la configuration des écouteurs WebSocket:', error);
             }
         },
+
+        // Ajouter dans actions
+        /**
+         * Initialise le tracking d'activité utilisateur
+         */
+        setupActivityTracking() {
+            // Événements à surveiller pour l'activité
+            const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
+            
+            // Fonction pour mettre à jour le timestamp de dernière activité
+            const updateActivity = () => {
+                this.lastActivity = Date.now();
+            };
+            
+            // Ajouter les écouteurs d'événements
+            activityEvents.forEach(event => {
+                window.addEventListener(event, updateActivity, { passive: true });
+            });
+            
+            // Vérifier l'activité toutes les 30 secondes
+            this.activityInterval = setInterval(() => {
+                const now = Date.now();
+                const inactiveTime = now - this.lastActivity;
+                
+                // Si l'utilisateur est actif dans les 5 dernières minutes
+                if (inactiveTime < 5 * 60 * 1000) {
+                    console.log('👤 Utilisateur actif, dernier mouvement il y a', Math.round(inactiveTime / 1000), 'secondes');
+                } else {
+                    console.log('💤 Utilisateur inactif depuis', Math.round(inactiveTime / 60000), 'minutes');
+                }
+            }, 30000);
+            
+            // Envoyer un heartbeat toutes les 2 minutes si l'utilisateur est actif
+            this.heartbeatInterval = setInterval(async () => {
+                const now = Date.now();
+                const inactiveTime = now - this.lastActivity;
+                
+                // Si l'utilisateur est actif dans les 5 dernières minutes, envoyer un heartbeat
+                if (inactiveTime < 5 * 60 * 1000) {
+                    try {
+                        await axios.post('/user/heartbeat');
+                        console.log('💓 Heartbeat envoyé au serveur');
+                    } catch (error) {
+                        console.error('❌ Erreur lors de l\'envoi du heartbeat:', error);
+                    }
+                }
+            }, 2 * 60 * 1000); // 2 minutes
+        },
+
+        /**
+         * Marque automatiquement les messages comme lus lorsqu'ils sont visibles
+         */
+        setupMessageReadTracking() {
+            // Utiliser IntersectionObserver pour détecter les messages visibles
+            if ('IntersectionObserver' in window) {
+                // Configuration de l'observateur
+                const options = {
+                    root: document.querySelector('.chat-container'),
+                    rootMargin: '0px',
+                    threshold: 0.5 // 50% visible
+                };
+                
+                // Créer l'observateur
+                const observer = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            const messageId = entry.target.dataset.messageId;
+                            const profileId = entry.target.dataset.profileId;
+                            const isFromClient = entry.target.dataset.isFromClient === 'true';
+                            
+                            // Ne marquer comme lu que les messages entrants
+                            if (messageId && profileId && !isFromClient) {
+                                this.markMessageAsRead(messageId, profileId);
+                            }
+                        }
+                    });
+                }, options);
+                
+                // Observer les messages (à appeler après le rendu des messages)
+                this.messageObserver = observer;
+            }
+        },
+
+        /**
+         * Marque un message spécifique comme lu
+         */
+        async markMessageAsRead(messageId, profileId) {
+    try {
+        // Récupérer le token CSRF actuel
+        const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        
+        // Appeler l'API pour marquer le message comme lu
+        await axios.post('/messages/mark-as-read', { // Changez cette ligne
+            message_id: messageId,
+            profile_id: profileId,
+            is_single: true // Ajoutez ce paramètre pour différencier
+        }, {
+            headers: {
+                'X-CSRF-TOKEN': token,
+                'Accept': 'application/json'
+            }
+        });
+        
+        console.log(`✅ Message ${messageId} marqué comme lu`);
+    } catch (error) {
+        console.error(`❌ Erreur lors du marquage du message ${messageId} comme lu:`, error);
+    }
+},
+
+        /**
+         * Observe les nouveaux messages pour les marquer comme lus
+         */
+        observeMessages(profileId) {
+            if (this.messageObserver) {
+                // Sélectionner tous les messages non-lus du profil actuel
+                const messages = document.querySelectorAll(`.message-in[data-profile-id="${profileId}"][data-is-read="false"]`);
+                
+                messages.forEach(message => {
+                    this.messageObserver.observe(message);
+                });
+            }
+        },
+
+
         
         /**
          * Nettoie les ressources lors de la déconnexion
          */
         cleanup() {
             console.log('🧹 Nettoyage des ressources du ClientStore...');
+            
+            // Nettoyer les intervalles
+            if (this.activityInterval) {
+                clearInterval(this.activityInterval);
+            }
+            
+            if (this.heartbeatInterval) {
+                clearInterval(this.heartbeatInterval);
+            }
+            
+            // Nettoyer l'observateur de messages
+            if (this.messageObserver) {
+                this.messageObserver.disconnect();
+            }
             
             // Quitter les canaux spécifiques au client
             if (this.clientId && this.channelSubscribed) {

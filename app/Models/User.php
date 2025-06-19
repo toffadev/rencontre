@@ -166,4 +166,21 @@ class User extends Authenticatable
     {
         return $this->hasOne(ClientProfile::class);
     }
+
+    /**
+     * Get the client notifications for this user
+     */
+    public function clientNotifications()
+    {
+        return $this->hasMany(ClientNotification::class);
+    }
+
+    /**
+     * Update the last activity timestamp
+     */
+    public function updateLastActivity()
+    {
+        $this->last_activity_at = now();
+        $this->save();
+    }
 }
