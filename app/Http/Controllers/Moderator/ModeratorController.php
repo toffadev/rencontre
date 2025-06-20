@@ -120,6 +120,10 @@ class ModeratorController extends Controller
                 Auth::user()->type,
                 request()->header('X-Socket-ID') ?? uniqid('conn_')
             );
+
+            // Mettre à jour le statut en ligne du modérateur
+            $user = Auth::user();
+            $user->updateOnlineStatus(true);
         }
 
         // Passer explicitement l'utilisateur à Inertia
@@ -1093,5 +1097,38 @@ class ModeratorController extends Controller
         }
 
         return $fullContext;
+    }
+
+    /**
+     * Endpoint pour le heartbeat du modérateur
+     * Cette méthode permet de suivre l'activité du modérateur en temps réel
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function heartbeat()
+    {
+        $user = Auth::user();
+
+        if (!$user || $user->type !== 'moderateur') {
+            return response()->json([
+                'success' => false,
+                'error' => 'Non autorisé'
+            ], 403);
+        }
+
+        // Mettre à jour le statut en ligne et la dernière activité
+        $user->updateOnlineStatus(true);
+
+        // Mettre à jour l'activité dans le service WebSocket
+        $this->webSocketHealthService->updateActivity(
+            request()->header('X-Socket-ID') ?? uniqid('conn_')
+        );
+
+        return response()->json([
+            'success' => true,
+            'timestamp' => now()->toIso8601String(),
+            'is_online' => $user->is_online,
+            'last_online_at' => $user->last_online_at ? $user->last_online_at->toIso8601String() : null
+        ]);
     }
 }

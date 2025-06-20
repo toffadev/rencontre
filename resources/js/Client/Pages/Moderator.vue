@@ -744,7 +744,26 @@ async function ensureWebSocketConnection() {
     }
 }
 
-// Dans checkWebSocketConnection()
+// Fonction pour mettre à jour le statut hors ligne
+/* async function updateOfflineStatus() {
+    try {
+        await axios.post('/moderateur/heartbeat', { is_online: false });
+        console.log('✅ Statut mis à jour: hors ligne');
+    } catch (error) {
+        console.error('❌ Erreur lors de la mise à jour du statut hors ligne:', error);
+    }
+} */
+
+// Version améliorée avec sendBeacon
+function updateOfflineStatus() {
+    const data = new FormData();
+    data.append('is_online', 'false');
+
+    // Utiliser sendBeacon qui est plus fiable pour les requêtes lors de la fermeture du navigateur
+    navigator.sendBeacon('/moderateur/heartbeat', data);
+    console.log('✅ Statut mis à jour: hors ligne (via sendBeacon)');
+}
+
 // Dans checkWebSocketConnection()
 function checkWebSocketConnection() {
     if (window.Echo && window.Echo.connector && window.Echo.connector.pusher) {
@@ -942,7 +961,7 @@ function setupCSRFErrorHandler() {
 // Variables pour le nettoyage
 let csrfRefreshInterval;
 let axiosInterceptorId;
-
+let heartbeatInterval; // Nouvelle variable pour le heartbeat
 // Configurer l'intercepteur Axios pour les erreurs CSRF
 axiosInterceptorId = axios.interceptors.response.use(
     response => response,
@@ -994,6 +1013,9 @@ onMounted(async () => {
         // Initialiser le store du modérateur
         await moderatorStore.initialize();
 
+        // Envoyer un heartbeat initial pour mettre à jour le statut en ligne
+        await moderatorStore.sendHeartbeat();
+
         // Configurer les écouteurs spécifiques au modérateur
         if (currentAssignedProfile.value) {
             moderatorStore.setupProfileListeners(currentAssignedProfile.value.id);
@@ -1004,9 +1026,16 @@ onMounted(async () => {
 
         // Configurer un intervalle pour rafraîchir le token CSRF périodiquement
         csrfRefreshInterval = setInterval(refreshCSRFToken, 30 * 60 * 1000); // 30 minutes
+        // Configurer l'intervalle de heartbeat pour maintenir le statut en ligne
+        heartbeatInterval = setInterval(() => {
+            moderatorStore.sendHeartbeat();
+        }, 2 * 60 * 1000); // 2 minutes
     } catch (error) {
         console.error('❌ Erreur lors de l\'initialisation du composant Moderator:', error);
     }
+
+    // Configurer l'écouteur d'événement pour la fermeture du navigateur
+    window.addEventListener('beforeunload', updateOfflineStatus);
 });
 
 // Nettoyage lors du démontage
@@ -1018,10 +1047,18 @@ onUnmounted(() => {
         clearInterval(csrfRefreshInterval);
     }
 
+    // Nettoyer l'intervalle de heartbeat
+    if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+    }
+
     // Supprimer l'intercepteur Axios
     if (axiosInterceptorId !== undefined) {
         axios.interceptors.response.eject(axiosInterceptorId);
     }
+
+    // Supprimer l'écouteur d'événement beforeunload
+    window.removeEventListener('beforeunload', updateOfflineStatus);
 
     // Nettoyer le store
     moderatorStore.cleanup();

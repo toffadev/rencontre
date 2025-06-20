@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Jobs\SendAwaitingReplyNotification;
 use App\Jobs\SendReactivationNotification;
 use App\Jobs\SendUnreadMessageNotification;
+use App\Jobs\ProcessPendingMessages;
+use App\Jobs\CheckNotificationRound;
 use Illuminate\Console\Command;
 
 class ProcessNotifications extends Command
@@ -41,6 +43,19 @@ class ProcessNotifications extends Command
         // Traiter les notifications de réactivation (48h)
         $this->info('Traitement des notifications de réactivation...');
         SendReactivationNotification::dispatch();
+
+        // Traiter les notifications pour messages en attente chez le modérateur (30 min)
+        $this->info('Traitement des notifications pour messages en attente chez le modérateur...');
+        ProcessPendingMessages::dispatch();
+
+        // Vérifier les rounds de notification (30 min)
+        $this->info('Vérification des rounds de notification...');
+        $lastRound = \App\Models\ModeratorNotificationRound::latest()->first();
+        if ($lastRound) {
+            CheckNotificationRound::dispatch($lastRound->id);
+        } else {
+            $this->info('Aucun round de notification à vérifier.');
+        }
 
         $this->info('Traitement des notifications terminé !');
     }

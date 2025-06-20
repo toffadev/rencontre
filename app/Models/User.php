@@ -26,6 +26,8 @@ class User extends Authenticatable
         'points',
         'status',
         'role',
+        'is_online',
+        'last_online_at',
     ];
 
     /**
@@ -182,5 +184,42 @@ class User extends Authenticatable
     {
         $this->last_activity_at = now();
         $this->save();
+    }
+
+    /**
+     * Update the online status and last online time
+     *
+     * @param bool $isOnline
+     * @return void
+     */
+    public function updateOnlineStatus(bool $isOnline): void
+    {
+        $this->is_online = $isOnline;
+
+        if ($isOnline) {
+            $this->last_online_at = now();
+        }
+
+        $this->save();
+    }
+
+    /**
+     * Count active conversations for this moderator
+     *
+     * @return int
+     */
+    public function getActiveConversationsCount(): int
+    {
+        if ($this->type !== 'moderateur') {
+            return 0;
+        }
+
+        // Compte les conversations distinctes (combinaison client_id et profile_id)
+        // où ce modérateur est impliqué et qui ont eu une activité récente
+        return Message::where('moderator_id', $this->id)
+            ->where('created_at', '>', now()->subDays(7))
+            ->select('client_id', 'profile_id')
+            ->distinct()
+            ->count();
     }
 }

@@ -82,4 +82,42 @@ class Message extends Model
         $this->save();
         return $this;
     }
+
+    /**
+     * Get pending client message record if exists
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasOne
+     */
+    public function pendingClientMessage()
+    {
+        return $this->hasOne(PendingClientMessage::class);
+    }
+
+    /**
+     * Create a pending message entry
+     *
+     * @return PendingClientMessage|null
+     */
+    public function createPendingEntry()
+    {
+        // Vérifier si c'est un message du client et sans modérateur assigné
+        if (!$this->is_from_client || $this->moderator_id) {
+            return null;
+        }
+
+        // Vérifier si une entrée existe déjà
+        if ($this->pendingClientMessage()->exists()) {
+            return $this->pendingClientMessage;
+        }
+
+        // Créer une nouvelle entrée
+        return PendingClientMessage::create([
+            'message_id' => $this->id,
+            'client_id' => $this->client_id,
+            'profile_id' => $this->profile_id,
+            'pending_since' => $this->created_at,
+            'is_notified' => false,
+            'is_processed' => false,
+        ]);
+    }
 }

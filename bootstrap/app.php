@@ -21,6 +21,7 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
             \App\Http\Middleware\HandleInertiaRequests::class,
             \App\Http\Middleware\TrackUserActivity::class,
+            \App\Http\Middleware\TrackModeratorActivity::class,
         ]);
 
         // API Middleware

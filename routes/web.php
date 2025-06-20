@@ -21,6 +21,10 @@ use App\Models\Profile;
 use App\Http\Controllers\Admin\ModeratorPerformanceController;
 use App\Http\Controllers\Admin\ProfilePerformanceController;
 use App\Models\User;
+use App\Http\Controllers\Moderator\ModeratorController;
+use App\Http\Controllers\Moderator\ProfilePhotoController;
+use App\Http\Controllers\Moderator\ClientInfoController;
+use App\Http\Controllers\Moderator\ModeratorProfileController;
 
 
 /*
@@ -339,35 +343,36 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     })->name('user-data');
 
     // Page principale des modérateurs
-    Route::get('/chat', [App\Http\Controllers\Moderator\ModeratorController::class, 'index'])->name('chat');
+    Route::get('/chat', [ModeratorController::class, 'index'])->name('chat');
 
     // API pour les modérateurs
-    Route::get('/clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getClients'])->name('clients');
-    Route::get('/available-clients', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAvailableClients'])->name('available-clients');
-    Route::post('/start-conversation', [App\Http\Controllers\Moderator\ModeratorController::class, 'startConversation'])->name('start-conversation');
-    Route::get('/profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'getAssignedProfile'])->name('profile');
-    Route::get('/messages', [App\Http\Controllers\Moderator\ModeratorController::class, 'getMessages'])->name('messages');
-    Route::post('/send-message', [App\Http\Controllers\Moderator\ModeratorController::class, 'sendMessage'])
+    Route::get('/clients', [ModeratorController::class, 'getClients'])->name('clients');
+    Route::get('/available-clients', [ModeratorController::class, 'getAvailableClients'])->name('available-clients');
+    Route::post('/start-conversation', [ModeratorController::class, 'startConversation'])->name('start-conversation');
+    Route::get('/profile', [ModeratorController::class, 'getAssignedProfile'])->name('profile');
+    Route::get('/messages', [ModeratorController::class, 'getMessages'])->name('messages');
+    Route::post('/send-message', [ModeratorController::class, 'sendMessage'])
         ->name('send-message')
         ->middleware(['web', 'auth', 'moderator']);
-    Route::post('/set-primary-profile', [App\Http\Controllers\Moderator\ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
+    Route::post('/set-primary-profile', [ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
+    Route::post('/heartbeat', [ModeratorController::class, 'heartbeat'])->name('heartbeat'); // Nouvelle route pour le heartbeat
 
     // Routes pour la gestion des photos de profil
-    Route::get('/profile-photos', [App\Http\Controllers\Moderator\ProfilePhotoController::class, 'getProfilePhotos'])->name('profile-photos');
-    Route::post('/send-profile-photo', [App\Http\Controllers\Moderator\ProfilePhotoController::class, 'sendProfilePhoto'])->name('send-profile-photo');
+    Route::get('/profile-photos', [ProfilePhotoController::class, 'getProfilePhotos'])->name('profile-photos');
+    Route::post('/send-profile-photo', [ProfilePhotoController::class, 'sendProfilePhoto'])->name('send-profile-photo');
 
     // Routes pour les informations client
-    Route::get('/clients/{client}/info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'getClientInfo'])->name('client.info');
-    Route::post('/clients/{client}/basic-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'updateBasicInfo'])->name('client.basic-info.update');
-    Route::post('/clients/{client}/custom-info', [App\Http\Controllers\Moderator\ClientInfoController::class, 'addCustomInfo'])->name('client.custom-info.add');
-    Route::delete('/custom-info/{customInfo}', [App\Http\Controllers\Moderator\ClientInfoController::class, 'deleteCustomInfo'])->name('client.custom-info.delete');
+    Route::get('/clients/{client}/info', [ClientInfoController::class, 'getClientInfo'])->name('client.info');
+    Route::post('/clients/{client}/basic-info', [ClientInfoController::class, 'updateBasicInfo'])->name('client.basic-info.update');
+    Route::post('/clients/{client}/custom-info', [ClientInfoController::class, 'addCustomInfo'])->name('client.custom-info.add');
+    Route::delete('/custom-info/{customInfo}', [ClientInfoController::class, 'deleteCustomInfo'])->name('client.custom-info.delete');
 
     // Nouvelles routes pour le profil modérateur
-    Route::get('/profile-stats', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'index'])->name('profile.stats');
-    Route::get('/profile/statistics', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getStatistics'])->name('profile.statistics');
-    Route::get('/profile/messages', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getMessageHistory'])->name('profile.messages');
-    Route::get('/profile/points', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getPointsReceived'])->name('profile.points');
-    Route::get('/profile/monthly-earnings', [App\Http\Controllers\Moderator\ModeratorProfileController::class, 'getMonthlyEarnings'])->name('profile.monthly-earnings');
+    Route::get('/profile-stats', [ModeratorProfileController::class, 'index'])->name('profile.stats');
+    Route::get('/profile/statistics', [ModeratorProfileController::class, 'getStatistics'])->name('profile.statistics');
+    Route::get('/profile/messages', [ModeratorProfileController::class, 'getMessageHistory'])->name('profile.messages');
+    Route::get('/profile/points', [ModeratorProfileController::class, 'getPointsReceived'])->name('profile.points');
+    Route::get('/profile/monthly-earnings', [ModeratorProfileController::class, 'getMonthlyEarnings'])->name('profile.monthly-earnings');
 
     // Moderator management routes will go here
 });

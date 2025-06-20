@@ -859,6 +859,25 @@ export const useModeratorStore = defineStore('moderator', {
             window.removeEventListener('websocket:connected', this.handleWebSocketConnected);
             
             console.log('🧹 ModeratorStore nettoyé');
+        },
+
+        /**
+         * Envoie un signal heartbeat pour indiquer que le modérateur est actif
+         * Cette fonction est appelée périodiquement pour maintenir le statut en ligne
+         */
+        async sendHeartbeat() {
+            try {
+                const response = await axios.post('/moderateur/heartbeat');
+                
+                if (response.data.success) {
+                    // Mettre à jour l'état local si nécessaire
+                    console.log('✅ Heartbeat envoyé avec succès');
+                    return true;
+                }
+            } catch (error) {
+                console.error('❌ Erreur lors de l\'envoi du heartbeat:', error);
+                return false;
+            }
         }
     }
 });
