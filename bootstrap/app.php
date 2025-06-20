@@ -47,6 +47,8 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('messages:process')->everyMinute();
         // Exécuter la commande de traitement des notifications toutes les 15 minutes
         $schedule->command('app:process-notifications')->everyMinute();
+        // Enregistrement du job de calcul d'activité des modérateurs
+        $schedule->job(new \App\Jobs\CalculateModeratorActivity())->everyFiveMinutes();
     })
     ->withCommands([
         \App\Console\Commands\UpdateModeratorStatistics::class,

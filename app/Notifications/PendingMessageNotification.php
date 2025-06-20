@@ -41,13 +41,20 @@ class PendingMessageNotification extends Notification implements ShouldQueue
     {
         $url = url('/moderateur/chat');
 
-        return (new MailMessage)
+        /* return (new MailMessage)
             ->subject('Messages clients en attente ⚠️')
             ->greeting('Bonjour ' . $notifiable->name)
             ->line("Il y a {$this->pendingMessagesCount} messages clients qui attendent une réponse.")
             ->line('Votre intervention est nécessaire pour maintenir une bonne expérience utilisateur.')
             ->action('Répondre aux messages', $url)
-            ->line('Merci de votre réactivité!');
+            ->line('Merci de votre réactivité!'); */
+        return (new MailMessage)
+            ->subject('Messages clients en attente ⚠️')
+            ->view('emails.pending-message', [
+                'user' => $notifiable,
+                'pendingMessagesCount' => $this->pendingMessagesCount,
+                'url' => $url,
+            ]);
     }
 
     /**

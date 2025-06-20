@@ -74,19 +74,25 @@ class LoginController extends Controller
      */
     public function logout(Request $request)
     {
-        $userType = Auth::user()->type;
+        $user = Auth::user(); // Récupère l'utilisateur une fois
 
-        // Revoke all user's tokens
-        if (Auth::check()) {
-            Auth::user()->tokens()->delete();
+        // Si l'utilisateur est un modérateur, mettre à jour son statut en ligne
+        if ($user && $user->type === 'moderateur') {
+            $user->updateOnlineStatus(false);
+        }
+
+        // Révoquer tous les tokens
+        if ($user) {
+            $user->tokens()->delete();
         }
 
         Auth::logout();
+
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
         // Rediriger vers la page de connexion appropriée
-        if ($userType === 'admin') {
+        if ($user && $user->type === 'admin') {
             return redirect()->route('admin.login');
         }
 

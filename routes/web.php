@@ -25,6 +25,8 @@ use App\Http\Controllers\Moderator\ModeratorController;
 use App\Http\Controllers\Moderator\ProfilePhotoController;
 use App\Http\Controllers\Moderator\ClientInfoController;
 use App\Http\Controllers\Moderator\ModeratorProfileController;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Http\Request;
 
 
 /*
@@ -387,3 +389,26 @@ Route::middleware(['auth'])->prefix('api/websocket')->name('websocket.')->group(
     Route::get('/statistics', [App\Http\Controllers\WebSocketDiagnosticController::class, 'statistics'])->name('statistics');
     Route::post('/refresh-auth', [App\Http\Controllers\WebSocketDiagnosticController::class, 'refreshAuth'])->name('refresh-auth');
 });
+
+Route::get('/test-mail', function () {
+    $to = request('to', 'test@example.com'); // Adresse de test par défaut
+    try {
+        Mail::raw('Ceci est un test d\'envoi de mail via Mailtrap.', function ($message) use ($to) {
+            $message->to($to)->subject('Test Mailtrap');
+        });
+        Log::info('Test mail envoyé à ' . $to);
+        return 'Mail de test envoyé à ' . $to;
+    } catch (Exception $e) {
+        Log::error('Erreur lors de l\'envoi du mail de test: ' . $e->getMessage());
+        return 'Erreur lors de l\'envoi du mail: ' . $e->getMessage();
+    }
+});
+
+/* Route::post('/moderateur/logout', function (Request $request) {
+    if (Auth::check() && Auth::user()->type === 'moderateur') {
+        $user = Auth::user();
+        $user->updateOnlineStatus(false);
+    }
+    // Appeler la route de logout existante
+    return app(\App\Http\Controllers\Auth\LoginController::class)->logout($request);
+})->name('moderator.logout'); */

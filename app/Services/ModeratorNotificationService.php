@@ -28,9 +28,9 @@ class ModeratorNotificationService
             ->where('is_online', false);
 
         // Si un round précédent est fourni, exclure les modérateurs déjà notifiés
-        if ($lastRound && !empty($lastRound->moderator_ids_notified)) {
+        /* if ($lastRound && !empty($lastRound->moderator_ids_notified)) {
             $query->whereNotIn('id', $lastRound->moderator_ids_notified);
-        }
+        } */
 
         // Récupérer les modérateurs
         $moderators = $query->get();
