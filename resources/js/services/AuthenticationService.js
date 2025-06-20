@@ -219,6 +219,29 @@ class AuthenticationService {
         
         return this;
     }
+
+    async reinitializeAfterAuth() {
+        // Rafraîchir le token CSRF
+        await this.refreshCSRFToken();
+
+        // Reconfigurer Axios (au cas où)
+        if (window.configureAxios) window.configureAxios();
+
+        // Réinitialiser Echo/WebSocketManager
+        if (window.webSocketManager && typeof window.webSocketManager.initialize === 'function') {
+            await window.webSocketManager.initialize();
+        }
+
+        // Réinitialiser les stores Pinia si besoin
+        if (window.$pinia) {
+            if (window.$pinia._s.has('client')) {
+                await window.$pinia._s.get('client').initialize();
+            }
+            if (window.$pinia._s.has('moderator')) {
+                await window.$pinia._s.get('moderator').initialize();
+            }
+        }
+    }
 }
 
 // Créer une instance singleton

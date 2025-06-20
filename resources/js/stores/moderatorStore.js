@@ -42,7 +42,10 @@ export const useModeratorStore = defineStore('moderator', {
             clients: null,
             messages: null,
             websocket: null
-        }
+        },
+
+        initialized: false,
+        heartbeatInterval: null
     }),
     
     actions: {
@@ -79,6 +82,8 @@ export const useModeratorStore = defineStore('moderator', {
                 this.setupModeratorWebSocketListeners();
                 
                 console.log('✅ ModeratorStore initialisé avec succès');
+                this.initialized = true;
+                this.startHeartbeat();
                 return true;
             } catch (error) {
                 console.error('❌ Erreur lors de l\'initialisation du ModeratorStore:', error);
@@ -867,7 +872,7 @@ export const useModeratorStore = defineStore('moderator', {
          */
         async sendHeartbeat() {
             try {
-                const response = await axios.post('/moderateur/heartbeat');
+                const response = await axios.post('/heartbeat');
                 
                 if (response.data.success) {
                     // Mettre à jour l'état local si nécessaire
@@ -878,6 +883,14 @@ export const useModeratorStore = defineStore('moderator', {
                 console.error('❌ Erreur lors de l\'envoi du heartbeat:', error);
                 return false;
             }
+        },
+
+        startHeartbeat() {
+            if (!this.initialized) return; // Guard
+            if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = setInterval(() => {
+                if (this.initialized) this.sendHeartbeat();
+            }, 30000);
         }
     }
 });

@@ -67,6 +67,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import authService from '@/services/AuthenticationService';
 import { router, Link, usePage } from '@inertiajs/vue3';
 import { route } from 'ziggy-js';
 import EchoTest from './EchoTest.vue';
@@ -101,7 +102,7 @@ onBeforeUnmount(() => {
     document.removeEventListener('click', closeDropdown);
 });
 
-const logout = async () => {
+/* const logout = async () => {
     try {
         // Récupérer d'abord le jeton CSRF actuel du serveur
         const response = await axios.get('/auth/check');
@@ -125,6 +126,22 @@ const logout = async () => {
     } catch (error) {
         console.error('Erreur lors de la déconnexion:', error);
         // Redirection de secours
+        window.location.href = route('login');
+    }
+}; */
+
+const logout = async () => {
+    try {
+        await router.post(route('logout'), {}, {
+            onFinish: async () => {
+                // Réinitialise tout le frontend après la déconnexion
+                await authService.reinitializeAfterAuth();
+                // Redirige vers la page de login
+                window.location.href = route('login');
+            }
+        });
+    } catch (error) {
+        console.error('Erreur lors de la déconnexion:', error);
         window.location.href = route('login');
     }
 };

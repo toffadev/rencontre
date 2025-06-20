@@ -124,6 +124,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue';
+import authService from '@/services/AuthenticationService';
 import { useForm, Link } from '@inertiajs/vue3';
 import GuestLayout from '@client/Layouts/GuestLayout.vue';
 import { route } from 'ziggy-js';
@@ -183,9 +184,20 @@ const togglePassword = () => {
   icon.classList.toggle('fa-eye');
 };
 
-const submit = () => {
+/* const submit = () => {
   form.post(route('login'));
+}; */
+
+const submit = () => {
+  form.post(route('login'), {
+    onSuccess: async () => {
+      await authService.reinitializeAfterAuth();
+      // Redirige ou recharge la page si besoin
+      window.location.reload();
+    }
+  });
 };
+
 </script>
 
 <style scoped>

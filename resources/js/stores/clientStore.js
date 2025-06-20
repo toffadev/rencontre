@@ -97,7 +97,7 @@ export const useClientStore = defineStore('client', {
                 
                 this.loading = false;
                 this.initialized = true;
-                
+                this.startHeartbeat(); // Démarrer le heartbeat après initialisation
                 console.log('✅ ClientStore initialisé avec succès');
                 
                 return this;
@@ -721,8 +721,33 @@ export const useClientStore = defineStore('client', {
             }
         },
 
+        /**
+         * Envoie un signal heartbeat pour indiquer que le modérateur est actif
+         * Cette fonction est appelée périodiquement pour maintenir le statut en ligne
+         */
+        async sendHeartbeat() {
+            try {
+                const response = await axios.post('/user/heartbeat');
+                
+                if (response.data.success) {
+                    // Mettre à jour l'état local si nécessaire
+                    console.log('✅ Heartbeat envoyé avec succès');
+                    return true;
+                }
+            } catch (error) {
+                console.error('❌ Erreur lors de l\'envoi du heartbeat:', error);
+                return false;
+            }
+        },
 
-        
+        startHeartbeat() {
+            if (!this.initialized) return; // Guard
+            if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
+            this.heartbeatInterval = setInterval(() => {
+                if (this.initialized) this.sendHeartbeat();
+            }, 30000);
+        },
+
         /**
          * Nettoie les ressources lors de la déconnexion
          */

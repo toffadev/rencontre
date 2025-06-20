@@ -34,6 +34,8 @@ function configureAxios() {
     }
 }
 
+configureAxios();
+
 /**
  * Configurer l'intercepteur Axios pour gérer les erreurs CSRF
  */
