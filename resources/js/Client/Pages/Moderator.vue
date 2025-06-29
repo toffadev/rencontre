@@ -4,32 +4,329 @@
         class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white"
     >
         <div class="flex flex-col items-center space-y-4">
-            <svg class="animate-spin h-12 w-12 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
+            <svg
+                class="animate-spin h-12 w-12 text-pink-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+            >
+                <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                ></circle>
+                <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"
+                ></path>
             </svg>
-            <div class="text-lg font-semibold text-pink-600">Chargement de l'espace modérateur...</div>
-            <div class="text-sm text-gray-500">Merci de patienter, nous synchronisons vos profils virtuels 👩‍💻</div>
+            <div class="text-lg font-semibold text-pink-600">
+                Chargement de l'espace modérateur...
+            </div>
+            <div class="text-sm text-gray-500">
+                Merci de patienter, nous synchronisons vos profils virtuels 👩‍💻
+            </div>
         </div>
     </div>
+
+    <!-- Écran de chargement pour le changement de profil -->
+    <div
+        v-else-if="moderatorStore.profileTransition.loadingData"
+        class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white"
+    >
+        <div class="flex flex-col items-center space-y-4">
+            <svg
+                class="animate-spin h-12 w-12 text-pink-500"
+                xmlns="http://www.w3.org/2000/svg"
+                fill="none"
+                viewBox="0 0 24 24"
+            >
+                <circle
+                    class="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    stroke-width="4"
+                ></circle>
+                <path
+                    class="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8v8z"
+                ></path>
+            </svg>
+            <div class="text-lg font-semibold text-pink-600">
+                Changement de profil en cours...
+            </div>
+            <div class="text-sm text-gray-500">
+                Nous chargeons les données du nouveau profil et ses
+                conversations
+            </div>
+        </div>
+    </div>
+
     <div v-else>
-    <MainLayout>
-        <div class="main-container">
-            <div class="flex flex-col space-y-4 mb-4">
-                <div class="bg-white p-4 rounded-xl shadow-md">
-                    <div class="flex justify-between items-center">
-                        <div>
-                            <h2 class="text-xl font-semibold text-pink-600">
-                                Espace Modérateur
-                            </h2>
-                            <p class="text-sm text-gray-600">
+        <MainLayout>
+            <!-- Interface de file d'attente -->
+            <div
+                v-if="
+                    moderatorStore.queueInfo.inQueue &&
+                    !moderatorStore.currentAssignedProfile
+                "
+                class="bg-white p-6 rounded-xl shadow-md text-center mt-4"
+            >
+                <div class="text-lg font-semibold text-pink-600 mb-2">
+                    Vous êtes en file d'attente pour l'attribution d'un profil
+                </div>
+
+                <div class="flex items-center justify-center mb-4">
+                    <div class="relative w-24 h-24">
+                        <svg
+                            class="w-24 h-24 transform -rotate-90"
+                            viewBox="0 0 100 100"
+                        >
+                            <circle
+                                class="text-gray-200"
+                                stroke-width="8"
+                                stroke="currentColor"
+                                fill="transparent"
+                                r="46"
+                                cx="50"
+                                cy="50"
+                            />
+                            <circle
+                                class="text-pink-500"
+                                stroke-width="8"
+                                stroke="currentColor"
+                                fill="transparent"
+                                r="46"
+                                cx="50"
+                                cy="50"
+                                :stroke-dasharray="2 * Math.PI * 46"
+                                :stroke-dashoffset="
+                                    2 *
+                                    Math.PI *
+                                    46 *
+                                    (1 - 1 / moderatorStore.queueInfo.position)
+                                "
+                            />
+                        </svg>
+                        <div
+                            class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-pink-600"
+                        >
+                            {{ moderatorStore.queueInfo.position }}
+                        </div>
+                    </div>
+                </div>
+
+                <p class="text-gray-600 mb-2">
+                    Votre position dans la file d'attente
+                </p>
+
+                <p class="text-gray-500 text-sm mb-4">
+                    Temps d'attente estimé:
+                    <span class="font-semibold"
+                        >{{
+                            moderatorStore.queueInfo.estimatedWaitTime
+                        }}
+                        minutes</span
+                    >
+                </p>
+
+                <p class="text-gray-400 text-xs">
+                    En attente depuis:
+                    {{ formatRelativeTime(moderatorStore.queueInfo.queuedAt) }}
+                </p>
+
+                <div class="mt-4">
+                    <button
+                        @click="leaveQueue"
+                        class="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors duration-200"
+                    >
+                        <i class="fas fa-sign-out-alt mr-2"></i>
+                        Quitter la file d'attente
+                    </button>
+                </div>
+            </div>
+
+            <!-- Indicateurs de verrouillage pour les profils -->
+            <div
+                v-if="isProfileLocked && moderatorStore.currentAssignedProfile"
+                class="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded-md mb-4"
+            >
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 text-yellow-500">
+                        <i class="fas fa-lock"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm text-yellow-700">
+                            Ce profil est temporairement verrouillé
+                            <span
+                                v-if="
+                                    profileLockInfo.moderatorId !==
+                                    moderatorStore.moderatorId
+                                "
+                            >
+                                par un autre modérateur
+                            </span>
+                            <span v-else> par vous </span>
+                        </p>
+                        <p
+                            class="text-xs text-yellow-600"
+                            v-if="profileLockTimeRemaining > 0"
+                        >
+                            Déverrouillage dans
+                            {{ formatSeconds(profileLockTimeRemaining) }}
+                        </p>
+                    </div>
+                    <div class="ml-auto">
+                        <button
+                            v-if="canRequestUnlock"
+                            @click="
+                                requestUnlock(
+                                    moderatorStore.currentAssignedProfile.id
+                                )
+                            "
+                            class="bg-yellow-200 text-yellow-800 px-3 py-1 rounded text-sm hover:bg-yellow-300"
+                        >
+                            Demander déverrouillage
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerte de conflit d'attribution -->
+            <div
+                v-if="hasActiveConflicts"
+                class="bg-red-100 border-l-4 border-red-500 p-4 rounded-md mb-4"
+            >
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 text-red-500">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-red-700">
+                            Conflit d'attribution détecté
+                        </p>
+                        <p class="text-xs text-red-600">
+                            {{ latestConflict.message }}
+                        </p>
+                    </div>
+                    <div class="ml-auto">
+                        <button
+                            @click="acknowledgeConflict(latestConflict.id)"
+                            class="bg-red-200 text-red-800 px-3 py-1 rounded text-sm hover:bg-red-300"
+                        >
+                            J'ai compris
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerte de réattribution forcée -->
+            <div
+                v-if="showReassignmentAlert"
+                class="bg-pink-100 border-l-4 border-pink-500 p-4 rounded-md mb-4 animate-pulse"
+            >
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 text-pink-500">
+                        <i class="fas fa-exchange-alt"></i>
+                    </div>
+                    <div class="ml-3">
+                        <p class="text-sm font-medium text-pink-700">
+                            Réattribution imminente
+                        </p>
+                        <p class="text-xs text-pink-600">
+                            En raison d'inactivité, ce profil va être réattribué
+                            dans {{ formatSeconds(reassignmentCountdown) }}
+                        </p>
+                    </div>
+                    <div class="ml-auto">
+                        <button
+                            @click="preventReassignment"
+                            class="bg-pink-200 text-pink-800 px-3 py-1 rounded text-sm hover:bg-pink-300"
+                        >
+                            Je suis toujours actif
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <!-- Notification de compte à rebours pour le changement de profil -->
+            <div
+                v-if="
+                    moderatorStore.profileTransition.inProgress &&
+                    !moderatorStore.profileTransition.loadingData
+                "
+                class="fixed top-4 right-4 bg-white shadow-lg rounded-lg p-4 z-50 max-w-md border-l-4 border-pink-500 animate-pulse"
+            >
+                <div class="flex items-center space-x-3">
+                    <div class="flex-shrink-0">
+                        <svg
+                            class="h-10 w-10 text-pink-500"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                        >
+                            <path
+                                stroke-linecap="round"
+                                stroke-linejoin="round"
+                                stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                            />
+                        </svg>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-gray-800">
+                            Changement de profil imminent !
+                        </h3>
+                        <p class="text-sm text-gray-600">
+                            Votre profil va changer dans
+                            <span class="font-bold text-pink-600">{{
+                                moderatorStore.profileTransition.countdown
+                            }}</span>
+                            secondes
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            Nouveau profil :
+                            {{
+                                moderatorStore.profileTransition.newProfile
+                                    ?.name
+                            }}
+                        </p>
+                    </div>
+                </div>
+                <!-- Bouton pour demander un délai supplémentaire -->
+                <div class="mt-2" v-if="!moderatorStore.delayRequested">
+                    <button
+                        @click="requestDelay"
+                        class="bg-white text-pink-600 border border-pink-500 px-3 py-1 rounded-md text-sm hover:bg-pink-50 transition-colors"
+                    >
+                        <i class="fas fa-clock mr-1"></i>
+                        Demander 5 min supplémentaires
+                    </button>
+                </div>
+            </div>
+
+            <div class="main-container">
+                <div class="flex flex-col space-y-4 mb-4">
+                    <div class="bg-white p-4 rounded-xl shadow-md">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-xl font-semibold text-pink-600">
+                                    Espace Modérateur
+                                </h2>
+                                <p class="text-sm text-gray-600">
                                     Vous êtes connecté en tant que modérateur.
                                     Vous pouvez discuter avec des clients en
                                     utilisant un profil virtuel.
-                            </p>
-                        </div>
-                        <div class="flex items-center gap-4">
-                            <!-- Indicateur d'état WebSocket -->
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-4">
+                                <!-- Indicateur d'état WebSocket -->
                                 <div
                                     class="flex items-center gap-2"
                                     @click="checkWebSocketConnection"
@@ -37,7 +334,7 @@
                                 >
                                     <div
                                         class="w-3 h-3 rounded-full"
-                                     :class="{
+                                        :class="{
                                             'bg-green-500':
                                                 connectionState === 'healthy',
                                             'bg-yellow-500':
@@ -53,10 +350,10 @@
                                     <span class="text-xs text-gray-600">{{
                                         connectionStateLabel
                                     }}</span>
-                            </div>
-                            
-                            <!-- Bouton de notifications -->
-                            <div class="relative">
+                                </div>
+
+                                <!-- Bouton de notifications -->
+                                <div class="relative">
                                     <button
                                         @click="
                                             showNotifications =
@@ -64,7 +361,7 @@
                                         "
                                         class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2"
                                     >
-                                    <i class="fas fa-bell"></i>
+                                        <i class="fas fa-bell"></i>
                                         <span
                                             v-if="
                                                 notifications.filter(
@@ -78,10 +375,10 @@
                                                     (n) => !n.read
                                                 ).length
                                             }}
-                                    </span>
-                                </button>
-                                
-                                <!-- Panel de notifications -->
+                                        </span>
+                                    </button>
+
+                                    <!-- Panel de notifications -->
                                     <div
                                         v-if="showNotifications"
                                         class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
@@ -94,7 +391,7 @@
                                             >
                                                 Notifications
                                             </h3>
-                                    </div>
+                                        </div>
                                         <div
                                             v-if="notifications.length > 0"
                                             class="divide-y divide-gray-100"
@@ -111,7 +408,7 @@
                                                     );
                                                     showNotifications = false;
                                                 "
-                                            class="p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
+                                                class="p-4 hover:bg-gray-50 cursor-pointer transition-colors duration-200"
                                                 :class="{
                                                     'bg-pink-50':
                                                         !notification.read,
@@ -120,7 +417,7 @@
                                                 <div
                                                     class="flex items-start gap-3"
                                                 >
-                                                <div class="flex-1">
+                                                    <div class="flex-1">
                                                         <p
                                                             class="font-medium text-gray-800"
                                                         >
@@ -149,8 +446,8 @@
                                                                     }
                                                                 )
                                                             }}
-                                                    </p>
-                                                </div>
+                                                        </p>
+                                                    </div>
                                                     <div
                                                         v-if="
                                                             !notification.read
@@ -164,133 +461,152 @@
                                             v-else
                                             class="p-4 text-center text-gray-500"
                                         >
-                                        Aucune notification
+                                            Aucune notification
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                            
+
                                 <Link
                                     href="/moderateur/profile-stats"
                                     class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2"
                                 >
-                                <i class="fas fa-chart-line"></i>
-                                Mon profil
-                            </Link>
+                                    <i class="fas fa-chart-line"></i>
+                                    Mon profil
+                                </Link>
+                            </div>
                         </div>
                     </div>
-                </div>
 
                     <div
                         v-if="!currentAssignedProfile"
                         class="bg-white p-6 rounded-xl shadow-md text-center"
                     >
-                    <div class="text-lg font-medium text-gray-700">
-                        En attente d'attribution...
-                    </div>
-                    <p class="text-gray-500 mt-2">
+                        <div class="text-lg font-medium text-gray-700">
+                            En attente d'attribution...
+                        </div>
+                        <p class="text-gray-500 mt-2">
                             Le système vous attribuera automatiquement un profil
                             pour discuter avec des clients.
-                    </p>
-                    <div class="mt-4">
+                        </p>
+                        <div class="mt-4">
                             <div
                                 class="animate-pulse flex space-x-4 justify-center"
                             >
                                 <div
                                     class="rounded-full bg-pink-200 h-12 w-12"
                                 ></div>
-                            <div class="flex-1 space-y-4 max-w-md">
+                                <div class="flex-1 space-y-4 max-w-md">
                                     <div
                                         class="h-4 bg-pink-200 rounded w-3/4"
                                     ></div>
                                     <div
                                         class="h-4 bg-pink-200 rounded w-1/2"
                                     ></div>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Alerte d'erreur WebSocket -->
+                    <!-- Alerte d'erreur WebSocket -->
                     <div
                         v-if="webSocketErrors"
                         class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md mb-4"
                     >
-                    <div class="flex items-center">
-                        <div class="flex-shrink-0">
-                            <i class="fas fa-exclamation-triangle"></i>
-                        </div>
-                        <div class="ml-3">
+                        <div class="flex items-center">
+                            <div class="flex-shrink-0">
+                                <i class="fas fa-exclamation-triangle"></i>
+                            </div>
+                            <div class="ml-3">
                                 <p class="font-medium">
                                     Problème de connexion WebSocket
                                 </p>
-                            <p class="text-sm">{{ webSocketErrors }}</p>
-                        </div>
-                        <div class="ml-auto">
+                                <p class="text-sm">{{ webSocketErrors }}</p>
+                            </div>
+                            <div class="ml-auto">
                                 <button
                                     @click="forceReconnect"
                                     class="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm"
                                 >
                                     <i class="fas fa-sync-alt mr-1"></i>
                                     Reconnecter
-                            </button>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
 
-            <div class="flex flex-col lg:flex-row gap-6">
-                <!-- Clients Section (à gauche) -->
+                <div class="flex flex-col lg:flex-row gap-6">
+                    <!-- Clients Section (à gauche) -->
                     <div
                         class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden"
                     >
-                    <!-- Tabs -->
-                    <div class="flex border-b border-gray-200">
+                        <!-- Tabs -->
+                        <div class="flex border-b border-gray-200">
                             <button
                                 @click="activeTab = 'assigned'"
                                 :class="[
-                            'flex-1 py-3 text-sm font-medium',
-                            activeTab === 'assigned'
-                                ? 'text-pink-600 border-b-2 border-pink-500'
-                                : 'text-gray-500 hover:text-gray-700',
+                                    'flex-1 py-3 text-sm font-medium',
+                                    activeTab === 'assigned'
+                                        ? 'text-pink-600 border-b-2 border-pink-500'
+                                        : 'text-gray-500 hover:text-gray-700',
                                 ]"
                             >
-                            Client attribué
-                        </button>
+                                Client attribué
+                            </button>
                             <button
                                 @click="activeTab = 'available'"
                                 :class="[
-                            'flex-1 py-3 text-sm font-medium',
-                            activeTab === 'available'
-                                ? 'text-pink-600 border-b-2 border-pink-500'
-                                : 'text-gray-500 hover:text-gray-700',
+                                    'flex-1 py-3 text-sm font-medium',
+                                    activeTab === 'available'
+                                        ? 'text-pink-600 border-b-2 border-pink-500'
+                                        : 'text-gray-500 hover:text-gray-700',
                                 ]"
                             >
-                            Clients disponibles
-                        </button>
-                    </div>
+                                Clients disponibles
+                            </button>
+                        </div>
 
-                    <!-- Tab Content: Client attribué -->
-                    <div v-if="activeTab === 'assigned'" class="p-4">
-                        <div class="flex justify-between items-center mb-4">
-                                <h2 class="text-xl font-semibold">
-                                    Client attribué
-                                </h2>
+                        <!-- Tab Content: Client attribué -->
+                        <div v-if="activeTab === 'assigned'" class="p-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <div class="flex items-center space-x-2">
+                                    <h2 class="text-xl font-semibold">
+                                        {{
+                                            currentAssignedProfile?.name ||
+                                            "Aucun profil assigné"
+                                        }}
+                                    </h2>
+                                    <span
+                                        v-if="isProfileShared"
+                                        class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded"
+                                        title="Ce profil est partagé avec d'autres modérateurs"
+                                    >
+                                        Partagé
+                                    </span>
+                                    <button
+                                        @click="refreshProfileData"
+                                        class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors"
+                                        title="Rafraîchir les données"
+                                    >
+                                        <i class="fas fa-sync-alt"></i>
+                                    </button>
+                                </div>
                                 <div
                                     v-if="assignedClient.length > 0"
                                     class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm"
                                 >
-                                En attente de réponse
-                            </div>
+                                    En attente de réponse
+                                </div>
                                 <div
                                     v-else
                                     class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm"
                                 >
-                                En attente d'attribution
+                                    En attente d'attribution
+                                </div>
                             </div>
-                        </div>
 
-                        <div class="space-y-4">
-                            <!-- Liste des clients attribués -->
+                            <div class="space-y-4">
+                                <!-- Liste des clients attribués -->
                                 <div
                                     v-if="assignedClient.length > 0"
                                     class="space-y-4"
@@ -303,41 +619,41 @@
                                     >
                                         <div
                                             :class="[
-                                        'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
-                                        selectedClient &&
-                                            selectedClient.id === client.id
-                                            ? 'border-l-4 border-pink-500'
-                                            : '',
+                                                'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
+                                                selectedClient &&
+                                                selectedClient.id === client.id
+                                                    ? 'border-l-4 border-pink-500'
+                                                    : '',
                                             ]"
                                         >
-                                        <div class="relative">
-                                            <template v-if="client.avatar">
+                                            <div class="relative">
+                                                <template v-if="client.avatar">
                                                     <img
                                                         :src="client.avatar"
                                                         :alt="client.name"
                                                         class="w-12 h-12 rounded-full object-cover"
                                                     />
-                                            </template>
-                                            <template v-else>
-                                                <div
+                                                </template>
+                                                <template v-else>
+                                                    <div
                                                         class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
                                                     >
                                                         <i
                                                             class="fas fa-user text-gray-400 text-xl"
                                                         ></i>
-                                                </div>
-                                            </template>
-                                            <div class="online-dot"></div>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
+                                                    </div>
+                                                </template>
+                                                <div class="online-dot"></div>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
                                                 <div
                                                     class="flex items-center justify-between"
                                                 >
                                                     <h3
                                                         class="font-semibold truncate"
                                                     >
-                                                    {{ client.name }}
-                                                </h3>
+                                                        {{ client.name }}
+                                                    </h3>
                                                     <span
                                                         class="text-xs text-gray-500"
                                                         >{{
@@ -346,13 +662,13 @@
                                                             )
                                                         }}</span
                                                     >
-                                            </div>
+                                                </div>
                                                 <p
                                                     class="text-sm text-gray-500"
                                                 >
                                                     <span
                                                         v-if="
-                                                    client.lastMessage
+                                                            client.lastMessage
                                                         "
                                                         class="truncate block"
                                                         >{{
@@ -369,104 +685,136 @@
                                                 <div
                                                     class="flex items-center mt-1 text-xs"
                                                 >
-                                                    <img
-                                                        :src="
+                                                    <!-- Si le client a des infos de profil -->
+                                                    <template
+                                                        v-if="
+                                                            client.profileInfo
+                                                        "
+                                                    >
+                                                        <span
+                                                            :class="`${
+                                                                !client
+                                                                    .profileInfo
+                                                                    .isPrimary
+                                                                    ? 'bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full'
+                                                                    : 'text-gray-600'
+                                                            }`"
+                                                        >
+                                                            <i
+                                                                class="fas fa-user-circle mr-1"
+                                                            ></i>
+                                                            {{
+                                                                client
+                                                                    .profileInfo
+                                                                    .name
+                                                            }}
+                                                        </span>
+                                                    </template>
+                                                    <!-- Ancienne façon d'afficher le profil si disponible -->
+                                                    <template
+                                                        v-else-if="
                                                             client.profilePhoto
                                                         "
-                                                        alt="Profile"
-                                                        class="w-4 h-4 rounded-full mr-1"
-                                                    />
-                                                    <span
-                                                        class="text-gray-600"
-                                                        >{{
-                                                    client.profileName
-                                                        }}</span
                                                     >
+                                                        <img
+                                                            :src="
+                                                                client.profilePhoto
+                                                            "
+                                                            alt="Profile"
+                                                            class="w-4 h-4 rounded-full mr-1"
+                                                        />
+                                                        <span
+                                                            class="text-gray-600"
+                                                            >{{
+                                                                client.profileName
+                                                            }}</span
+                                                        >
+                                                    </template>
+                                                </div>
                                             </div>
-                                        </div>
                                             <div
                                                 v-if="client.unreadCount"
                                                 class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
                                             >
-                                            {{ client.unreadCount }}
+                                                {{ client.unreadCount }}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- État vide -->
-                            <div v-else class="text-center py-8">
-                                <p class="text-gray-500">
+                                <!-- État vide -->
+                                <div v-else class="text-center py-8">
+                                    <p class="text-gray-500">
                                         Aucun client ne vous a été attribué pour
                                         le moment.
-                                </p>
-                                <p class="text-gray-400 text-sm mt-2">
+                                    </p>
+                                    <p class="text-gray-400 text-sm mt-2">
                                         Le système vous attribuera
                                         automatiquement un client qui attend une
                                         réponse, ou consultez les clients
                                         disponibles.
-                                </p>
+                                    </p>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Tab Content: Clients disponibles -->
-                    <div v-if="activeTab === 'available'" class="p-4">
-                        <div class="flex justify-between items-center mb-4">
-                            <h2 class="text-xl font-semibold">
-                                Clients disponibles
-                            </h2>
+                        <!-- Tab Content: Clients disponibles -->
+                        <div v-if="activeTab === 'available'" class="p-4">
+                            <div class="flex justify-between items-center mb-4">
+                                <h2 class="text-xl font-semibold">
+                                    Clients disponibles
+                                </h2>
                                 <button
                                     @click="loadAvailableClients"
                                     class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                                 >
-                                <i class="fas fa-sync-alt"></i>
-                            </button>
-                        </div>
+                                    <i class="fas fa-sync-alt"></i>
+                                </button>
+                            </div>
 
-                        <div class="space-y-4">
-                            <!-- Liste des clients disponibles -->
-                            <div v-if="availableClients.length > 0">
+                            <div class="space-y-4">
+                                <!-- Liste des clients disponibles -->
+                                <div v-if="availableClients.length > 0">
                                     <div
                                         v-for="client in availableClients"
                                         :key="client.id"
-                                    class="client-card transition duration-300 cursor-pointer"
+                                        class="client-card transition duration-300 cursor-pointer"
                                         @click="startConversation(client)"
                                     >
-                                    <div
+                                        <div
                                             class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200"
                                         >
-                                        <div class="relative">
-                                            <template v-if="client.avatar">
+                                            <div class="relative">
+                                                <template v-if="client.avatar">
                                                     <img
                                                         :src="client.avatar"
                                                         :alt="client.name"
                                                         class="w-12 h-12 rounded-full object-cover"
                                                     />
-                                            </template>
-                                            <template v-else>
-                                                <div
+                                                </template>
+                                                <template v-else>
+                                                    <div
                                                         class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
                                                     >
                                                         <i
                                                             class="fas fa-user text-gray-400 text-xl"
                                                         ></i>
-                                                </div>
-                                            </template>
-                                            <div class="online-dot"></div>
-                                        </div>
-                                        <div class="flex-1 min-w-0">
+                                                    </div>
+                                                </template>
+                                                <div class="online-dot"></div>
+                                            </div>
+                                            <div class="flex-1 min-w-0">
                                                 <h3
                                                     class="font-semibold truncate"
                                                 >
-                                                {{ client.name }}
-                                            </h3>
+                                                    {{ client.name }}
+                                                </h3>
                                                 <p
                                                     class="text-sm text-gray-500"
                                                 >
                                                     <span
                                                         v-if="
-                                                    client.lastMessage
+                                                            client.lastMessage
                                                         "
                                                         class="truncate block"
                                                         >{{
@@ -490,72 +838,73 @@
                                                 <p
                                                     class="text-xs text-gray-400 mt-1"
                                                 >
-                                                {{ client.lastActivity }}
-                                            </p>
-                                        </div>
-                                        <button
+                                                    {{ client.lastActivity }}
+                                                </p>
+                                            </div>
+                                            <button
                                                 class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
                                             >
-                                            <i class="fas fa-comments"></i>
-                                        </button>
+                                                <i class="fas fa-comments"></i>
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- État de chargement -->
-                            <div v-else-if="loading" class="py-8">
+                                <!-- État de chargement -->
+                                <div v-else-if="loading" class="py-8">
                                     <div
                                         class="animate-pulse flex space-x-4 justify-center"
                                     >
                                         <div
                                             class="rounded-full bg-pink-200 h-12 w-12"
                                         ></div>
-                                    <div class="flex-1 space-y-4 max-w-md">
+                                        <div class="flex-1 space-y-4 max-w-md">
                                             <div
                                                 class="h-4 bg-pink-200 rounded w-3/4"
                                             ></div>
                                             <div
                                                 class="h-4 bg-pink-200 rounded w-1/2"
                                             ></div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <!-- État vide -->
-                            <div v-else class="text-center py-8">
-                                <p class="text-gray-500">
-                                    Aucun client disponible pour le moment.
-                                </p>
-                                <p class="text-gray-400 text-sm mt-2">
+                                <!-- État vide -->
+                                <div v-else class="text-center py-8">
+                                    <p class="text-gray-500">
+                                        Aucun client disponible pour le moment.
+                                    </p>
+                                    <p class="text-gray-400 text-sm mt-2">
                                         Réessayez plus tard ou attendez qu'un
                                         client soit attribué automatiquement.
-                                </p>
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Chat Section -->
+                    <!-- Chat Section -->
                     <div
                         class="w-full lg:w-2/4 flex flex-col"
                         ref="chatSection"
                     >
-                    <!-- Version mobile du ClientInfoPanel -->
-                    <div class="lg:hidden">
+                        <!-- Version mobile du ClientInfoPanel -->
+                        <div class="lg:hidden">
                             <ClientInfoDrawer
                                 v-if="selectedClient"
                                 :key="`drawer-${selectedClient.id}`"
                                 :client-id="selectedClient.id"
                                 @edit="openFullInfoModal"
                             />
-                    </div>
+                        </div>
 
-                    <!-- Profil attribué -->
+                        <!-- Profil attribué -->
+                        <!-- Profil attribué -->
                         <div
                             v-if="currentAssignedProfile"
                             class="bg-white rounded-xl shadow-md p-4 mb-4"
                         >
-                        <div class="flex items-center space-x-4">
+                            <div class="flex items-center space-x-4">
                                 <img
                                     :src="
                                         currentAssignedProfile.main_photo_path ||
@@ -564,99 +913,144 @@
                                     :alt="currentAssignedProfile.name"
                                     class="w-16 h-16 rounded-full object-cover"
                                 />
-                            <div>
+                                <div>
                                     <h3
                                         class="text-lg font-semibold text-gray-800"
                                     >
-                                    {{ currentAssignedProfile.name }}
-                                </h3>
-                                <p class="text-sm text-gray-600">
-                                    Profil virtuel attribué
-                                </p>
+                                        {{ currentAssignedProfile.name }}
+                                    </h3>
+                                    <p class="text-sm text-gray-600">
+                                        Profil virtuel attribué
+                                    </p>
                                     <div
                                         class="flex items-center mt-1 text-xs text-gray-500"
                                     >
-                                    <span class="mr-2">
-                                        <i class="fas fa-venus-mars"></i>
+                                        <span class="mr-2">
+                                            <i class="fas fa-venus-mars"></i>
                                             {{
                                                 currentAssignedProfile.gender ===
                                                 "female"
                                                     ? "Femme"
                                                     : "Homme"
                                             }}
-                                    </span>
-                                    <span v-if="currentAssignedProfile.age">
+                                        </span>
+                                        <span v-if="currentAssignedProfile.age">
                                             <i
                                                 class="fas fa-birthday-cake ml-2 mr-1"
                                             ></i>
-                                        {{ currentAssignedProfile.age }} ans
-                                    </span>
+                                            {{ currentAssignedProfile.age }} ans
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
+                        <!-- Notification de profil partagé -->
+                        <div
+                            v-if="isProfileShared"
+                            class="shared-profile-indicator bg-blue-100 text-blue-700 px-3 py-2 rounded-md mt-2"
+                        >
+                            <div class="flex items-center">
+                                <i class="fas fa-users mr-2"></i>
+                                <span
+                                    >Ce profil est partagé avec d'autres
+                                    modérateurs</span
+                                >
+                            </div>
+                        </div>
 
-                    <!-- Chat Content -->
+                        <!-- Indicateurs d'activité des autres modérateurs -->
+                        <div
+                            v-if="otherModeratorsActive.length > 0"
+                            class="bg-gray-50 p-2 rounded-md mt-2 border border-gray-100"
+                        >
+                            <p class="text-xs text-gray-600 font-medium">
+                                <i class="fas fa-user-clock mr-1"></i>
+                                Autres modérateurs actifs sur ce profil:
+                            </p>
+                            <div
+                                v-for="activity in otherModeratorsActive"
+                                :key="activity.moderatorId"
+                                class="text-xs text-gray-500 mt-1"
+                            >
+                                <span
+                                    >Modérateur #{{
+                                        activity.moderatorId
+                                    }}</span
+                                >
+                                <span class="mx-1">•</span>
+                                <span>{{
+                                    activity.activityType === "typing"
+                                        ? "écrit"
+                                        : activity.activityType
+                                }}</span>
+                                <span class="ml-2 text-gray-400">{{
+                                    formatTime(activity.timestamp)
+                                }}</span>
+                            </div>
+                        </div>
+
+                        <!-- Chat Content -->
                         <div
                             v-if="selectedClient"
                             class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col h-[calc(100vh-theme(spacing.32))]"
+                            :key="`chat-${currentAssignedProfile?.id}-${selectedClient.id}`"
                         >
-                        <!-- Chat Header -->
+                            <!-- Chat Header -->
                             <div
                                 class="border-b border-gray-200 p-4 flex items-center space-x-3"
                             >
-                            <div class="relative">
-                                <template v-if="selectedClient.avatar">
+                                <div class="relative">
+                                    <template v-if="selectedClient.avatar">
                                         <img
                                             :src="selectedClient.avatar"
                                             :alt="selectedClient.name"
                                             class="w-12 h-12 rounded-full object-cover"
                                         />
-                                </template>
-                                <template v-else>
+                                    </template>
+                                    <template v-else>
                                         <div
                                             class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
                                         >
                                             <i
                                                 class="fas fa-user text-gray-400 text-xl"
                                             ></i>
-                                    </div>
-                                </template>
-                                <div class="online-dot"></div>
-                            </div>
-                            <div>
-                                <h3 class="font-semibold">
-                                    {{ selectedClient.name }}
-                                </h3>
-                                <p class="text-sm text-gray-500">
-                                    En discussion avec vous
-                                </p>
-                            </div>
+                                        </div>
+                                    </template>
+                                    <div class="online-dot"></div>
+                                </div>
+                                <div>
+                                    <h3 class="font-semibold">
+                                        {{ selectedClient.name }}
+                                    </h3>
+                                    <p class="text-sm text-gray-500">
+                                        En discussion avec vous
+                                    </p>
+                                </div>
                                 <div
                                     class="ml-auto flex items-center space-x-2"
                                 >
-                                <div class="text-sm text-gray-500">
+                                    <div class="text-sm text-gray-500">
                                         <span class="font-medium"
                                             >Client ID:</span
                                         >
-                                    {{ selectedClient.id }}
-                                </div>
+                                        {{ selectedClient.id }}
+                                    </div>
                                     <button
                                         @click="openFullInfoModal"
                                         class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
                                     >
-                                    <i class="fas fa-info-circle"></i>
-                                </button>
+                                        <i class="fas fa-info-circle"></i>
+                                    </button>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Chat Messages -->
+                            <!-- Chat Messages -->
                             <div
                                 class="chat-container flex-1 overflow-y-auto p-4 space-y-3"
                                 ref="chatContainer"
                                 @scroll="handleScroll"
                             >
-                            <!-- Indicateur de chargement des messages plus anciens -->
+                                <!-- Indicateur de chargement des messages plus anciens -->
                                 <div
                                     v-if="isLoadingMore"
                                     class="text-center py-2"
@@ -667,23 +1061,23 @@
                                     <span class="text-xs text-gray-500 ml-2"
                                         >Chargement des messages...</span
                                     >
-                            </div>
+                                </div>
 
-                            <!-- Indicateur de messages plus anciens disponibles -->
+                                <!-- Indicateur de messages plus anciens disponibles -->
                                 <div
                                     v-if="hasMoreMessages && !isLoadingMore"
                                     class="text-center text-xs text-gray-500 my-2"
                                 >
                                     Faites défiler vers le haut pour charger
                                     plus de messages
-                            </div>
+                                </div>
 
-                            <!-- Date -->
+                                <!-- Date -->
                                 <div
                                     class="text-center text-xs text-gray-500 my-4"
                                 >
-                                Aujourd'hui
-                            </div>
+                                    Aujourd'hui
+                                </div>
 
                                 <div
                                     v-for="(
@@ -696,33 +1090,33 @@
                                             : 'justify-end'
                                     }`"
                                 >
-                                <template v-if="message.isFromClient">
-                                    <template v-if="selectedClient.avatar">
+                                    <template v-if="message.isFromClient">
+                                        <template v-if="selectedClient.avatar">
                                             <img
                                                 :src="selectedClient.avatar"
                                                 :alt="selectedClient.name"
                                                 class="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                             />
-                                    </template>
-                                    <template v-else>
-                                        <div
+                                        </template>
+                                        <template v-else>
+                                            <div
                                                 class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"
                                             >
                                                 <i
                                                     class="fas fa-user text-gray-400 text-sm"
                                                 ></i>
-                                        </div>
-                                    </template>
-                                    <div>
+                                            </div>
+                                        </template>
+                                        <div>
                                             <div
                                                 class="message-in px-4 py-2 max-w-xs lg:max-w-md"
                                             >
-                                            <!-- Contenu du message -->
+                                                <!-- Contenu du message -->
                                                 <div v-if="message.content">
                                                     {{ message.content }}
                                                 </div>
-                                            
-                                            <!-- Image attachée -->
+
+                                                <!-- Image attachée -->
                                                 <div
                                                     v-if="
                                                         message.attachment &&
@@ -741,37 +1135,37 @@
                                                             message.attachment
                                                                 .file_name
                                                         "
-                                                    class="max-w-full rounded-lg cursor-pointer"
+                                                        class="max-w-full rounded-lg cursor-pointer"
                                                         @click="
                                                             showImagePreview(
                                                                 message.attachment
                                                             )
                                                         "
                                                     />
+                                                </div>
                                             </div>
-                                        </div>
                                             <div
                                                 class="flex items-center mt-1 text-xs text-gray-500"
                                             >
-                                            <span>{{ message.time }}</span>
-                                            <span class="mx-1">•</span>
+                                                <span>{{ message.time }}</span>
+                                                <span class="mx-1">•</span>
                                                 <span>{{
                                                     selectedClient.name
                                                 }}</span>
+                                            </div>
                                         </div>
-                                    </div>
-                                </template>
-                                <template v-else>
-                                    <div>
+                                    </template>
+                                    <template v-else>
+                                        <div>
                                             <div
                                                 class="message-out px-4 py-2 max-w-xs lg:max-w-md"
                                             >
-                                            <!-- Contenu du message -->
+                                                <!-- Contenu du message -->
                                                 <div v-if="message.content">
                                                     {{ message.content }}
                                                 </div>
-                                            
-                                            <!-- Image attachée -->
+
+                                                <!-- Image attachée -->
                                                 <div
                                                     v-if="
                                                         message.attachment &&
@@ -790,30 +1184,30 @@
                                                             message.attachment
                                                                 .file_name
                                                         "
-                                                    class="max-w-full rounded-lg cursor-pointer"
+                                                        class="max-w-full rounded-lg cursor-pointer"
                                                         @click="
                                                             showImagePreview(
                                                                 message.attachment
                                                             )
                                                         "
                                                     />
+                                                </div>
                                             </div>
-                                        </div>
                                             <div
                                                 class="flex items-center justify-end mt-1 text-xs text-gray-500"
                                             >
-                                            <span>{{ message.time }}</span>
-                                            <span class="mx-1">•</span>
-                                            <span>{{
-                                                currentAssignedProfile?.name ||
-                                                "Vous"
-                                            }}</span>
+                                                <span>{{ message.time }}</span>
+                                                <span class="mx-1">•</span>
+                                                <span>{{
+                                                    currentAssignedProfile?.name ||
+                                                    "Vous"
+                                                }}</span>
+                                            </div>
                                         </div>
-                                    </div>
                                         <img
                                             :src="
                                                 currentAssignedProfile?.main_photo_path ||
-                                        'https://via.placeholder.com/64'
+                                                'https://via.placeholder.com/64'
                                             "
                                             :alt="
                                                 currentAssignedProfile?.name ||
@@ -821,21 +1215,48 @@
                                             "
                                             class="w-8 h-8 rounded-full object-cover flex-shrink-0"
                                         />
-                                </template>
+                                    </template>
+                                </div>
                             </div>
-                        </div>
 
-                        <!-- Message Input -->
+                            <!-- Indicateur d'activité de frappe -->
+                            <div
+                                v-if="isTyping"
+                                class="typing-indicator text-xs text-gray-500 animate-pulse mb-3 px-4"
+                            >
+                                <div class="flex items-center">
+                                    <span class="mr-2"
+                                        >{{ selectedClient.name }} est en train
+                                        d'écrire...</span
+                                    >
+                                    <div class="flex space-x-1">
+                                        <div
+                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0s"
+                                        ></div>
+                                        <div
+                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0.2s"
+                                        ></div>
+                                        <div
+                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0.4s"
+                                        ></div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Message Input -->
                             <div
                                 class="border-t border-gray-200 bg-white z-50 p-4 mb-16 lg:mb-0"
                             >
-                            <div class="flex flex-col space-y-2">
-                                <!-- Prévisualisation de l'image -->
+                                <div class="flex flex-col space-y-2">
+                                    <!-- Prévisualisation de l'image -->
                                     <div
                                         v-if="selectedFile"
                                         class="flex justify-end"
                                     >
-                                    <div class="relative inline-block">
+                                        <div class="relative inline-block">
                                             <img
                                                 :src="previewUrl"
                                                 class="max-h-32 rounded-lg"
@@ -845,12 +1266,12 @@
                                                 @click="removeSelectedFile"
                                                 class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
                                             >
-                                            <i class="fas fa-times"></i>
-                                        </button>
+                                                <i class="fas fa-times"></i>
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
-                                
-                                <div class="flex items-center space-x-2">
+
+                                    <div class="flex items-center space-x-2">
                                         <input
                                             type="file"
                                             ref="fileInput"
@@ -858,8 +1279,8 @@
                                             accept="image/*"
                                             @change="handleFileUpload"
                                         />
-                                    
-                                    <!-- Sélecteur de photos de profil -->
+
+                                        <!-- Sélecteur de photos de profil -->
                                         <ProfilePhotoSelector
                                             v-if="
                                                 currentAssignedProfile &&
@@ -873,65 +1294,65 @@
                                                 handleProfilePhotoSelected
                                             "
                                         />
-                                    
-                                    <div class="flex-1 relative">
+
+                                        <div class="flex-1 relative">
                                             <input
                                                 v-model="newMessage"
                                                 type="text"
                                                 placeholder="Écrire un message..."
-                                            class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
+                                                class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
                                                 @keyup.enter="sendMessage"
                                             />
-                                    </div>
+                                        </div>
                                         <button
                                             class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
                                             @click="sendMessage"
                                         >
-                                        <i class="fas fa-paper-plane"></i>
-                                    </button>
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- État vide pour le chat -->
+                        <!-- État vide pour le chat -->
                         <div
                             v-else
                             class="bg-white rounded-xl shadow-md p-8 flex-1 flex items-center justify-center"
                         >
-                        <div class="text-center">
-                            <div class="text-gray-400 mb-4">
-                                <i class="fas fa-comments text-5xl"></i>
-                            </div>
-                            <h3 class="text-lg font-medium text-gray-700">
-                                Sélectionnez un client pour discuter
-                            </h3>
-                            <p class="text-gray-500 mt-2">
+                            <div class="text-center">
+                                <div class="text-gray-400 mb-4">
+                                    <i class="fas fa-comments text-5xl"></i>
+                                </div>
+                                <h3 class="text-lg font-medium text-gray-700">
+                                    Sélectionnez un client pour discuter
+                                </h3>
+                                <p class="text-gray-500 mt-2">
                                     Choisissez un client attribué ou disponible
                                     pour commencer une conversation
-                            </p>
+                                </p>
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Informations client (à droite) - Version desktop uniquement -->
-                <div class="hidden lg:block lg:w-1/4">
+                    <!-- Informations client (à droite) - Version desktop uniquement -->
+                    <div class="hidden lg:block lg:w-1/4">
                         <ClientInfoPanel
                             v-if="selectedClient"
                             :client-id="selectedClient.id"
                         />
+                    </div>
                 </div>
-            </div>
 
-            <!-- Modals -->
-            <Teleport to="body">
-                <!-- Modal pour édition complète sur mobile -->
+                <!-- Modals -->
+                <Teleport to="body">
+                    <!-- Modal pour édition complète sur mobile -->
                     <div
                         v-if="showFullInfoModal"
                         class="fixed inset-0 z-50 lg:hidden bg-white"
                     >
-                    <div class="h-full overflow-y-auto">
-                        <div
+                        <div class="h-full overflow-y-auto">
+                            <div
                                 class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10"
                             >
                                 <h2 class="text-lg font-semibold text-gray-800">
@@ -941,34 +1362,34 @@
                                     @click="showFullInfoModal = false"
                                     class="p-2 rounded-full hover:bg-gray-100"
                                 >
-                                <i class="fas fa-times"></i>
-                            </button>
-                        </div>
-                        <div class="p-4 pb-32">
+                                    <i class="fas fa-times"></i>
+                                </button>
+                            </div>
+                            <div class="p-4 pb-32">
                                 <ClientInfoPanel
                                     v-if="selectedClient"
                                     :client-id="selectedClient.id"
                                 />
+                            </div>
                         </div>
                     </div>
-                </div>
 
-                <!-- Modal de prévisualisation d'image -->
+                    <!-- Modal de prévisualisation d'image -->
                     <div
                         v-if="showPreview"
-                     class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50" 
+                        class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
                         @click="closeImagePreview"
                     >
-                    <div class="max-w-4xl max-h-full p-4">
+                        <div class="max-w-4xl max-h-full p-4">
                             <img
                                 :src="previewImage.url"
                                 :alt="previewImage.file_name"
                                 class="max-w-full max-h-[90vh] object-contain"
                             />
+                        </div>
                     </div>
-                </div>
 
-                <!-- Autres modals existants -->
+                    <!-- Autres modals existants -->
                     <ProfileActionModal
                         v-if="showActionModal"
                         :show="showActionModal"
@@ -985,25 +1406,27 @@
                         @close="closeReportModal"
                         @reported="handleReported"
                     />
-            </Teleport>
-        </div>
-    </MainLayout>
+                </Teleport>
+            </div>
+        </MainLayout>
     </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch, computed, nextTick, onUnmounted } from "vue";
-import MainLayout from "@client/Layouts/MainLayout.vue";
-import axios from "axios";
-import webSocketManager from "@/services/WebSocketManager";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
+import { Link, usePage } from "@inertiajs/vue3";
 import { useModeratorStore } from "@/stores/moderatorStore";
+import { useWebSocketHealth } from "@/composables/useWebSocketHealth";
+import axios from "axios";
+import MainLayout from "../Layouts/MainLayout.vue";
+import webSocketManager from "@/services/WebSocketManager";
 import ClientInfoPanel from "@client/Components/ClientInfoPanel.vue";
 import ClientInfoDrawer from "@client/Components/ClientInfoDrawer.vue";
 import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 import ProfilePhotoSelector from "@client/Components/ProfilePhotoSelector.vue";
-import { Link } from "@inertiajs/vue3";
-import { useWebSocketHealth } from "@/composables/useWebSocketHealth";
+import { toast } from 'vue3-toastify';
+import 'vue3-toastify/dist/index.css';
 
 // Ajouter un écouteur pour détecter quand Echo est prêt
 document.addEventListener("echo:initialized", () => {
@@ -1058,6 +1481,157 @@ const showActionModal = ref(false);
 const showReportModalFlag = ref(false);
 const selectedProfileForActions = ref(null);
 const selectedProfileForReport = ref(null);
+// État pour les verrouillages
+const profileLockTimeRemaining = ref(0);
+const profileLockInterval = ref(null);
+
+// État pour les réattributions
+const showReassignmentAlert = ref(false);
+const reassignmentCountdown = ref(0);
+const reassignmentInterval = ref(null);
+
+// Formater le temps depuis une date
+const formatRelativeTime = (isoString) => {
+    if (!isoString) return "N/A";
+
+    const date = new Date(isoString);
+    const now = new Date();
+    const diffMs = now - date;
+
+    if (diffMs < 60000) {
+        // moins d'une minute
+        return "à l'instant";
+    } else if (diffMs < 3600000) {
+        // moins d'une heure
+        const minutes = Math.floor(diffMs / 60000);
+        return `il y a ${minutes} minute${minutes > 1 ? "s" : ""}`;
+    } else {
+        return date.toLocaleTimeString();
+    }
+};
+
+// Formater les secondes en min:sec
+const formatSeconds = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs < 10 ? "0" + secs : secs}`;
+};
+
+// Vérifier si le profil actuel est verrouillé
+const isProfileLocked = computed(() => {
+    if (!moderatorStore.currentAssignedProfile) return false;
+
+    const profileId = moderatorStore.currentAssignedProfile.id;
+    return moderatorStore.lockedProfiles[profileId] !== undefined;
+});
+
+// Obtenir les informations de verrouillage du profil
+const profileLockInfo = computed(() => {
+    if (!moderatorStore.currentAssignedProfile) return {};
+
+    const profileId = moderatorStore.currentAssignedProfile.id;
+    return moderatorStore.lockedProfiles[profileId] || {};
+});
+
+// Vérifier si l'utilisateur peut demander un déverrouillage
+const canRequestUnlock = computed(() => {
+    if (!isProfileLocked.value) return false;
+
+    // On peut demander un déverrouillage si on n'est pas le propriétaire du verrou
+    return profileLockInfo.value.moderatorId !== moderatorStore.moderatorId;
+});
+
+// Vérifier s'il y a des conflits actifs
+const hasActiveConflicts = computed(() => {
+    return moderatorStore.assignmentConflicts.length > 0;
+});
+
+// Obtenir le dernier conflit
+const latestConflict = computed(() => {
+    if (!hasActiveConflicts.value) return {};
+
+    return moderatorStore.assignmentConflicts[
+        moderatorStore.assignmentConflicts.length - 1
+    ];
+});
+
+// Mettre à jour le temps restant de verrouillage
+const updateLockTimeRemaining = () => {
+    if (!isProfileLocked.value) return;
+
+    const expiresAt = new Date(profileLockInfo.value.expiresAt);
+    const now = new Date();
+    const diffSeconds = Math.floor((expiresAt - now) / 1000);
+
+    profileLockTimeRemaining.value = Math.max(0, diffSeconds);
+
+    if (profileLockTimeRemaining.value <= 0) {
+        clearInterval(profileLockInterval.value);
+        profileLockInterval.value = null;
+    }
+};
+
+// Quitter la file d'attente
+const leaveQueue = async () => {
+    try {
+        const response = await axios.post("/moderateur/queue/leave");
+
+        if (response.data.status === "success") {
+            moderatorStore.queueInfo.inQueue = false;
+            moderatorStore.queueInfo.position = null;
+            moderatorStore.queueInfo.estimatedWaitTime = null;
+            moderatorStore.queueInfo.queuedAt = null;
+        }
+    } catch (error) {
+        console.error("Erreur lors de la sortie de la file d'attente:", error);
+    }
+};
+
+// Demander le déverrouillage d'un profil
+const requestUnlock = async (profileId) => {
+    await moderatorStore.requestProfileUnlock(profileId);
+};
+
+// Accusé de réception d'un conflit
+const acknowledgeConflict = (conflictId) => {
+    moderatorStore.assignmentConflicts =
+        moderatorStore.assignmentConflicts.filter(
+            (conflict) => conflict.id !== conflictId
+        );
+};
+
+// Prévenir la réattribution en signalant l'activité
+const preventReassignment = async () => {
+    try {
+        await axios.post("/moderateur/activity/signal", {
+            profile_id: moderatorStore.currentAssignedProfile?.id,
+        });
+
+        showReassignmentAlert.value = false;
+        clearInterval(reassignmentInterval.value);
+        reassignmentInterval.value = null;
+    } catch (error) {
+        console.error("Erreur lors de la signalisation d'activité:", error);
+    }
+};
+
+// Démarrer l'alerte de réattribution
+const startReassignmentAlert = () => {
+    if (reassignmentInterval.value) return;
+
+    showReassignmentAlert.value = true;
+    reassignmentCountdown.value = 60; // 60 secondes avant réattribution
+
+    reassignmentInterval.value = setInterval(() => {
+        reassignmentCountdown.value--;
+
+        if (reassignmentCountdown.value <= 0) {
+            clearInterval(reassignmentInterval.value);
+            reassignmentInterval.value = null;
+            showReassignmentAlert.value = false;
+        }
+    }, 1000);
+};
 
 // Messages pour la conversation actuelle
 const currentChatMessages = computed(() => {
@@ -1101,6 +1675,39 @@ const connectionStateLabel = computed(() => {
 
 // Erreurs WebSocket
 const webSocketErrors = computed(() => moderatorStore.errors.websocket);
+
+// Vérifier si le client est en train de taper
+const isTyping = computed(() => {
+    if (!selectedClient.value) return false;
+
+    const typingKey = `${currentAssignedProfile.value?.id}-${selectedClient.value.id}`;
+    return moderatorStore.typingStatus[typingKey]?.isTyping || false;
+});
+
+// Vérifier si le profil est partagé
+const isProfileShared = computed(() => {
+    return moderatorStore.sharedProfiles.includes(
+        currentAssignedProfile.value?.id
+    );
+});
+
+// Obtenir les activités des autres modérateurs sur ce profil
+const otherModeratorsActive = computed(() => {
+    if (!currentAssignedProfile.value) return [];
+
+    const profileId = currentAssignedProfile.value.id;
+    return moderatorStore.activeModeratorsByProfile[profileId] || [];
+});
+
+// Demander un délai avant changement de profil
+function requestDelay() {
+    if (currentAssignedProfile.value) {
+        moderatorStore.requestProfileChangeDelay(
+            currentAssignedProfile.value.id,
+            5
+        );
+    }
+}
 
 // Fonction pour initialiser ou vérifier la connexion WebSocket
 async function ensureWebSocketConnection() {
@@ -1416,12 +2023,12 @@ function setupWebSocketAuthInterceptor() {
                     authorizerInstance.authorize(
                         socketId,
                         function (err, data) {
-                        if (err && err.status === 419) {
+                            if (err && err.status === 419) {
                                 console.warn(
                                     "⚠️ Erreur CSRF 419 malgré le rafraîchissement du token"
                                 );
-                        }
-                        callback(err, data);
+                            }
+                            callback(err, data);
                         }
                     );
                 } catch (error) {
@@ -1466,11 +2073,11 @@ function setupCSRFErrorHandler() {
                                             "⚠️ Erreur CSRF 419 détectée, rafraîchissement du token..."
                                         );
 
-                                    try {
-                                        // Rafraîchir le token CSRF
-                                        await refreshCSRFToken();
+                                        try {
+                                            // Rafraîchir le token CSRF
+                                            await refreshCSRFToken();
 
-                                        // Réessayer l'autorisation avec le nouveau token
+                                            // Réessayer l'autorisation avec le nouveau token
                                             const retryAuth =
                                                 originalAuthorizer(channel);
                                             retryAuth.authorize(
@@ -1482,16 +2089,16 @@ function setupCSRFErrorHandler() {
                                                     );
                                                 }
                                             );
-                                    } catch (refreshError) {
+                                        } catch (refreshError) {
                                             console.error(
                                                 "❌ Échec du rafraîchissement du token CSRF:",
                                                 refreshError
                                             );
-                                        callback(error, null);
+                                            callback(error, null);
+                                        }
+                                    } else {
+                                        callback(error, data);
                                     }
-                                } else {
-                                    callback(error, data);
-                                }
                                 }
                             );
                         } catch (err) {
@@ -1509,6 +2116,7 @@ function setupCSRFErrorHandler() {
 let csrfRefreshInterval;
 let axiosInterceptorId;
 let heartbeatInterval; // Nouvelle variable pour le heartbeat
+let dataRefreshInterval; // Intervalle pour le rafraîchissement périodique des données
 // Configurer l'intercepteur Axios pour les erreurs CSRF
 axiosInterceptorId = axios.interceptors.response.use(
     (response) => response,
@@ -1587,10 +2195,19 @@ onMounted(async () => {
 
         // Configurer un intervalle pour rafraîchir le token CSRF périodiquement
         csrfRefreshInterval = setInterval(refreshCSRFToken, 30 * 60 * 1000); // 30 minutes
+
         // Configurer l'intervalle de heartbeat pour maintenir le statut en ligne
         heartbeatInterval = setInterval(() => {
             moderatorStore.sendHeartbeat();
         }, 2 * 60 * 1000); // 2 minutes
+
+        // Configurer l'intervalle de rafraîchissement périodique des données
+        dataRefreshInterval = setInterval(() => {
+            if (moderatorStore.currentAssignedProfile) {
+                console.log('🔄 Rafraîchissement périodique des données...');
+                moderatorStore.forceProfileRefresh();
+            }
+        }, 60 * 1000); // Vérification toutes les 60 secondes
     } catch (error) {
         console.error(
             "❌ Erreur lors de l'initialisation du composant Moderator:",
@@ -1614,6 +2231,11 @@ onUnmounted(() => {
     // Nettoyer l'intervalle de heartbeat
     if (heartbeatInterval) {
         clearInterval(heartbeatInterval);
+    }
+
+    // Nettoyer l'intervalle de rafraîchissement des données
+    if (dataRefreshInterval) {
+        clearInterval(dataRefreshInterval);
     }
 
     // Supprimer l'intercepteur Axios
@@ -1667,26 +2289,26 @@ async function startConversation(client) {
 
         await moderatorStore.startConversation(client.id);
 
-            // Sélectionner ce client
+        // Sélectionner ce client
         const updatedClient = moderatorStore.getClientById(client.id);
         if (updatedClient) {
             selectedClient.value = updatedClient;
         }
 
-            // Changer l'onglet
-            activeTab.value = "assigned";
+        // Changer l'onglet
+        activeTab.value = "assigned";
 
-            // Faire défiler jusqu'à la section de chat sur mobile
-            nextTick(() => {
+        // Faire défiler jusqu'à la section de chat sur mobile
+        nextTick(() => {
             if (window.innerWidth < 1024) {
                 chatSection.value?.scrollIntoView({ behavior: "smooth" });
-                }
-                // Faire défiler le conteneur de messages vers le bas
-                if (chatContainer.value) {
+            }
+            // Faire défiler le conteneur de messages vers le bas
+            if (chatContainer.value) {
                 chatContainer.value.scrollTop =
                     chatContainer.value.scrollHeight;
-                }
-            });
+            }
+        });
     } catch (error) {
         console.error("Erreur lors du démarrage de la conversation:", error);
     } finally {
@@ -1722,12 +2344,22 @@ async function sendMessage() {
         // Effacer le champ avant d'envoyer pour éviter les doublons visuels
         newMessage.value = "";
 
+        // Envoyer le message
         await moderatorStore.sendMessage({
             clientId: selectedClient.value.id,
             profileId: currentAssignedProfile.value.id,
             content: messageContent,
             file: selectedFile.value,
         });
+
+        // Mettre à jour l'activité de dernière réponse
+        if (currentAssignedProfile.value && selectedClient.value) {
+            // Cette ligne est nouvelle
+            moderatorStore.updateLastMessageActivity(
+                currentAssignedProfile.value.id,
+                selectedClient.value.id
+            );
+        }
 
         // Réinitialiser le fichier sélectionné
         removeSelectedFile();
@@ -1741,7 +2373,6 @@ async function sendMessage() {
         });
     } catch (error) {
         console.error("Erreur lors de l'envoi du message:", error);
-        // Ne pas restaurer le message en cas d'erreur, l'utilisateur peut le retaper
     }
 }
 
@@ -1754,7 +2385,7 @@ function handleFileUpload(event) {
             alert("Seules les images sont autorisées");
             return;
         }
-        
+
         // Vérifier la taille du fichier (5MB max)
         if (file.size > 5 * 1024 * 1024) {
             alert("La taille du fichier ne doit pas dépasser 5MB");
@@ -1791,7 +2422,7 @@ async function handleProfilePhotoSelected(photo) {
             console.error("Profil ou client non sélectionné");
             return;
         }
-        
+
         await moderatorStore.sendProfilePhoto({
             profileId: currentAssignedProfile.value.id,
             clientId: selectedClient.value.id,
@@ -1867,17 +2498,67 @@ function loadAvailableClients() {
 watch(
     () => moderatorStore.currentAssignedProfile,
     async (newProfile, oldProfile) => {
-    if (newProfile && newProfile.id !== oldProfile?.id) {
-        // Configurer les écouteurs pour le nouveau profil
-        moderatorStore.setupProfileListeners(newProfile.id);
+        if (newProfile && newProfile.id !== oldProfile?.id) {
+            // Configurer les écouteurs pour le nouveau profil
+            moderatorStore.setupProfileListeners(newProfile.id);
+
+            // Réinitialiser le client sélectionné pour éviter l'affichage d'une conversation d'un autre profil
+            selectedClient.value = moderatorStore.selectedClient;
+
+            // S'assurer que les messages affichés correspondent au client sélectionné
+            if (selectedClient.value) {
+                // Faire défiler le conteneur de messages vers le bas après le rendu
+                nextTick(() => {
+                    if (chatContainer.value) {
+                        chatContainer.value.scrollTop =
+                            chatContainer.value.scrollHeight;
+                    }
+                });
+            }
+
+            // Ajouter une notification système pour informer du changement de profil
+            const notification = {
+                id: Date.now(),
+                message: `Vous utilisez maintenant le profil ${newProfile.name}`,
+                clientId: null,
+                clientName: "Système",
+                timestamp: new Date(),
+                read: false,
+            };
+
+            notifications.value.unshift(notification);
+        }
     }
+);
+
+// Observer les changements du client sélectionné dans le store
+watch(
+    () => moderatorStore.selectedClient,
+    (newSelectedClient) => {
+        if (newSelectedClient) {
+            // Synchroniser le client sélectionné local avec celui du store
+            selectedClient.value = newSelectedClient;
+
+            // Faire défiler le conteneur de messages vers le bas après le rendu
+            nextTick(() => {
+                if (chatContainer.value) {
+                    chatContainer.value.scrollTop =
+                        chatContainer.value.scrollHeight;
+                }
+
+                // Sur mobile, faire défiler jusqu'à la section de chat
+                if (window.innerWidth < 1024) {
+                    chatSection.value?.scrollIntoView({ behavior: "smooth" });
+                }
+            });
+        }
     }
 );
 
 // Surveiller l'état de la connexion WebSocket
 watch(connectionState, (newState) => {
     console.log(`État WebSocket changé: ${newState}`);
-    
+
     if (newState === "disconnected") {
         // Afficher une notification
         const notification = {
@@ -1889,7 +2570,7 @@ watch(connectionState, (newState) => {
             timestamp: new Date(),
             read: false,
         };
-        
+
         notifications.value.unshift(notification);
     } else if (newState === "healthy") {
         // Ajouter une notification de reconnexion
@@ -1901,10 +2582,100 @@ watch(connectionState, (newState) => {
             timestamp: new Date(),
             read: false,
         };
-        
+
         notifications.value.unshift(notification);
     }
 });
+
+// Surveiller l'input de message pour signaler l'activité de frappe
+let typingTimeout = null;
+let lastTypingTime = 0;
+
+watch(newMessage, (value) => {
+    if (
+        value &&
+        value.length > 0 &&
+        currentAssignedProfile.value &&
+        selectedClient.value
+    ) {
+        // Vérifier si assez de temps s'est écoulé depuis le dernier événement (500ms)
+        const now = Date.now();
+        if (now - lastTypingTime < 500) {
+            return; // Trop tôt pour envoyer un autre événement
+        }
+
+        lastTypingTime = now;
+
+        // Annuler le timeout précédent s'il existe
+        if (typingTimeout) {
+            clearTimeout(typingTimeout);
+        }
+
+        // Envoyer l'événement de frappe
+        moderatorStore.recordTypingActivity(
+            currentAssignedProfile.value.id,
+            selectedClient.value.id
+        );
+
+        // Définir un nouveau timeout pour arrêter l'indicateur après 3 secondes d'inactivité
+        typingTimeout = setTimeout(() => {
+            // Envoyer un événement pour indiquer que l'utilisateur a arrêté de taper
+            // Vous pourriez ajouter une méthode stopTypingActivity dans votre store
+            typingTimeout = null;
+        }, 3000);
+    }
+});
+
+// Observer les changements de verrouillage
+watch(
+    () => moderatorStore.lockedProfiles,
+    (newValue, oldValue) => {
+        if (isProfileLocked.value && !profileLockInterval.value) {
+            updateLockTimeRemaining();
+            profileLockInterval.value = setInterval(
+                updateLockTimeRemaining,
+                1000
+            );
+        } else if (!isProfileLocked.value && profileLockInterval.value) {
+            clearInterval(profileLockInterval.value);
+            profileLockInterval.value = null;
+        }
+    },
+    { deep: true }
+);
+
+// Nettoyage lors du démontage
+onUnmounted(() => {
+    if (profileLockInterval.value) {
+        clearInterval(profileLockInterval.value);
+    }
+
+    if (reassignmentInterval.value) {
+        clearInterval(reassignmentInterval.value);
+    }
+});
+
+/**
+ * Rafraîchir manuellement les données du profil
+ */
+async function refreshProfileData() {
+    try {
+        // Afficher un indicateur de chargement
+        isLoading.value = true;
+        
+        // Forcer le rechargement des données
+        await moderatorStore.forceProfileRefresh();
+        
+        // Afficher une notification de succès
+        toast.success('Données rafraîchies avec succès');
+    } catch (error) {
+        console.error('❌ Erreur lors du rafraîchissement des données:', error);
+        toast.error('Erreur lors du rafraîchissement des données');
+    } finally {
+        // Masquer l'indicateur de chargement
+        isLoading.value = false;
+    }
+}
 </script>
 
 <style scoped>
@@ -2005,5 +2776,22 @@ watch(connectionState, (newState) => {
 .slide-enter-from,
 .slide-leave-to {
     transform: translateY(-100%);
+}
+
+/* Animation pour le compte à rebours */
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.6;
+    }
+    100% {
+        opacity: 1;
+    }
+}
+
+.animate-pulse {
+    animation: pulse 1s ease-in-out infinite;
 }
 </style>

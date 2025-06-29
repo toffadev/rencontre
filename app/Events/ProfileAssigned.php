@@ -4,6 +4,7 @@ namespace App\Events;
 
 use App\Models\Profile;
 use App\Models\User;
+use App\Models\ModeratorProfileAssignment;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -16,37 +17,31 @@ class ProfileAssigned implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    /**
-     * The moderator instance.
-     *
-     * @var \App\Models\User
-     */
     public $moderator;
-
-    /**
-     * The profile instance.
-     *
-     * @var \App\Models\Profile
-     */
-    public $profile;
-
-    public $isPrimary;
-    public $clientId;
-
-    public $unreadMessages;
-    public $totalUnread;
+    public $profileId;
+    public $assignmentId;
+    public $isShared; // Nouveau champ pour indiquer si le profil est partagé
+    public $oldModeratorId; // ID de l'ancien modérateur en cas de réattribution
+    public $forced; // Indique si c'est une réattribution forcée
+    public $reason; // Raison de la réattribution (ex: "inactivity")
 
     /**
      * Create a new event instance.
      */
-    public function __construct(User $moderator, Profile $profile, bool $isPrimary = false, ?int $clientId = null, $unreadMessages = [], $totalUnread = 0)
+    public function __construct($moderator, $profileId, $assignmentId, $oldModeratorId = null, $reason = null)
     {
         $this->moderator = $moderator;
-        $this->profile = $profile;
-        $this->isPrimary = $isPrimary;
-        $this->clientId = $clientId;
-        $this->unreadMessages = $unreadMessages;
-        $this->totalUnread = $totalUnread;
+        $this->profileId = $profileId;
+        $this->assignmentId = $assignmentId;
+        $this->oldModeratorId = $oldModeratorId;
+        $this->reason = $reason;
+        $this->forced = $oldModeratorId !== null || $reason === 'inactivity';
+
+        // Vérifier si ce profil est déjà attribué à d'autres modérateurs
+        $this->isShared = ModeratorProfileAssignment::where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->where('id', '!=', $assignmentId)
+            ->exists();
     }
 
     /**
@@ -62,28 +57,22 @@ class ProfileAssigned implements ShouldBroadcast
     }
 
     /**
-     * The event's broadcast name.
-     *
-     * @return string
-     */
-    public function broadcastAs(): string
-    {
-        return 'profile.assigned';
-    }
-
-    /**
      * Get the data to broadcast.
      *
      * @return array
      */
     public function broadcastWith(): array
     {
+        // Récupérer les informations du profil pour les inclure dans l'événement
+        $profile = Profile::with('photos')->find($this->profileId);
+
         return [
-            'profile' => $this->profile,
-            'is_primary' => $this->isPrimary,
-            'client_id' => $this->clientId,
-            'unread_messages' => $this->unreadMessages,
-            'total_unread' => $this->totalUnread,
+            'profile' => $profile,
+            'is_primary' => ModeratorProfileAssignment::find($this->assignmentId)->is_primary ?? false,
+            'is_shared' => $this->isShared,
+            'old_moderator_id' => $this->oldModeratorId,
+            'forced' => $this->forced,
+            'reason' => $this->reason,
         ];
     }
 }

@@ -1,0 +1,1 @@
+<?php echo e($slot); ?>: <?php echo e($url); ?> <?php /**PATH C:\Users\ROYAL COMPUTER\Desktop\projets\laravel\rencontre\resources\views/vendor/mail/text/button.blade.php ENDPATH**/ ?>

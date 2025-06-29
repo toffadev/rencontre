@@ -48,7 +48,8 @@ class ProcessMessages extends Command
 
         // Réattribuer les profils des modérateurs inactifs
         $this->info('Réattribution des profils inactifs...');
-        $inactiveProfilesCount = $this->assignmentService->reassignInactiveProfiles(30);
+        // Changé de 30 minutes à 1 minute pour le seuil d'inactivité
+        $inactiveProfilesCount = $this->assignmentService->reassignInactiveProfiles(1);
         $this->info("Nombre de profils inactifs réattribués: $inactiveProfilesCount");
         Log::info("[ProcessMessages] Profils inactifs réattribués: $inactiveProfilesCount");
 
@@ -57,6 +58,12 @@ class ProcessMessages extends Command
         $clientsAssigned = $this->assignmentService->processUnassignedMessages();
         $this->info("Nombre de clients attribués à des modérateurs: $clientsAssigned");
         Log::info("[ProcessMessages] Clients attribués: $clientsAssigned");
+
+        // Traiter spécifiquement les clients en attente de réponse
+        $this->info('Traitement des clients en attente de réponse...');
+        $clientsProcessed = $this->assignmentService->processClientsNeedingResponse();
+        $this->info("Nombre de clients en attente traités: $clientsProcessed");
+        Log::info("[ProcessMessages] Clients en attente traités: $clientsProcessed");
 
         $this->info('Traitement terminé avec succès.');
         Log::info('[ProcessMessages] Traitement terminé avec succès');

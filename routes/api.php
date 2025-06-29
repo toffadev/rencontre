@@ -37,3 +37,6 @@ Route::get('/auth-test', function (Request $request) {
 Route::post('/stripe/profile-points/webhook', [ProfilePointController::class, 'handleWebhook'])
     ->name('stripe.profile-points.webhook')
     ->withoutMiddleware(['csrf']);
+
+// Route de diagnostic pour les modérateurs
+Route::middleware(['auth:sanctum', 'moderator'])->get('/moderateur/diagnostic', [App\Http\Controllers\Moderator\ModeratorController::class, 'diagnosticStatus']);

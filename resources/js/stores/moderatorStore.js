@@ -45,7 +45,33 @@ export const useModeratorStore = defineStore('moderator', {
         },
 
         initialized: false,
-        heartbeatInterval: null
+        heartbeatInterval: null,
+        
+        // États de transition de profil
+        profileTransition: {
+            inProgress: false,
+            countdown: 0,
+            newProfile: null,
+            countdownTimer: null,
+            loadingData: false
+        },
+        // Nouvelles propriétés pour la gestion des profils partagés
+        sharedProfiles: [],
+        activeModeratorsByProfile: {},
+        typingStatus: {},
+        currentConversationActivity: null,
+        canRequestDelay: true,
+        delayRequested: false,
+         // Nouvelles propriétés pour le système de file d'attente et verrouillage
+        queueInfo: {
+            inQueue: false,
+            position: null,
+            estimatedWaitTime: null,
+            queuedAt: null
+        },
+        lockedProfiles: {}, // Structure: { profileId: { lockedAt, expiresAt, moderatorId } }
+        lockedClients: {}, // Structure: { clientId: { lockedAt, expiresAt, profileId } }
+        assignmentConflicts: [], // Stocke les conflits d'attribution en cours
     }),
     
     actions: {
@@ -56,7 +82,7 @@ export const useModeratorStore = defineStore('moderator', {
             try {
                 console.log('🚀 Initialisation du ModeratorStore...');
                 
-                // Charger les données du modérateur
+                // Chargement initial comme avant...
                 await this.loadModeratorData();
                 
                 // S'assurer que le WebSocketManager est initialisé
@@ -67,6 +93,9 @@ export const useModeratorStore = defineStore('moderator', {
                     this.webSocketStatus = webSocketManager.getConnectionStatus();
                 }
                 
+                // Vérifier si le modérateur est en file d'attente
+                await this.checkQueueStatus();
+                
                 // Charger les profils attribués
                 await this.loadAssignedProfiles();
                 
@@ -76,6 +105,9 @@ export const useModeratorStore = defineStore('moderator', {
                     
                     // Configurer les écouteurs WebSocket pour le profil principal
                     this.setupWebSocketListeners();
+                } else if (this.queueInfo.inQueue) {
+                    // Si le modérateur est en file d'attente, afficher l'interface de file d'attente
+                    console.log('🔍 Modérateur en file d\'attente, position: ' + this.queueInfo.position);
                 }
                 
                 // Configurer les écouteurs WebSocket pour le modérateur
@@ -96,6 +128,138 @@ export const useModeratorStore = defineStore('moderator', {
                 // Réessayer l'initialisation après un délai
                 setTimeout(() => this.initialize(), 5000);
                 return false;
+            }
+        },
+
+        /**
+         * Vérifier le statut de file d'attente du modérateur
+         */
+        async checkQueueStatus() {
+            try {
+                const response = await axios.get('/moderateur/queue/status');
+                
+                if (response.data.in_queue) {
+                    this.queueInfo = {
+                        inQueue: true,
+                        position: response.data.position,
+                        estimatedWaitTime: response.data.estimated_wait_time,
+                        queuedAt: response.data.queued_at
+                    };
+                    console.log('🔍 Modérateur en file d\'attente, position: ' + this.queueInfo.position);
+                } else {
+                    this.queueInfo.inQueue = false;
+                }
+                
+                return this.queueInfo;
+            } catch (error) {
+                console.error('❌ Erreur lors de la vérification du statut de file d\'attente:', error);
+                return null;
+            }
+        },
+
+        /**
+         * Gérer le changement de position dans la file d'attente
+         */
+        handleQueuePosition(event) {
+            console.log('📩 Événement queue.position.changed reçu:', event);
+            
+            this.queueInfo = {
+                inQueue: true,
+                position: event.position,
+                estimatedWaitTime: event.estimated_wait_time,
+                queuedAt: event.timestamp
+            };
+            
+            // Mettre à jour l'interface pour refléter la position dans la file d'attente
+            this.showQueueStatus();
+        },
+        
+        /**
+         * Gérer le statut de verrouillage d'un profil
+         */
+        handleProfileLockStatus(event) {
+            console.log('📩 Événement profile.lock.status reçu:', event);
+            
+            if (event.status === 'locked') {
+                // Ajouter ou mettre à jour le verrouillage
+                this.lockedProfiles[event.profile_id] = {
+                    lockedAt: event.timestamp,
+                    expiresAt: event.expires_at,
+                    moderatorId: event.moderator_id
+                };
+            } else if (event.status === 'unlocked') {
+                // Supprimer le verrouillage
+                if (this.lockedProfiles[event.profile_id]) {
+                    delete this.lockedProfiles[event.profile_id];
+                }
+            }
+        },
+        
+        /**
+         * Demander le déverrouillage d'un profil
+         */
+        async requestProfileUnlock(profileId) {
+            try {
+                const response = await axios.post('/moderateur/locks/request-unlock', {
+                    profile_id: profileId
+                });
+                
+                if (response.data.status === 'success') {
+                    console.log('✅ Demande de déverrouillage envoyée avec succès');
+                    
+                    // Supprimer le verrouillage localement
+                    if (this.lockedProfiles[profileId]) {
+                        delete this.lockedProfiles[profileId];
+                    }
+                    
+                    return true;
+                }
+                
+                return false;
+            } catch (error) {
+                console.error('❌ Erreur lors de la demande de déverrouillage:', error);
+                return false;
+            }
+        },
+        
+        /**
+         * Afficher le statut de la file d'attente
+         */
+        showQueueStatus() {
+            if (!this.queueInfo.inQueue) {
+                return false;
+            }
+            
+            const remainingTime = this.queueInfo.estimatedWaitTime;
+            console.log(`🕒 Position dans la file d'attente: ${this.queueInfo.position}, temps estimé: ${remainingTime} minutes`);
+            
+            // Cette méthode peut être utilisée pour mettre à jour l'interface utilisateur
+            // avec les informations de file d'attente
+            
+            return true;
+        },
+        
+        /**
+         * Gérer la résolution des conflits
+         */
+        handleConflictResolution(event) {
+            console.log('📩 Événement conflict.resolution reçu:', event);
+            
+            if (event.conflict_type === 'assignment') {
+                // Stocker le conflit pour affichage
+                this.assignmentConflicts.push({
+                    id: Date.now(),
+                    type: event.conflict_type,
+                    message: event.message,
+                    timestamp: event.timestamp,
+                    details: event.details
+                });
+                
+                // Si le conflit concerne le profil actuel, recharger les données
+                if (event.details.profile_id === this.currentAssignedProfile?.id) {
+                    this.loadAssignedProfiles();
+                    this.loadAssignedClients();
+                }
             }
         },
         
@@ -348,98 +512,98 @@ export const useModeratorStore = defineStore('moderator', {
          * Envoie un message à un client
          */
         async sendMessage({ clientId, profileId, content, file }) {
-  try {
-    // Génération d'un ID temporaire pour le message
-    const tempId = Date.now().toString();
-    
-    // Ajouter un message temporaire à l'interface utilisateur immédiatement
-    const tempMessage = {
-      id: tempId,
-      content: content || '',
-      sender_id: profileId,
-      sender_type: 'profile',
-      isFromClient: false,
-      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      isSending: true
-    };
+            try {
+                // Génération d'un ID temporaire pour le message
+                const tempId = Date.now().toString();
+                
+                // Ajouter un message temporaire à l'interface utilisateur immédiatement
+                const tempMessage = {
+                id: tempId,
+                content: content || '',
+                sender_id: profileId,
+                sender_type: 'profile',
+                isFromClient: false,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                isSending: true
+                };
 
-    // Initialiser l'entrée si nécessaire
-    if (!this.messages[clientId]) {
-      this.messages[clientId] = {
-        messages: [],
-        pagination: { page: 1, hasMore: false }
-      };
-    }
-    
-    // Ajouter à notre liste de messages (notez l'accès à .messages)
-    this.messages[clientId].messages.push(tempMessage);
+                // Initialiser l'entrée si nécessaire
+                if (!this.messages[clientId]) {
+                this.messages[clientId] = {
+                    messages: [],
+                    pagination: { page: 1, hasMore: false }
+                };
+                }
+                
+                // Ajouter à notre liste de messages (notez l'accès à .messages)
+                this.messages[clientId].messages.push(tempMessage);
 
-    // Construire les données pour la requête
-    const formData = new FormData();
-    formData.append('client_id', clientId);
-    formData.append('profile_id', profileId);
-    if (content) formData.append('content', content);
-    if (file) formData.append('attachment', file);
+                // Construire les données pour la requête
+                const formData = new FormData();
+                formData.append('client_id', clientId);
+                formData.append('profile_id', profileId);
+                if (content) formData.append('content', content);
+                if (file) formData.append('attachment', file);
 
-    // Envoyer le message au serveur
-    const response = await axios.post('/moderateur/send-message', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
-      }
-    });
+                // Envoyer le message au serveur
+                const response = await axios.post('/moderateur/send-message', formData, {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                }
+                });
 
-    // Mettre à jour le message temporaire avec les données réelles
-    if (response.data.success) {
-      // Récupérer le message de la réponse en vérifiant sa structure
-      const actualMessage = response.data.message || response.data.messageData;
-      
-      if (actualMessage) {
-        // Remplacer le message temporaire par le message réel
-        const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
-        if (tempIndex !== -1) {
-          // Créer un nouvel objet message avec les bons champs
-          const formattedMessage = {
-            id: actualMessage.id || tempId,
-            content: actualMessage.content || content || '',
-            isFromClient: false,
-            time: actualMessage.created_at 
-              ? new Date(actualMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-              : tempMessage.time
-          };
-          
-          // Ajouter l'attachment si présent
-          if (actualMessage.attachment) {
-            formattedMessage.attachment = actualMessage.attachment;
-          }
-          
-          this.messages[clientId].messages[tempIndex] = formattedMessage;
-        }
-      } else {
-        console.warn("Message envoyé mais structure de réponse API inattendue");
-        // Marquer le message comme envoyé en supprimant l'indicateur de chargement
-        const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
-        if (tempIndex !== -1) {
-          this.messages[clientId].messages[tempIndex].isSending = false;
-        }
-      }
-    }
+                // Mettre à jour le message temporaire avec les données réelles
+                if (response.data.success) {
+                // Récupérer le message de la réponse en vérifiant sa structure
+                const actualMessage = response.data.message || response.data.messageData;
+                
+                if (actualMessage) {
+                    // Remplacer le message temporaire par le message réel
+                    const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
+                    if (tempIndex !== -1) {
+                    // Créer un nouvel objet message avec les bons champs
+                    const formattedMessage = {
+                        id: actualMessage.id || tempId,
+                        content: actualMessage.content || content || '',
+                        isFromClient: false,
+                        time: actualMessage.created_at 
+                        ? new Date(actualMessage.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : tempMessage.time
+                    };
+                    
+                    // Ajouter l'attachment si présent
+                    if (actualMessage.attachment) {
+                        formattedMessage.attachment = actualMessage.attachment;
+                    }
+                    
+                    this.messages[clientId].messages[tempIndex] = formattedMessage;
+                    }
+                } else {
+                    console.warn("Message envoyé mais structure de réponse API inattendue");
+                    // Marquer le message comme envoyé en supprimant l'indicateur de chargement
+                    const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
+                    if (tempIndex !== -1) {
+                    this.messages[clientId].messages[tempIndex].isSending = false;
+                    }
+                }
+                }
 
-    return response.data;
-  } catch (error) {
-    console.error("❌ Erreur lors de l'envoi du message:", error);
-    
-    // En cas d'erreur, marquer le message comme échoué
-    if (this.messages[clientId] && this.messages[clientId].messages) {
-      const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
-      if (tempIndex !== -1) {
-        this.messages[clientId].messages[tempIndex].failed = true;
-        this.messages[clientId].messages[tempIndex].isSending = false;
-      }
-    }
-    
-    throw error;
-  }
-},
+                return response.data;
+            } catch (error) {
+                console.error("❌ Erreur lors de l'envoi du message:", error);
+                
+                // En cas d'erreur, marquer le message comme échoué
+                if (this.messages[clientId] && this.messages[clientId].messages) {
+                const tempIndex = this.messages[clientId].messages.findIndex(m => m.id === tempId);
+                if (tempIndex !== -1) {
+                    this.messages[clientId].messages[tempIndex].failed = true;
+                    this.messages[clientId].messages[tempIndex].isSending = false;
+                }
+                }
+                
+                throw error;
+            }
+        },
         
         /**
          * Envoie une photo de profil à un client
@@ -675,6 +839,20 @@ export const useModeratorStore = defineStore('moderator', {
                 window.addEventListener('websocket:disconnected', this.handleWebSocketDisconnected);
                 window.addEventListener('websocket:connected', this.handleWebSocketConnected);
                 
+                // NOUVEAU: Ajouter l'écoute des événements de profil partagé
+                this.listenToSharedProfileEvents(profileId);
+                
+                // NOUVEAU: Vérifier si ce profil est partagé
+                if (!this.sharedProfiles.includes(profileId)) {
+                    axios.get(`/moderateur/profile/${profileId}/is-shared`)
+                        .then(response => {
+                            if (response.data.isShared) {
+                                this.sharedProfiles.push(profileId);
+                            }
+                        })
+                        .catch(error => console.error('Erreur lors de la vérification du partage de profil:', error));
+                }
+                
             } catch (error) {
                 console.error('❌ Erreur lors de la configuration des écouteurs WebSocket:', error);
                 this.errors.websocket = 'Erreur de configuration WebSocket';
@@ -704,6 +882,23 @@ export const useModeratorStore = defineStore('moderator', {
                 this.setupModeratorWebSocketListeners();
             }
         },
+
+        // Méthode pour gérer les conflits d'attribution
+        handleAssignmentConflict(event) {
+            console.log('📩 Événement assignment.conflict reçu:', event);
+            
+            if (event.resolution === 'reassign') {
+                // Afficher une notification à l'utilisateur
+                this.addNotification(
+                    `Un conflit d'attribution a été détecté. Votre profil ${event.profile_name} a été réattribué.`,
+                    null,
+                    'Système'
+                );
+                
+                // Recharger les profils attribués
+                this.loadAssignedProfiles();
+            }
+        },
         
         /**
          * Configure les écouteurs WebSocket pour le modérateur
@@ -720,27 +915,82 @@ export const useModeratorStore = defineStore('moderator', {
             webSocketManager.subscribeToPrivateChannel(`moderator.${this.moderatorId}`, {
                 '.profile.assigned': async (data) => {
                     console.log('📩 Événement profile.assigned reçu:', data);
+                    console.log('📊 État actuel du store avant traitement:', {
+                        currentProfile: this.currentAssignedProfile ? this.currentAssignedProfile.id : null,
+                        assignedProfiles: this.assignedProfiles.map(p => p.id),
+                        isReassignment: data.reason === 'inactivity' || data.old_moderator_id,
+                        isForced: data.forced === true,
+                        reason: data.reason,
+                        oldModeratorId: data.old_moderator_id
+                    });
                     
                     // Recharger les données après l'attribution d'un profil
                     await this.loadAssignedProfiles();
                     
-                    // Si le profil attribué est différent du profil actuel et qu'il est principal
-                    if (data.profile && 
-                        data.profile.id !== this.currentAssignedProfile?.id && 
-                        data.is_primary) {
+                    // Vérifier si c'est une réattribution forcée (inactivité)
+                    
+                    // Amélioration: Vérification plus robuste des conditions de réattribution forcée
+                    const isReassignment = data.reason === 'inactivity' || data.old_moderator_id;
+                    const isForced = data.forced === true;
+                    
+                    // Debug supplémentaire pour la réattribution
+                    console.log('🔍 Analyse de l\'événement profile.assigned:', {
+                        isReassignment,
+                        isForced,
+                        reason: data.reason,
+                        oldModeratorId: data.old_moderator_id,
+                        profileId: data.profileId || (data.profile ? data.profile.id : null),
+                        currentProfileId: this.currentAssignedProfile ? this.currentAssignedProfile.id : null
+                    });
+                    
+                    // Forcer la mise à jour du profil actuel si:
+                    // 1. Le profil principal a changé
+                    // 2. C'est une réattribution forcée (inactivité)
+                    // 3. L'événement indique explicitement que c'est forcé
+
+                    
+                    if (data.profile && data.is_primary && 
+                            (!this.currentAssignedProfile || data.profile.id !== this.currentAssignedProfile.id) ||
+                        isReassignment || 
+                        isForced) {
+                        console.log('🔄 Changement de profil détecté, préparation de la transition...', {
+                            newProfileId: data.profile ? data.profile.id : (data.profileId || 'non spécifié'),
+                            reason: data.reason || 'non spécifié',
+                            isForced: isForced,
+                            isReassignment: isReassignment
+                        });
+
                         
-                        // Mettre à jour le profil principal
-                        this.currentAssignedProfile = data.profile;
+                       
                         
-                        // Recharger les clients
-                        await this.loadAssignedClients();
+                        // Démarrer le compte à rebours pour le changement de profil
+                        this.startProfileTransition(data.profile);
                         
-                        // Configurer les écouteurs WebSocket pour le nouveau profil
-                        this.setupWebSocketListeners();
+                        // Attendre la fin du compte à rebours
+                        await new Promise(resolve => {
+                            setTimeout(resolve, 3000); // 3 secondes de compte à rebours
+                        });
                         
-                        // Si un client est associé à ce changement de profil
-                        if (data.client_id) {
-                            try {
+                        // Activer l'état de chargement global
+                        this.profileTransition.loadingData = true;
+                        
+                        try {
+                            console.log('🔄 Chargement du nouveau profil en cours...');
+                            
+                            // Réinitialiser le client sélectionné et vider le chat avant de changer de profil
+                            this.selectedClient = null;
+                            
+                            // Mettre à jour le profil principal
+                            this.currentAssignedProfile = data.profile;
+                            
+                            // Recharger les clients
+                            await this.loadAssignedClients();
+                            
+                            // Configurer les écouteurs WebSocket pour le nouveau profil
+                            this.setupWebSocketListeners();
+                            
+                            // Si un client est associé à ce changement de profil
+                            if (data.client_id) {
                                 // Charger les messages du client
                                 await this.loadMessages(data.client_id);
                                 
@@ -749,10 +999,24 @@ export const useModeratorStore = defineStore('moderator', {
                                 if (clientInfo) {
                                     this.selectedClient = clientInfo;
                                 }
-                            } catch (error) {
-                                console.error('❌ Erreur lors du chargement des messages:', error);
+                            } else if (this.assignedClients.length > 0) {
+                                // Si aucun client spécifique n'est associé mais qu'il y a des clients attribués,
+                                // sélectionner le premier client de la liste pour éviter un chat vide
+                                const firstClient = this.assignedClients[0];
+                                this.selectedClient = firstClient;
+                                await this.loadMessages(firstClient.id);
                             }
+                            
+                            console.log('✅ Transition de profil terminée avec succès');
+                        } catch (error) {
+                            console.error('❌ Erreur lors de la transition de profil:', error);
+                        } finally {
+                            // Désactiver l'état de chargement
+                            this.profileTransition.loadingData = false;
+                            this.endProfileTransition();
                         }
+                    } else {
+                        console.log('ℹ️ Mise à jour des données sans changement de profil principal');
                     }
                 },
                 
@@ -770,8 +1034,68 @@ export const useModeratorStore = defineStore('moderator', {
                             await this.selectClient(clientInfo);
                         }
                     }
-                }
+                },
+                // Nouvel écouteur pour les changements de position dans la file d'attente
+                '.queue.position.changed': (data) => {
+                    this.handleQueuePosition(data);
+                },
+                
+                // Nouvel écouteur pour les changements de statut de verrouillage des profils
+                '.profile.lock.status': (data) => {
+                    this.handleProfileLockStatus(data);
+                },
+                
+                // Nouvel écouteur pour la résolution des conflits
+                '.conflict.resolution': (data) => {
+                    this.handleConflictResolution(data);
+                },
+                'assignment.conflict': (event) => {
+                    this.handleAssignmentConflict(event);
+                },
             });
+        },
+        
+        /**
+         * Démarre la transition vers un nouveau profil avec un compte à rebours
+         */
+        startProfileTransition(newProfile) {
+            // Annuler tout compte à rebours en cours
+            if (this.profileTransition.countdownTimer) {
+                clearInterval(this.profileTransition.countdownTimer);
+            }
+            
+            // Initialiser l'état de transition
+            this.profileTransition.inProgress = true;
+            this.profileTransition.countdown = 3; // 3 secondes de compte à rebours
+            this.profileTransition.newProfile = newProfile;
+            
+            // Démarrer le compte à rebours
+            this.profileTransition.countdownTimer = setInterval(() => {
+                this.profileTransition.countdown -= 1;
+                
+                // Si le compte à rebours est terminé, arrêter le timer
+                if (this.profileTransition.countdown <= 0) {
+                    clearInterval(this.profileTransition.countdownTimer);
+                    this.profileTransition.countdownTimer = null;
+                }
+            }, 1000);
+        },
+        
+        /**
+         * Termine la transition de profil
+         */
+        endProfileTransition() {
+            // Réinitialiser l'état de transition
+            this.profileTransition.inProgress = false;
+            this.profileTransition.countdown = 0;
+            this.profileTransition.newProfile = null;
+            this.profileTransition.loadingData = false;
+            
+            // Annuler le compte à rebours si nécessaire
+            if (this.profileTransition.countdownTimer) {
+                clearInterval(this.profileTransition.countdownTimer);
+                this.profileTransition.countdownTimer = null;
+            }
         },
         
         /**
@@ -872,7 +1196,7 @@ export const useModeratorStore = defineStore('moderator', {
          */
         async sendHeartbeat() {
             try {
-                const response = await axios.post('/heartbeat');
+                const response = await axios.post('/moderateur/heartbeat');
                 
                 if (response.data.success) {
                     // Mettre à jour l'état local si nécessaire
@@ -891,6 +1215,180 @@ export const useModeratorStore = defineStore('moderator', {
             this.heartbeatInterval = setInterval(() => {
                 if (this.initialized) this.sendHeartbeat();
             }, 30000);
-        }
+        },
+
+        /**
+         * Enregistre l'activité de frappe
+         */
+        async recordTypingActivity(profileId, clientId) {
+            // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
+            const typingKey = `${profileId}-${clientId}`;
+            
+            // Si le statut existe déjà et qu'il est récent (moins de 2 secondes), ne rien faire
+            if (this.typingStatus[typingKey] && 
+                this.typingStatus[typingKey].timestamp && 
+                (new Date().getTime() - new Date(this.typingStatus[typingKey].timestamp).getTime() < 2000)) {
+                return;
+            }
+            
+            try {
+                // Mettre à jour l'état local avant d'envoyer la requête
+                this.typingStatus[typingKey] = {
+                    isTyping: true,
+                    timestamp: new Date(),
+                };
+                
+                // Envoyer la requête au serveur
+                await axios.post('/moderateur/typing', {
+                    profile_id: profileId,
+                    client_id: clientId,
+                });
+                
+                // Effacer le statut après 5 secondes
+                setTimeout(() => {
+                    if (this.typingStatus[typingKey]) {
+                        this.typingStatus[typingKey].isTyping = false;
+                    }
+                }, 5000);
+            } catch (error) {
+                console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
+            }
+        },
+
+        /**
+         * Met à jour l'activité de dernière réponse pour un profil et un client
+         */
+        updateLastMessageActivity(profileId, clientId) {
+            try {
+                // Mettre à jour l'état local pour indiquer que le modérateur a répondu
+                const key = `${profileId}-${clientId}`;
+                this.currentConversationActivity = {
+                    profileId,
+                    clientId,
+                    lastResponse: new Date(),
+                };
+                
+                // Vous pouvez également envoyer cette information au serveur si nécessaire
+                axios.post('/moderateur/update-activity', {
+                    profile_id: profileId,
+                    client_id: clientId,
+                    activity_type: 'message_sent'
+                }).catch(error => {
+                    console.warn('Erreur lors de la mise à jour de l\'activité:', error);
+                });
+                
+                return true;
+            } catch (error) {
+                console.error('Erreur lors de la mise à jour de l\'activité de message:', error);
+                return false;
+            }
+        },
+
+        /**
+         * Demander un délai avant changement de profil
+         */
+        async requestProfileChangeDelay(profileId, minutes = 5) {
+            if (!this.canRequestDelay) return false;
+            
+            try {
+                const response = await axios.post('/moderateur/request-delay', {
+                    profile_id: profileId,
+                    minutes: minutes,
+                });
+                
+                if (response.data.status === 'success') {
+                    this.delayRequested = true;
+                    this.canRequestDelay = false;
+                    
+                    // Réinitialiser après un certain temps
+                    setTimeout(() => {
+                        this.canRequestDelay = true;
+                    }, 15 * 60 * 1000); // 15 minutes
+                    
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                console.error('Erreur lors de la demande de délai:', error);
+                return false;
+            }
+        },
+
+         /**
+         * Écouter les événements de profil partagé
+         */
+        listenToSharedProfileEvents(profileId) {
+            if (!window.Echo) return;
+            
+            window.Echo.private(`profile.${profileId}`)
+                .listen('ModeratorActivityEvent', (event) => {
+                    // Mettre à jour l'état des activités des autres modérateurs
+                    if (event.moderatorId !== this.moderatorId) {
+                        this.activeModeratorsByProfile[profileId] = this.activeModeratorsByProfile[profileId] || [];
+                        
+                        // Ajouter ou mettre à jour l'activité du modérateur
+                        const existingIndex = this.activeModeratorsByProfile[profileId].findIndex(
+                            m => m.moderatorId === event.moderatorId
+                        );
+                        
+                        const activityData = {
+                            moderatorId: event.moderatorId,
+                            clientId: event.clientId,
+                            activityType: event.activityType,
+                            timestamp: event.timestamp,
+                        };
+                        
+                        if (existingIndex >= 0) {
+                            this.activeModeratorsByProfile[profileId][existingIndex] = activityData;
+                        } else {
+                            this.activeModeratorsByProfile[profileId].push(activityData);
+                        }
+                        
+                        // Nettoyer les activités anciennes
+                        this.cleanupOldActivities();
+                    }
+                });
+        },
+
+        /**
+         * Nettoyer les activités anciennes (plus de 5 minutes)
+         */
+        cleanupOldActivities() {
+            const now = new Date();
+            
+            Object.keys(this.activeModeratorsByProfile).forEach(profileId => {
+                this.activeModeratorsByProfile[profileId] = this.activeModeratorsByProfile[profileId].filter(activity => {
+                    const activityTime = new Date(activity.timestamp);
+                    return now.getTime() - activityTime.getTime() < 5 * 60 * 1000;
+                });
+            });
+        },
+
+        /**
+         * Force le rechargement des données du profil courant
+         * Utile quand les données ne sont pas automatiquement mises à jour
+         */
+        async forceProfileRefresh() {
+            console.log('🔄 Forçage du rechargement des données du profil...');
+            
+            try {
+                // Recharger les profils assignés
+                await this.loadAssignedProfiles();
+                
+                // Si un profil est actuellement assigné, recharger ses clients
+                if (this.currentAssignedProfile) {
+                    await this.loadAssignedClients();
+                    
+                    // Si un client est sélectionné, recharger ses messages
+                    if (this.selectedClient) {
+                        await this.loadMessages(this.selectedClient.id);
+                    }
+                }
+                
+                console.log('✅ Rechargement forcé des données terminé avec succès');
+            } catch (error) {
+                console.error('❌ Erreur lors du rechargement forcé des données:', error);
+            }
+        },
     }
 });

@@ -2,8 +2,6 @@
 
 namespace App\Events;
 
-use App\Models\Profile;
-use App\Models\User;
 use Illuminate\Broadcasting\Channel;
 use Illuminate\Broadcasting\InteractsWithSockets;
 use Illuminate\Broadcasting\PresenceChannel;
@@ -11,30 +9,27 @@ use Illuminate\Broadcasting\PrivateChannel;
 use Illuminate\Contracts\Broadcasting\ShouldBroadcast;
 use Illuminate\Foundation\Events\Dispatchable;
 use Illuminate\Queue\SerializesModels;
-use App\Models\ModeratorProfileAssignment;
 
-class ClientAssigned implements ShouldBroadcast
+class ModeratorActivityEvent implements ShouldBroadcast
 {
     use Dispatchable, InteractsWithSockets, SerializesModels;
 
-    public $moderator;
-    public $clientId;
+    public $moderatorId;
     public $profileId;
-    public $isSharedProfile; // Nouveau
+    public $clientId;
+    public $activityType;
+    public $timestamp;
 
     /**
      * Create a new event instance.
      */
-    public function __construct($moderator, $clientId, $profileId)
+    public function __construct($moderatorId, $profileId, $clientId, $activityType)
     {
-        $this->moderator = $moderator;
-        $this->clientId = $clientId;
+        $this->moderatorId = $moderatorId;
         $this->profileId = $profileId;
-
-        // Vérifier si ce profil est partagé entre plusieurs modérateurs
-        $this->isSharedProfile = ModeratorProfileAssignment::where('profile_id', $profileId)
-            ->where('is_active', true)
-            ->count() > 1;
+        $this->clientId = $clientId;
+        $this->activityType = $activityType; // 'typing', 'reading', 'idle', etc.
+        $this->timestamp = now()->toIso8601String();
     }
 
     /**
@@ -44,8 +39,10 @@ class ClientAssigned implements ShouldBroadcast
      */
     public function broadcastOn(): array
     {
+        // Diffuser sur le canal du profil pour que tous les modérateurs
+        // qui partagent ce profil puissent voir l'activité
         return [
-            new PrivateChannel('moderator.' . $this->moderator->id),
+            new PrivateChannel('profile.' . $this->profileId),
         ];
     }
 }

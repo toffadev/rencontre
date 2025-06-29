@@ -49,9 +49,21 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('app:process-notifications')->everyMinute();
         // Enregistrement du job de calcul d'activité des modérateurs
         $schedule->job(new \App\Jobs\CalculateModeratorActivity())->everyFiveMinutes();
+        // Ajouter une tâche pour exécuter la rotation des profils toutes les minutes
+        $schedule->call(function () {
+            $task = app()->make(\App\Tasks\RotateModeratorProfilesTask::class);
+            $task();
+        })->everyMinute();
+
+        // Ajouter une tâche pour la surveillance des assignations toutes les 15 secondes
+        $schedule->call(function () {
+            $task = app()->make(\App\Tasks\ProfileAssignmentMonitoringTask::class);
+            $task();
+        })->everyFifteenSeconds();
     })
     ->withCommands([
         \App\Console\Commands\UpdateModeratorStatistics::class,
         \App\Console\Commands\ProcessNotifications::class,
+        \App\Console\Commands\ProcessMessages::class,
     ])
     ->create();

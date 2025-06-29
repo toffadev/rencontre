@@ -19,6 +19,7 @@ use App\Models\ModeratorStatistic;
 use App\Services\MessageAttachmentService;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MessageAttachment;
+use App\Services\ModeratorActivityService;
 
 class ModeratorController extends Controller
 {
@@ -94,27 +95,8 @@ class ModeratorController extends Controller
      */
     public function index()
     {
-        // Au lieu d'attribuer automatiquement un profil unique,
-        // on vérifie si le modérateur a au moins un profil attribué
-        $assignedProfiles = $this->assignmentService->getAllAssignedProfiles(Auth::user());
-
-        // Si aucun profil n'est attribué, essayer d'en attribuer un
-        if ($assignedProfiles->isEmpty()) {
-            $assignment = $this->assignmentService->assignProfileToModerator(Auth::user());
-            if ($assignment) {
-                $assignedProfiles = $this->assignmentService->getAllAssignedProfiles(Auth::user());
-            }
-        } else {
-            // Mettre à jour la dernière activité pour tous les profils
-            $this->assignmentService->updateLastActivity(Auth::user());
-        }
-
-        // Traitement de tous les messages non assignés
-        // Cette étape est importante pour distribuer équitablement les messages entre modérateurs
-        $this->assignmentService->processUnassignedMessages();
-
-        // Enregistrer la connexion WebSocket du modérateur
-        if (Auth::check()) {
+        // Enregistrer la connexion WebSocket si disponible
+        if (request()->header('X-Socket-ID')) {
             $this->webSocketHealthService->registerConnection(
                 Auth::id(),
                 Auth::user()->type,
@@ -122,8 +104,10 @@ class ModeratorController extends Controller
             );
 
             // Mettre à jour le statut en ligne du modérateur
-            $user = Auth::user();
-            $user->updateOnlineStatus(true);
+            User::where('id', Auth::id())->update([
+                'is_online' => true,
+                'last_online_at' => now()
+            ]);
         }
 
         // Passer explicitement l'utilisateur à Inertia
@@ -135,7 +119,7 @@ class ModeratorController extends Controller
     }
 
     /**
-     * Récupère les clients attribués au modérateur pour discussion
+     * Récupère les clients attribués au modérateur
      *
      * @return \Illuminate\Http\JsonResponse
      */
@@ -147,94 +131,100 @@ class ModeratorController extends Controller
             'moderator_id' => $currentModeratorId
         ]);
 
-        // Récupérer tous les profils attribués à ce modérateur
-        $assignedProfileIds = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
+        // Récupérer le profil actif du modérateur
+        $assignment = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
             ->where('is_active', true)
-            ->pluck('profile_id')
-            ->toArray();
+            ->first();
 
-        Log::info("[DEBUG] Profils attribués au modérateur", [
-            'profile_ids' => $assignedProfileIds
-        ]);
-
-        if (empty($assignedProfileIds)) {
-            Log::warning("[DEBUG] Aucun profil attribué au modérateur");
+        if (!$assignment) {
+            Log::warning("[DEBUG] Aucun profil actif trouvé pour le modérateur");
             return response()->json([
                 'clients' => []
             ]);
         }
 
-        // Trouver les clients qui ont interagi avec ces profils
-        // et qui attendent une réponse (leur dernier message est sans réponse)
-        $clientsNeedingResponse = [];
+        $profileId = $assignment->profile_id;
 
-        foreach ($assignedProfileIds as $profileId) {
-            // Pour chaque profil, trouver les clients qui ont besoin d'une réponse
-            $latestMessages = DB::table('messages as m1')
-                ->select('m1.*')
-                ->where('m1.profile_id', $profileId)
-                ->whereIn(DB::raw('(m1.client_id, m1.id)'), function ($query) use ($profileId) {
-                    $query->select(DB::raw('client_id, MAX(id)'))
-                        ->from('messages')
-                        ->where('profile_id', $profileId)
-                        ->groupBy('client_id');
-                })
-                ->where('m1.is_from_client', true)
-                ->orderBy('m1.created_at', 'desc')
-                ->get();
+        // Vérifier si des clients sont explicitement assignés
+        $conversationIds = $assignment->conversation_ids ?? [];
 
-            Log::info("[DEBUG] Messages récents pour le profil", [
-                'profile_id' => $profileId,
-                'message_count' => $latestMessages->count()
-            ]);
+        // Si aucun client n'est explicitement assigné, chercher les clients avec des messages récents
+        if (empty($conversationIds)) {
+            // Trouver les clients qui ont des messages non lus pour ce profil
+            $clientsWithMessages = Message::where('profile_id', $profileId)
+                ->where('is_from_client', true)
+                ->whereNull('read_at')
+                ->select('client_id')
+                ->distinct()
+                ->pluck('client_id')
+                ->toArray();
 
-            foreach ($latestMessages as $message) {
-                $client = User::find($message->client_id);
+            // Ajouter ces clients à l'assignation
+            if (!empty($clientsWithMessages)) {
+                foreach ($clientsWithMessages as $clientId) {
+                    $assignment->addConversation($clientId);
+                }
+                $conversationIds = $assignment->conversation_ids ?? [];
+            }
 
-                if (!$client) continue;
+            // Si toujours pas de clients, chercher les clients avec des conversations existantes
+            if (empty($conversationIds)) {
+                $clientsWithConversation = Message::where('profile_id', $profileId)
+                    ->select('client_id')
+                    ->distinct()
+                    ->pluck('client_id')
+                    ->toArray();
 
-                // Récupérer le nombre de messages non lus pour ce client et ce profil
-                $unreadCount = Message::where('profile_id', $profileId)
-                    ->where('client_id', $client->id)
-                    ->where('is_from_client', true)
-                    ->whereNull('read_at')
-                    ->count();
-
-                // Récupérer les informations du profil
-                $profile = Profile::find($profileId);
-
-                if (!$profile) continue;
-
-                // Ajouter ce client à la liste
-                $clientsNeedingResponse[] = [
-                    'id' => $client->id,
-                    'name' => $client->name,
-                    'avatar' => $client->clientProfile?->profile_photo_url,
-                    'lastMessage' => $message->content,
-                    'unreadCount' => $unreadCount,
-                    'createdAt' => $message->created_at,
-                    'lastMessageAt' => $message->created_at, // Ajouté pour le tri
-                    'profileId' => $profileId,
-                    'profileName' => $profile->name,
-                    'profilePhoto' => $profile->main_photo_path,
-                ];
+                if (!empty($clientsWithConversation)) {
+                    foreach ($clientsWithConversation as $clientId) {
+                        $assignment->addConversation($clientId);
+                    }
+                    $conversationIds = $assignment->conversation_ids ?? [];
+                }
             }
         }
 
-        // Trier par ordre chronologique (les plus anciens messages en premier)
-        usort($clientsNeedingResponse, function ($a, $b) {
-            return strtotime($a['createdAt']) - strtotime($b['createdAt']);
-        });
+        // Si toujours pas de clients, retourner une liste vide
+        if (empty($conversationIds)) {
+            return response()->json([
+                'clients' => []
+            ]);
+        }
 
-        Log::info("[DEBUG] Clients nécessitant une réponse", [
-            'client_count' => count($clientsNeedingResponse)
-        ]);
+        // Récupérer les informations des clients
+        $clientsNeedingResponse = [];
 
-        // Mettre à jour l'activité du modérateur dans le service de surveillance
-        if (Auth::check()) {
-            $this->webSocketHealthService->updateActivity(
-                request()->header('X-Socket-ID') ?? uniqid('conn_')
-            );
+        foreach ($conversationIds as $clientId) {
+            // Récupérer le client
+            $client = User::find($clientId);
+            if (!$client) continue;
+
+            // Récupérer le dernier message échangé
+            $lastMessage = Message::where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->orderBy('created_at', 'desc')
+                ->first();
+
+            if (!$lastMessage) continue;
+
+            // Vérifier s'il y a des messages non lus
+            $unreadCount = Message::where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->where('is_from_client', true)
+                ->whereNull('read_at')
+                ->count();
+
+            // Ajouter le client à la liste
+            $clientsNeedingResponse[] = [
+                'id' => $client->id,
+                'name' => $client->name,
+                'avatar' => $client->profile_photo_url ?? null,
+                'lastMessage' => $lastMessage->content,
+                'lastMessageTime' => $lastMessage->created_at->diffForHumans(),
+                'unreadCount' => $unreadCount,
+                'isTyping' => false, // Par défaut, le client n'est pas en train de taper
+                'profileId' => $profileId
+            ];
         }
 
         return response()->json([
@@ -242,8 +232,74 @@ class ModeratorController extends Controller
         ]);
     }
 
+    /* public function getClients()
+    {
+        $currentModeratorId = Auth::id();
+
+        Log::info("[DEBUG] Récupération des clients pour le modérateur", [
+            'moderator_id' => $currentModeratorId
+        ]);
+
+        // Récupérer le profil principal actif du modérateur
+        $primaryAssignment = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
+            ->where('is_active', true)
+            ->where('is_primary', true)
+            ->first();
+
+        if (!$primaryAssignment) {
+            Log::warning("[DEBUG] Aucun profil principal actif trouvé pour le modérateur");
+            return response()->json([
+                'clients' => []
+            ]);
+        }
+
+        $primaryProfileId = $primaryAssignment->profile_id;
+
+        // Vérifier si des clients sont explicitement assignés
+        $conversationIds = $primaryAssignment->conversation_ids ?? [];
+
+        // Si aucun client n'est explicitement assigné, chercher les clients avec des messages récents
+        if (empty($conversationIds)) {
+            // Trouver les clients qui ont des messages non lus pour ce profil
+            $clientsWithMessages = Message::where('profile_id', $primaryProfileId)
+                ->where('is_from_client', true)
+                ->whereNull('read_at')
+                ->select('client_id')
+                ->distinct()
+                ->pluck('client_id')
+                ->toArray();
+
+            // Ajouter ces clients à l'assignation
+            if (!empty($clientsWithMessages)) {
+                foreach ($clientsWithMessages as $clientId) {
+                    $primaryAssignment->addConversation($clientId);
+                }
+                $conversationIds = $primaryAssignment->conversation_ids ?? [];
+            }
+        }
+
+        // Si toujours pas de clients, retourner une liste vide
+        if (empty($conversationIds)) {
+            return response()->json([
+                'clients' => []
+            ]);
+        }
+
+        // Le reste de la méthode reste inchangé...
+        // Continuer avec la récupération des informations des clients
+        $clientsNeedingResponse = [];
+
+        foreach ($conversationIds as $clientId) {
+            // Code existant pour récupérer les informations des clients...
+        }
+
+        return response()->json([
+            'clients' => $clientsNeedingResponse
+        ]);
+    } */
+
     /**
-     * Récupère le profil actuellement attribué au modérateur comme profil principal
+     * Récupère le profil actuellement attribué au modérateur
      *
      * @return \Illuminate\Http\JsonResponse
      */
@@ -257,117 +313,77 @@ class ModeratorController extends Controller
             'moderator_type' => $moderator->type,
         ]);
 
-        // Récupérer tous les profils attribués
-        $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
-
-        Log::info("[DEBUG] Profils attribués récupérés", [
-            'profiles_count' => $profiles->count(),
-            'profiles_ids' => $profiles->pluck('id')->toArray(),
-        ]);
-
-        // Trouver le profil principal (si existe)
-        $primaryAssignment = ModeratorProfileAssignment::where('user_id', $moderator->id)
+        // Récupérer le profil actif du modérateur (un seul)
+        $assignment = ModeratorProfileAssignment::where('user_id', $moderator->id)
             ->where('is_active', true)
-            ->where('is_primary', true)
             ->first();
 
-        $primaryProfileId = $primaryAssignment ? $primaryAssignment->profile_id : null;
-
-        Log::info("[DEBUG] Recherche du profil principal", [
-            'primary_profile_id' => $primaryProfileId,
-            'primary_assignment_found' => $primaryAssignment ? true : false
-        ]);
-
-        // Si aucun profil principal n'est défini mais des profils sont attribués, en définir un comme principal
-        if (!$primaryAssignment && $profiles->isNotEmpty()) {
-            Log::info("[DEBUG] Aucun profil principal défini mais des profils sont attribués");
-
-            // Prendre le premier profil disponible et le définir comme principal
-            $firstProfileId = $profiles->first()->id;
-
-            try {
-                DB::transaction(function () use ($moderator, $firstProfileId) {
-                    // Désactiver tous les profils principaux existants (pour être sûr)
-                    ModeratorProfileAssignment::where('user_id', $moderator->id)
-                        ->where('is_primary', true)
-                        ->update(['is_primary' => false]);
-
-                    // Définir ce profil comme principal
-                    ModeratorProfileAssignment::where('user_id', $moderator->id)
-                        ->where('profile_id', $firstProfileId)
-                        ->where('is_active', true)
-                        ->update(['is_primary' => true]);
-                });
-
-                $primaryProfileId = $firstProfileId;
-
-                Log::info("[DEBUG] Profil défini comme principal", [
-                    'profile_id' => $primaryProfileId
-                ]);
-            } catch (\Exception $e) {
-                Log::error("[DEBUG] Erreur lors de la définition du profil principal", [
-                    'error' => $e->getMessage()
-                ]);
-            }
-
-            // Rafraîchir la liste des profils après cette modification
-            $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
-        }
-
-        // Si aucun profil n'est attribué, en attribuer un automatiquement et le définir comme principal
-        if ($profiles->isEmpty()) {
+        if (!$assignment) {
             Log::info("[DEBUG] Aucun profil attribué, tentative d'attribution automatique");
 
-            $assignment = $this->assignmentService->assignProfileToModerator($moderator, null, true);
+            // Aucun profil assigné, en attribuer un automatiquement
+            $assignment = $this->assignmentService->assignProfileToModerator($moderator->id, null, true);
 
-            if ($assignment) {
-                Log::info("[DEBUG] Profil attribué automatiquement", [
-                    'assignment_id' => $assignment->id,
-                    'profile_id' => $assignment->profile_id
-                ]);
-
-                $profiles = $this->assignmentService->getAllAssignedProfiles($moderator);
-                $primaryProfileId = $assignment->profile_id;
-            } else {
+            if (!$assignment) {
                 Log::warning("[DEBUG] Échec de l'attribution automatique d'un profil");
+
+                return response()->json([
+                    'profiles' => [],
+                    'primaryProfile' => null
+                ]);
             }
+
+            Log::info("[DEBUG] Profil attribué automatiquement", [
+                'assignment_id' => $assignment->id,
+                'profile_id' => $assignment->profile_id
+            ]);
         } else {
             // Mettre à jour la dernière activité
             $this->assignmentService->updateLastActivity($moderator);
         }
 
-        // Préparer les données pour la réponse
-        $profilesData = $profiles->map(function ($profile) use ($primaryProfileId) {
-            return [
+        // Récupérer les détails du profil
+        $profile = Profile::with('photos')->find($assignment->profile_id);
+
+        if (!$profile) {
+            Log::warning("[DEBUG] Profil assigné non trouvé dans la base de données", [
+                'profile_id' => $assignment->profile_id
+            ]);
+
+            return response()->json([
+                'profiles' => [],
+                'primaryProfile' => null
+            ]);
+        }
+
+        // Construire la réponse
+        $profileData = [
+            'id' => $profile->id,
+            'name' => $profile->name,
+            'gender' => $profile->gender,
+            'bio' => $profile->bio,
+            'main_photo_path' => $profile->main_photo_path,
+            'photos' => $profile->photos,
+            'isPrimary' => true
+        ];
+
+        // Log final
+        Log::info("[DEBUG] Résultat final de getAssignedProfile", [
+            'profile_id' => $profile->id,
+            'profile_name' => $profile->name
+        ]);
+
+        // Maintenir la structure de réponse attendue par le frontend
+        return response()->json([
+            'profiles' => [$profileData],
+            'primaryProfile' => [
                 'id' => $profile->id,
                 'name' => $profile->name,
                 'gender' => $profile->gender,
                 'bio' => $profile->bio,
                 'main_photo_path' => $profile->main_photo_path,
                 'photos' => $profile->photos,
-                'isPrimary' => $profile->id === $primaryProfileId
-            ];
-        });
-
-        $primaryProfile = $profiles->firstWhere('id', $primaryProfileId);
-
-        // Log final
-        Log::info("[DEBUG] Résultat final de getAssignedProfile", [
-            'profiles_count' => $profiles->count(),
-            'primary_profile_id' => $primaryProfileId,
-            'has_primary_profile' => $primaryProfile ? true : false
-        ]);
-
-        return response()->json([
-            'profiles' => $profilesData,
-            'primaryProfile' => $primaryProfile ? [
-                'id' => $primaryProfile->id,
-                'name' => $primaryProfile->name,
-                'gender' => $primaryProfile->gender,
-                'bio' => $primaryProfile->bio,
-                'main_photo_path' => $primaryProfile->main_photo_path,
-                'photos' => $primaryProfile->photos,
-            ] : null
+            ]
         ]);
     }
 
@@ -569,7 +585,8 @@ class ModeratorController extends Controller
             Log::info('Envoi de l\'événement broadcast');
 
             // Émettre l'événement en temps réel
-            broadcast(new MessageSent($message))->toOthers();
+            //broadcast(new MessageSent($message))->toOthers();
+            event(new MessageSent($message)); // Utiliser event() au lieu de broadcast()->toOthers() pour un traitement immédiat
 
             // Mettre à jour l'activité du modérateur
             if (Auth::check()) {
@@ -933,7 +950,8 @@ class ModeratorController extends Controller
             ];
 
             // Émettre l'événement en temps réel
-            broadcast(new MessageSent($message))->toOthers();
+            //broadcast(new MessageSent($message))->toOthers();
+            event(new MessageSent($message));
 
             return response()->json([
                 'success' => true,
@@ -1029,7 +1047,7 @@ class ModeratorController extends Controller
                 ],
                 'connections' => $connections,
                 'system_health' => $healthCheck,
-                'reverb_status' => $this->webSocketHealthService->isReverbRunning() ? 'running' : 'not_running',
+                'reverb_status' => 'status_check_not_available', // Simplification car la méthode n'est pas accessible
                 'server_info' => [
                     'php_version' => phpversion(),
                     'laravel_version' => app()->version(),
@@ -1117,7 +1135,10 @@ class ModeratorController extends Controller
         }
 
         // Mettre à jour le statut en ligne et la dernière activité
-        $user->updateOnlineStatus(true);
+        User::where('id', $user->id)->update([
+            'is_online' => true,
+            'last_online_at' => now()
+        ]);
 
         // Mettre à jour l'activité dans le service WebSocket
         $this->webSocketHealthService->updateActivity(
@@ -1127,8 +1148,242 @@ class ModeratorController extends Controller
         return response()->json([
             'success' => true,
             'timestamp' => now()->toIso8601String(),
-            'is_online' => $user->is_online,
-            'last_online_at' => $user->last_online_at ? $user->last_online_at->toIso8601String() : null
+            'is_online' => true,
+            'last_online_at' => now()->toIso8601String()
         ]);
+    }
+
+    // Ajouter les nouveaux endpoints
+
+    /**
+     * Signale une activité de frappe
+     */
+    /* public function recordTyping(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'client_id' => 'required|integer',
+        ]);
+
+        $activityService = app(ModeratorActivityService::class);
+        $activityService->recordTypingActivity(
+            Auth::id(),
+            $validated['profile_id'],
+            $validated['client_id']
+        );
+
+        return response()->json(['status' => 'success']);
+    } */
+
+    public function recordTyping(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'client_id' => 'required|integer',
+        ]);
+
+        $activityService = app(ModeratorActivityService::class);
+        $activityService->recordTypingActivity(
+            Auth::id(),
+            $validated['profile_id'],
+            $validated['client_id']
+        );
+
+        // Retourner immédiatement sans appeler d'autres services
+        return response()->json(['status' => 'success']);
+    }
+
+    /**
+     * Demande un délai avant changement de profil
+     */
+    public function requestDelay(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'minutes' => 'integer|min:1|max:15',
+        ]);
+
+        $minutes = $validated['minutes'] ?? 5;
+
+        $activityService = app(ModeratorActivityService::class);
+        $success = $activityService->requestDelay(
+            Auth::id(),
+            $validated['profile_id'],
+            $minutes
+        );
+
+        return response()->json([
+            'status' => $success ? 'success' : 'error',
+            'message' => $success ? 'Délai accordé' : 'Impossible d\'accorder un délai'
+        ]);
+    }
+
+    /**
+     * Vérifie si un profil est partagé entre plusieurs modérateurs
+     *
+     * @param int $profileId L'ID du profil à vérifier
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function isProfileShared($profileId)
+    {
+        try {
+            Log::info("[DEBUG] Vérification si le profil est partagé", [
+                'profile_id' => $profileId
+            ]);
+
+            $isShared = ModeratorProfileAssignment::where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->count() > 1;
+
+            $activeModeratorCount = ModeratorProfileAssignment::where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->count();
+
+            $activeModeratorIds = ModeratorProfileAssignment::where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->pluck('user_id')
+                ->toArray();
+
+            Log::info("[DEBUG] Résultat de la vérification", [
+                'is_shared' => $isShared,
+                'active_moderator_count' => $activeModeratorCount,
+                'active_moderator_ids' => $activeModeratorIds
+            ]);
+
+            return response()->json([
+                'isShared' => $isShared,
+                'activeModeratorCount' => $activeModeratorCount,
+                'activeModeratorIds' => $activeModeratorIds
+            ]);
+        } catch (\Exception $e) {
+            Log::error("[DEBUG] Erreur lors de la vérification du partage de profil", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Une erreur est survenue lors de la vérification du partage de profil'
+            ], 500);
+        }
+    }
+
+    /**
+     * Met à jour l'activité du modérateur
+     */
+    public function updateActivity(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'client_id' => 'required|integer',
+            'activity_type' => 'required|string',
+        ]);
+
+        try {
+            // Mettre à jour l'activité
+            $assignment = ModeratorProfileAssignment::where('user_id', auth::id())
+                ->where('profile_id', $validated['profile_id'])
+                ->where('is_active', true)
+                ->first();
+
+            if ($assignment) {
+                // Mettre à jour le timestamp de dernière activité
+                $assignment->last_activity = now();
+
+                // Si c'est un message envoyé, mettre à jour le timestamp spécifique
+                if ($validated['activity_type'] === 'message_sent') {
+                    $assignment->last_message_sent = now();
+                }
+
+                $assignment->save();
+
+                return response()->json(['success' => true]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Aucune attribution trouvée']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
+     * Endpoint de diagnostic pour vérifier l'état des assignations de profils et des modérateurs
+     * 
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function diagnosticStatus()
+    {
+        try {
+            // Récupérer tous les modérateurs actifs
+            $moderators = \App\Models\User::where('type', 'moderateur')
+                ->where('status', 'active')
+                ->where('is_online', true)
+                ->get();
+
+            $diagnosticData = [];
+
+            foreach ($moderators as $moderator) {
+                // Récupérer les assignations actives du modérateur
+                $activeAssignments = \App\Models\ModeratorProfileAssignment::where('user_id', $moderator->id)
+                    ->where('is_active', true)
+                    ->with('profile')
+                    ->get();
+
+                // Récupérer la dernière activité du modérateur
+                $lastActivity = $activeAssignments->max('last_activity');
+
+                // Vérifier si le modérateur est inactif (plus de 1 minute sans activité)
+                $isInactive = $lastActivity ? $lastActivity->diffInMinutes(now()) > 1 : true;
+
+                // Récupérer les profils avec des messages en attente pour ce modérateur
+                $profilesWithPendingMessages = [];
+
+                foreach ($activeAssignments as $assignment) {
+                    $hasPendingMessages = \App\Models\Message::where('profile_id', $assignment->profile_id)
+                        ->where('is_from_client', true)
+                        ->whereNull('read_at')
+                        ->exists();
+
+                    if ($hasPendingMessages) {
+                        $profilesWithPendingMessages[] = $assignment->profile_id;
+                    }
+                }
+
+                $diagnosticData[] = [
+                    'moderator_id' => $moderator->id,
+                    'moderator_name' => $moderator->name,
+                    'is_online' => $moderator->is_online,
+                    'active_assignments' => $activeAssignments->map(function ($assignment) {
+                        return [
+                            'assignment_id' => $assignment->id,
+                            'profile_id' => $assignment->profile_id,
+                            'profile_name' => $assignment->profile->name ?? 'Inconnu',
+                            'is_primary' => $assignment->is_primary,
+                            'last_activity' => $assignment->last_activity ? $assignment->last_activity->diffForHumans() : 'jamais',
+                            'last_activity_timestamp' => $assignment->last_activity,
+                        ];
+                    }),
+                    'is_inactive' => $isInactive,
+                    'profiles_with_pending_messages' => $profilesWithPendingMessages,
+                    'in_queue' => \App\Models\ModeratorQueue::where('moderator_id', $moderator->id)
+                        ->where('status', 'waiting')
+                        ->exists(),
+                ];
+            }
+
+            // Ajouter des informations sur les profils avec des messages en attente
+            $pendingProfiles = app(\App\Services\ModeratorAssignmentService::class)->getProfilesWithPendingMessages();
+
+            return response()->json([
+                'moderators' => $diagnosticData,
+                'pending_profiles' => $pendingProfiles,
+                'timestamp' => now()->toDateTimeString(),
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Erreur lors de la récupération des données de diagnostic',
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ], 500);
+        }
     }
 }

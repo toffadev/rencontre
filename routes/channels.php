@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Broadcast;
 use Illuminate\Support\Facades\Log;
+use App\Models\ModeratorProfileAssignment;
 
 /*
 |--------------------------------------------------------------------------
@@ -55,7 +56,7 @@ Broadcast::channel('profile.{profileId}', function ($user, $profileId) {
     }
 
     // Si l'utilisateur est modérateur
-    $isModerator = method_exists($user, 'isModerator') ? $user->isModerator() : ($user->type === 'moderateur');
+    /* $isModerator = method_exists($user, 'isModerator') ? $user->isModerator() : ($user->type === 'moderateur');
     if ($isModerator) {
         // Vérifier d'abord l'assignation active
         $hasAssignment = \App\Models\ModeratorProfileAssignment::where('user_id', $user->id)
@@ -86,7 +87,42 @@ Broadcast::channel('profile.{profileId}', function ($user, $profileId) {
         ]);
 
         return $isPrimaryProfile;
+    } */
+
+    // Si l'utilisateur est modérateur
+    $isModerator = method_exists($user, 'isModerator') ? $user->isModerator() : ($user->type === 'moderateur');
+    if ($isModerator) {
+        // Vérifier assignation active normale
+        $hasAssignment = \App\Models\ModeratorProfileAssignment::where('user_id', $user->id)
+            ->where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->exists();
+
+        if ($hasAssignment) {
+            Log::info("[CHANNELS] Modérateur - Assignation active trouvée", [
+                'moderator_id' => $user->id,
+                'profile_id' => $profileId
+            ]);
+            return true;
+        }
+
+        // Nouveau: vérifier si le modérateur est en train d'être assigné à ce profil
+        // (pour les attributions multiples)
+        $isPendingAssignment = \App\Models\ModeratorProfileAssignment::where('user_id', $user->id)
+            ->where('profile_id', $profileId)
+            ->exists();
+
+        if ($isPendingAssignment) {
+            Log::info("[CHANNELS] Modérateur - Assignation en attente trouvée", [
+                'moderator_id' => $user->id,
+                'profile_id' => $profileId
+            ]);
+            return true;
+        }
+
+        return false;
     }
+
 
     // Autoriser les accès admin
     $isAdmin = method_exists($user, 'isAdmin') ? $user->isAdmin() : ($user->type === 'admin');

@@ -24,9 +24,6 @@ return new class extends Migration
             // Index pour l'optimisation des requêtes
             $table->index(['user_id', 'is_active']);
             $table->index(['profile_id', 'is_active']);
-
-            // La contrainte unique a été supprimée car elle est gérée de manière programmatique
-            // dans le modèle ModeratorProfileAssignment
         });
     }
 

@@ -222,4 +222,36 @@ class User extends Authenticatable
             ->distinct()
             ->count();
     }
+
+    /**
+     * Get the queue position of the user.
+     */
+    public function queuePosition()
+    {
+        return $this->hasOne(ModeratorQueue::class, 'moderator_id');
+    }
+
+    /**
+     * Get the profile locks owned by the user.
+     */
+    public function profileLocks()
+    {
+        return $this->hasMany(ProfileLock::class, 'moderator_id');
+    }
+
+    /**
+     * Get the client locks owned by the user.
+     */
+    public function clientLocks()
+    {
+        return $this->hasMany(ClientLock::class, 'moderator_id');
+    }
+
+    /**
+     * Alias pour moderatorProfileAssignments() pour compatibilité
+     */
+    public function profileAssignments()
+    {
+        return $this->moderatorProfileAssignments();
+    }
 }

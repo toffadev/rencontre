@@ -67,4 +67,20 @@ class Profile extends Model
     {
         return $this->hasMany(ProfileReport::class, 'reported_profile_id');
     }
+
+    /**
+     * Get the locks for the profile.
+     */
+    public function locks()
+    {
+        return $this->hasMany(ProfileLock::class);
+    }
+
+    /**
+     * Check if the profile is currently locked.
+     */
+    public function isLocked()
+    {
+        return $this->locks()->where('expires_at', '>', now())->exists();
+    }
 }

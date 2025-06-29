@@ -336,9 +336,6 @@ Route::middleware(['auth', 'admin'])->prefix('admin')->name('admin.')->group(fun
 
 // Moderator routes
 Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.')->group(function () {
-    /* Route::get('/dashboard', function () {
-        return Inertia::render('Admin/Dashboard');
-    })->name('dashboard'); */
 
     Route::get('/user-data', function () {
         return Auth::user();
@@ -358,6 +355,10 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
         ->middleware(['web', 'auth', 'moderator']);
     Route::post('/set-primary-profile', [ModeratorController::class, 'setPrimaryProfile'])->name('set-primary-profile');
     Route::post('/heartbeat', [ModeratorController::class, 'heartbeat'])->name('heartbeat'); // Nouvelle route pour le heartbeat
+
+    Route::post('/typing', [ModeratorController::class, 'recordTyping']);
+    Route::post('/request-delay', [ModeratorController::class, 'requestDelay']);
+    Route::get('/profile/{profileId}/is-shared', [ModeratorController::class, 'isProfileShared']);
 
     // Routes pour la gestion des photos de profil
     Route::get('/profile-photos', [ProfilePhotoController::class, 'getProfilePhotos'])->name('profile-photos');
@@ -379,6 +380,24 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
     // Moderator management routes will go here
 });
 
+// Routes pour la gestion de la file d'attente
+Route::middleware(['auth', 'moderator'])->group(function () {
+    Route::get('/moderateur/queue/status', [App\Http\Controllers\Moderator\QueueController::class, 'getQueueStatus']);
+    Route::post('/moderateur/queue/leave', [App\Http\Controllers\Moderator\QueueController::class, 'leaveQueue']);
+    Route::post('/moderateur/queue/priority', [App\Http\Controllers\Moderator\QueueController::class, 'requestPriorityChange']);
+
+    // Routes pour la gestion des verrous
+    Route::get('/moderateur/locks/status', [App\Http\Controllers\Moderator\LockController::class, 'getLockStatus']);
+    Route::post('/moderateur/locks/request-unlock', [App\Http\Controllers\Moderator\LockController::class, 'requestUnlock']);
+    Route::post('/moderateur/locks/extend', [App\Http\Controllers\Moderator\LockController::class, 'extendLock']);
+
+    // Routes pour la résolution des conflits
+    Route::post('/moderateur/conflicts/resolve', [App\Http\Controllers\Moderator\ModeratorController::class, 'resolveConflict']);
+
+    // Route pour signaler l'activité (éviter la réattribution)
+    Route::post('/moderateur/activity/signal', [App\Http\Controllers\Moderator\ModeratorController::class, 'signalActivity']);
+});
+
 Route::get('/check-active-discussion/{profileId}', [ProfileDiscussionController::class, 'checkActiveDiscussion'])
     ->name('profile.check-discussion');
 
@@ -389,6 +408,20 @@ Route::middleware(['auth'])->prefix('api/websocket')->name('websocket.')->group(
     Route::get('/statistics', [App\Http\Controllers\WebSocketDiagnosticController::class, 'statistics'])->name('statistics');
     Route::post('/refresh-auth', [App\Http\Controllers\WebSocketDiagnosticController::class, 'refreshAuth'])->name('refresh-auth');
 });
+
+Route::post('/moderateur/update-activity', [ModeratorController::class, 'updateActivity'])
+    ->middleware(['auth', 'moderator']);
+
+// Route de débogage pour le processus d'attribution
+Route::get('/debug/process-messages', function () {
+    try {
+        $service = app(App\Services\ModeratorAssignmentService::class);
+        $count = $service->processUnassignedMessages();
+        return "Traitement terminé : $count messages attribués. Vérifiez les logs pour plus de détails.";
+    } catch (\Exception $e) {
+        return "Erreur : " . $e->getMessage() . "\n" . $e->getTraceAsString();
+    }
+})->middleware(['auth', 'admin']);
 
 Route::get('/test-mail', function () {
     $to = request('to', 'test@example.com'); // Adresse de test par défaut
@@ -412,3 +445,8 @@ Route::get('/test-mail', function () {
     // Appeler la route de logout existante
     return app(\App\Http\Controllers\Auth\LoginController::class)->logout($request);
 })->name('moderator.logout'); */
+
+// Route de diagnostic pour les modérateurs
+Route::get('/moderateur/diagnostic', function () {
+    return view('Moderator/Diagnostic');
+})->middleware(['auth', 'moderator']);
