@@ -69,28 +69,22 @@ export const useClientStore = defineStore('client', {
                     this.clientId = parseInt(clientData);
                 }
                 
-                // S'assurer que le WebSocketManager est initialisé - mais ne pas attendre sa complétion
+                // S'assurer que le WebSocketManager est initialisé
                 if (!webSocketManager.isInitialized) {
-                    webSocketManager.initialize(); // Ne pas attendre avec await
+                    await webSocketManager.initialize();
                 }
                 
-                // Charger les données essentielles en premier pour afficher rapidement l'interface
+                // Charger les données du client
                 await this.loadClientData();
                 
-                // Marquer comme initialisé pour permettre l'affichage de l'interface
-                this.initialized = true;
-                this.loading = false;
+                // Charger les points de l'utilisateur
+                await this.loadPoints();
                 
-                // Charger les données non-critiques en parallèle
-                Promise.all([
-                    this.loadPoints(),
-                    this.loadBlockedProfiles(),
-                    this.loadAllConversations()
-                ]).then(() => {
-                    console.log('✅ Chargement des données secondaires terminé');
-                }).catch(error => {
-                    console.error('❌ Erreur lors du chargement des données secondaires:', error);
-                });
+                // Charger les profils bloqués
+                await this.loadBlockedProfiles();
+                
+                // Charger les conversations actives
+                await this.loadAllConversations();
                 
                 // Configurer les écouteurs WebSocket
                 this.setupClientListeners();
@@ -101,6 +95,8 @@ export const useClientStore = defineStore('client', {
                 // Configurer le tracking de lecture des messages
                 this.setupMessageReadTracking();
                 
+                this.loading = false;
+                this.initialized = true;
                 this.startHeartbeat(); // Démarrer le heartbeat après initialisation
                 console.log('✅ ClientStore initialisé avec succès');
                 
@@ -193,8 +189,8 @@ export const useClientStore = defineStore('client', {
                 const response = await axios.get("/active-conversations");
                 
                 if (response.data && response.data.conversations) {
-                    // Initialiser les états de conversation d'abord
                     for (const conv of response.data.conversations) {
+                        // Initialiser l'état de la conversation
                         this.initConversationState(conv.profile_id, {
                             unreadCount: conv.unread_count || 0,
                             lastReadMessageId: conv.last_read_message_id,
@@ -202,24 +198,10 @@ export const useClientStore = defineStore('client', {
                             hasBeenOpened: conv.has_been_opened || false,
                             awaitingReply: conv.awaiting_reply || false
                         });
+                        
+                        // Charger les messages
+                        await this.loadMessages(conv.profile_id);
                     }
-                    
-                    // Charger les messages des conversations prioritaires (les 3 premières)
-                    const priorityConversations = response.data.conversations.slice(0, 3);
-                    await Promise.all(
-                        priorityConversations.map(conv => this.loadMessages(conv.profile_id))
-                    );
-                    
-                    // Charger les messages des autres conversations en arrière-plan
-                    if (response.data.conversations.length > 3) {
-                        setTimeout(() => {
-                            const remainingConversations = response.data.conversations.slice(3);
-                            for (const conv of remainingConversations) {
-                                this.loadMessages(conv.profile_id);
-                            }
-                        }, 2000); // Délai de 2 secondes pour permettre à l'interface de se stabiliser
-                    }
-                    
                     console.log(`✅ ${response.data.conversations.length} conversations chargées`);
                 }
             } catch (error) {
@@ -265,109 +247,153 @@ export const useClientStore = defineStore('client', {
          * Envoie un message à un profil
          */
         async sendMessage({ profileId, content, file }) {
-            // 1. Vérifications
-            if ((!content || !content.trim()) && !file) {
-                console.warn('⚠️ Tentative d\'envoi de message vide');
-                return;
+    if ((!content || !content.trim()) && !file) {
+        console.warn('⚠️ Tentative d\'envoi de message vide');
+        return;
+    }
+    
+    if (!profileId) {
+        console.error('❌ ID de profil manquant pour l\'envoi du message');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('profile_id', profileId);
+    
+    if (content && content.trim()) {
+        formData.append('content', content);
+    }
+    
+    if (file) {
+        formData.append('attachment', file);
+    }
+    
+    // Créer un message local temporaire
+    const now = new Date();
+    const timeString = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    
+    const localMessage = {
+        id: "temp-" + Date.now(),
+        content: content,
+        isOutgoing: true,
+        time: timeString,
+        date: now.toISOString().split("T")[0],
+        pending: true,
+    };
+    
+    if (file) {
+        localMessage.attachment = {
+            url: URL.createObjectURL(file),
+            file_name: file.name,
+            mime_type: file.type
+        };
+    }
+    
+    // Ajouter le message local à la liste
+    if (!this.messagesMap[profileId]) {
+        this.messagesMap[profileId] = [];
+    }
+    this.messagesMap[profileId].push(localMessage);
+    
+    // Récupérer le token CSRF actuel
+    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    try {
+        console.log(`🚀 Envoi d'un message au profil ${profileId}...`);
+        const response = await axios.post("/send-message", formData, {
+            headers: {
+                'Content-Type': 'multipart/form-data',
+                'X-CSRF-TOKEN': token,
+                'Accept': 'application/json'
             }
-
-            if (!profileId) {
-                console.error('❌ ID de profil manquant pour l\'envoi du message');
-                return;
+        });
+        
+        // Mettre à jour le solde de points
+        if (response.data.remaining_points !== undefined) {
+            this.points.balance = response.data.remaining_points;
+        }
+        
+        // Remplacer le message temporaire par le message réel
+        if (response.data.success && response.data.messageData) {
+            const index = this.messagesMap[profileId].findIndex(
+                (msg) => msg.id === localMessage.id
+            );
+            if (index !== -1) {
+                this.messagesMap[profileId][index] = response.data.messageData;
             }
-
-            // 2. Préparer les données
-            const formData = new FormData();
-            formData.append('profile_id', profileId);
-            if (content?.trim()) formData.append('content', content);
-            if (file) formData.append('attachment', file);
-
-            // 3. Créer et afficher un message local temporaire
-            const now = new Date();
-            const localMessage = {
-                id: "temp-" + Date.now(),
-                content,
-                isOutgoing: true,
-                time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                date: now.toISOString().split("T")[0],
-                pending: true,
-                attachment: file ? {
-                    url: URL.createObjectURL(file),
-                    file_name: file.name,
-                    mime_type: file.type
-                } : null
-            };
-
-            if (!this.messagesMap[profileId]) this.messagesMap[profileId] = [];
-            this.messagesMap[profileId].push(localMessage);
-
-            // 4. Retourner immédiatement pour affichage instantané
-            const localReturn = { success: true, localMessage };
-
-            // 5. Envoyer en arrière-plan
-            (async () => {
-                try {
-                    const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-                    const send = async (tokenToUse) => {
-                        const response = await axios.post("/send-message", formData, {
-                            headers: {
-                                'Content-Type': 'multipart/form-data',
-                                'X-CSRF-TOKEN': tokenToUse,
-                                'Accept': 'application/json'
-                            }
-                        });
-
-                        // Mettre à jour le solde de points
-                        if (response.data.remaining_points !== undefined) {
-                            this.points.balance = response.data.remaining_points;
+            console.log(`✅ Message envoyé avec succès au profil ${profileId}`);
+        }
+        
+        return response.data;
+    } catch (error) {
+        // Gestion spécifique des erreurs CSRF (419)
+        if (error.response?.status === 419) {
+            console.warn(`⚠️ Erreur CSRF lors de l'envoi du message au profil ${profileId}, tentative de rafraîchissement du token...`);
+            try {
+                // Rafraîchir le token CSRF
+                await axios.get('/sanctum/csrf-cookie');
+                
+                // Réessayer avec le nouveau token
+                const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+                
+                if (newToken) {
+                    formData.append('_token', newToken); // Ajouter le token au FormData également
+                    
+                    const retryResponse = await axios.post("/send-message", formData, {
+                        headers: {
+                            'Content-Type': 'multipart/form-data',
+                            'X-CSRF-TOKEN': newToken,
+                            'Accept': 'application/json'
                         }
-
-                        // Remplacer le message temporaire par le vrai
-                        if (response.data.success && response.data.messageData) {
-                            const index = this.messagesMap[profileId].findIndex(
-                                (msg) => msg.id === localMessage.id
-                            );
-                            if (index !== -1) {
-                                this.messagesMap[profileId][index] = response.data.messageData;
-                            }
-                        }
-                    };
-
-                    await send(token);
-
-                } catch (error) {
-                    if (error.response?.status === 419) {
-                        console.warn(`⚠️ CSRF 419 détecté, rafraîchissement du token...`);
-                        try {
-                            await axios.get('/sanctum/csrf-cookie');
-                            const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-                            if (newToken) {
-                                formData.append('_token', newToken);
-                                await send(newToken);
-                                console.log(`✅ Message renvoyé après rafraîchissement CSRF`);
-                                return;
-                            }
-                        } catch (retryError) {
-                            console.error('❌ Échec du retry après CSRF:', retryError);
-                        }
-                    } else {
-                        console.error('❌ Échec envoi message:', error);
+                    });
+                    
+                    // Traiter la réponse comme avant
+                    if (retryResponse.data.remaining_points !== undefined) {
+                        this.points.balance = retryResponse.data.remaining_points;
                     }
-
-                    // Marquer le message comme échoué
-                    const index = this.messagesMap[profileId].findIndex(
-                        (msg) => msg.id === localMessage.id
-                    );
-                    if (index !== -1) {
-                        this.messagesMap[profileId][index].failed = true;
-                        this.messagesMap[profileId][index].pending = false;
+                    
+                    if (retryResponse.data.success && retryResponse.data.messageData) {
+                        const index = this.messagesMap[profileId].findIndex(
+                            (msg) => msg.id === localMessage.id
+                        );
+                        if (index !== -1) {
+                            this.messagesMap[profileId][index] = retryResponse.data.messageData;
+                        }
+                        console.log(`✅ Message envoyé avec succès au profil ${profileId} après rafraîchissement du token`);
                     }
+                    
+                    return retryResponse.data;
                 }
-            })();
-
-            return localReturn;
-        },
+            } catch (retryError) {
+                console.error(`❌ Échec après tentative de rafraîchissement du token:`, retryError);
+                
+                // Marquer le message comme échoué
+                const index = this.messagesMap[profileId].findIndex(
+                    (msg) => msg.id === localMessage.id
+                );
+                if (index !== -1) {
+                    this.messagesMap[profileId][index].failed = true;
+                    this.messagesMap[profileId][index].pending = false;
+                }
+                
+                throw retryError;
+            }
+        } else {
+            console.error(`❌ Erreur lors de l'envoi du message au profil ${profileId}:`, error);
+            
+            // Marquer le message comme échoué
+            const index = this.messagesMap[profileId].findIndex(
+                (msg) => msg.id === localMessage.id
+            );
+            if (index !== -1) {
+                this.messagesMap[profileId][index].failed = true;
+                this.messagesMap[profileId][index].pending = false;
+            }
+            
+            throw error;
+        }
+    }
+},
         
         /**
          * Marque une conversation comme lue

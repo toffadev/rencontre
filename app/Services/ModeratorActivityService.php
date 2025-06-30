@@ -71,42 +71,62 @@ class ModeratorActivityService
     }
 
     /**
-     * Détecter les modérateurs inactifs pour réattribution
+     * Détecter les modérateurs inactifs :
+     * - Aucun message envoyé depuis plus de 1 minute
+     * - Et pas en train d’écrire
      */
     public function detectInactiveModerators($thresholdMinutes = 1)
     {
-        // Surveillance toutes les 15 secondes au lieu de 30
-        $lastCheck = ModeratorProfileAssignment::where('last_activity_check', '>', now()->subSeconds(15))
+        // Éviter les vérifications trop rapprochées (toutes les 5s)
+        $lastCheck = ModeratorProfileAssignment::where('last_activity_check', '>', now()->subSeconds(5))
             ->exists();
 
         if ($lastCheck) {
-            return false; // Éviter les vérifications trop fréquentes
+            return false;
         }
 
         $inactiveTime = now()->subMinutes($thresholdMinutes);
 
+        // Détection selon :
+        // - Dernier message envoyé il y a plus d'1 min
+        // - Et pas d'activité de frappe récente
         $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
             ->where(function ($query) use ($inactiveTime) {
-                $query->where('last_activity', '<', $inactiveTime)
-                    ->orWhereNull('last_activity');
+                $query->where('last_message_sent', '<', $inactiveTime)
+                    ->where(function ($q) use ($inactiveTime) {
+                        $q->whereNull('last_typing')
+                            ->orWhere('last_typing', '<', $inactiveTime);
+                    });
             })
             ->get();
 
         Log::info("Détection des modérateurs inactifs", [
             'threshold_minutes' => $thresholdMinutes,
-            'inactive_count' => $inactiveAssignments->count()
+            'inactive_count' => $inactiveAssignments->count(),
+            'inactive_details' => $inactiveAssignments->map(function ($a) {
+                return [
+                    'id' => $a->id,
+                    'user_id' => $a->user_id,
+                    'profile_id' => $a->profile_id,
+                    'last_message_sent' => $a->last_message_sent?->toDateTimeString() ?? 'jamais',
+                    'last_typing' => $a->last_typing?->toDateTimeString() ?? 'jamais',
+                ];
+            })->toArray(),
+            'timestamp' => now()->toDateTimeString()
         ]);
 
         foreach ($inactiveAssignments as $assignment) {
+            // 🔁 Réattribution pour cause d’inactivité
             $this->triggerReassignmentForInactivity($assignment->user_id);
 
-            // Marquer comme vérifié
+            // ✅ Marquer le contrôle comme fait
             $assignment->last_activity_check = now();
             $assignment->save();
         }
 
         return count($inactiveAssignments);
     }
+
 
     /**
      * Déclencher la réattribution pour inactivité

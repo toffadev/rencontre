@@ -49,7 +49,7 @@ class ProfileAssignmentMonitoringTask
         $this->conflictService = $conflictService ?? new ConflictResolutionService();
         $this->lockService = $lockService ?? new ProfileLockService();
         $this->queueService = $queueService ?? new ModeratorQueueService();
-        $this->rotateTask = $rotateTask;
+        $this->rotateTask = $rotateTask ?? new RotateModeratorProfilesTask($this->assignmentService);
     }
 
     /**
@@ -83,8 +83,13 @@ class ProfileAssignmentMonitoringTask
         // Générer des alertes système si nécessaire
         $alerts = $this->generateAlerts();
 
-        // Cette tâche s'exécute plus fréquemment pour vérifier l'inactivité
-        $this->rotateTask->checkInactivity();
+        // S'assurer que rotateTask est correctement initialisé avant d'appeler checkInactivity
+        if ($this->rotateTask) {
+            // Cette tâche s'exécute plus fréquemment pour vérifier l'inactivité
+            $this->rotateTask->checkInactivity();
+        } else {
+            Log::warning("rotateTask n'est pas initialisé dans ProfileAssignmentMonitoringTask");
+        }
 
         // Vérifier aussi les messages non assignés
         $this->assignmentService->processUnassignedMessages();

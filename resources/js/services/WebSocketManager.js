@@ -24,7 +24,7 @@ class WebSocketManager {
     /**
      * Initialise le gestionnaire de WebSockets
      */
-    async initialize() {
+    async initialize2() {
         if (this.isInitialized) return this;
         
         console.log('🚀 Initialisation du WebSocketManager');
@@ -71,6 +71,57 @@ class WebSocketManager {
                 this.initialize();
             }, this.calculateReconnectDelay());
             
+            return this;
+        }
+    }
+
+    // Modifiez la méthode initialize pour être moins bloquante
+    async initialize() {
+        if (this.isInitialized) return this;
+        
+        console.log('🚀 Initialisation du WebSocketManager');
+        
+        try {
+            // S'assurer que le service d'authentification est initialisé - mais pas de façon bloquante
+            authService.initialize();
+            
+            // Si nous sommes sur une page d'authentification, ne pas continuer
+            const isAuthPage = window.location.pathname.includes('/login') || 
+                            window.location.pathname.includes('/register') ||
+                            window.location.pathname === '/welcome';
+            
+            if (isAuthPage) {
+                console.log('📝 Page d\'authentification détectée, initialisation WebSocket ignorée');
+                return this;
+            }
+            
+            // Attendre que Echo soit initialisé, mais avec un timeout plus court
+            if (!window.Echo) {
+                return new Promise((resolve) => {
+                    const echoInitHandler = () => {
+                        document.removeEventListener('echo:initialized', echoInitHandler);
+                        this.finishInitialization().then(resolve);
+                    };
+                    
+                    document.addEventListener('echo:initialized', echoInitHandler);
+                    
+                    // Timeout réduit à 5 secondes au lieu de 15
+                    setTimeout(() => {
+                        document.removeEventListener('echo:initialized', echoInitHandler);
+                        console.warn('⚠️ Timeout lors de l\'attente de l\'initialisation d\'Echo (5s)');
+                        this.isInitialized = true; // Marquer comme initialisé même si Echo n'est pas prêt
+                        resolve(this);
+                    }, 5000);
+                });
+            }
+            
+            // Finir l'initialisation de manière non-bloquante
+            this.finishInitialization();
+            this.isInitialized = true;
+            return this;
+        } catch (error) {
+            console.error('❌ Erreur lors de l\'initialisation du WebSocketManager:', error);
+            this.isInitialized = true; // Marquer comme initialisé pour ne pas bloquer le reste de l'application
             return this;
         }
     }

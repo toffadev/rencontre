@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Models\ModeratorProfileAssignment;
+use App\Services\ModeratorAssignmentService;
 use App\Models\User;
 use App\Models\Profile;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use App\Services\ModeratorQueueService;
 
 /**
  * Service pour gérer les conflits liés aux attributions des profils aux modérateurs.
@@ -25,45 +27,96 @@ use Carbon\Carbon;
 class ConflictResolutionService
 {
     /**
-     * Gérer les collisions de connexions simultanées
+     * Gère une collision de connexion entre plusieurs modérateurs
+     * 
+     * @param array $moderatorIds Les IDs des modérateurs impliqués
+     * @param array $availableProfiles Les profils disponibles initialement
+     * @return array Les allocations de profils aux modérateurs
      */
     public function handleConnectionCollision($moderatorIds, $availableProfiles)
     {
-        Log::info("Gestion d'une collision de connexion", [
+        // Récupérer TOUS les profils avec des messages en attente, pas seulement ceux fournis
+        $allPendingProfiles = app(ModeratorAssignmentService::class)->getProfilesWithPendingMessages();
+
+        // Fusionner avec les profils disponibles fournis
+        $allAvailableProfiles = array_unique(array_merge($availableProfiles, $allPendingProfiles));
+
+        Log::info("Gestion avancée d'une collision de connexion", [
             'moderator_ids' => $moderatorIds,
-            'available_profiles' => $availableProfiles
+            'initial_available_profiles' => $availableProfiles,
+            'all_pending_profiles' => $allPendingProfiles,
+            'all_available_profiles' => $allAvailableProfiles,
+            'timestamp' => now()->toDateTimeString()
         ]);
 
-        // Si nous avons suffisamment de profils pour tous les modérateurs, pas de conflit
-        if (count($availableProfiles) >= count($moderatorIds)) {
-            return [
-                'status' => 'no_conflict',
-                'allocations' => []
-            ];
-        }
-
-        // Prioriser les modérateurs par horodatage de dernière activité
-        $prioritizedModerators = $this->prioritizeByTimestamp($moderatorIds);
-
-        // Allouer les profils disponibles aux modérateurs prioritaires
+        // Si pas assez de profils pour tous les modérateurs, certains seront mis en file d'attente
         $allocations = [];
-        for ($i = 0; $i < min(count($prioritizedModerators), count($availableProfiles)); $i++) {
-            $allocations[$prioritizedModerators[$i]] = $availableProfiles[$i];
+        $queueService = app(ModeratorQueueService::class);
+
+        // Trier les modérateurs par priorité (par exemple, par ID le plus bas)
+        sort($moderatorIds);
+
+        // Pour chaque modérateur, essayer d'attribuer un profil disponible
+        foreach ($moderatorIds as $moderatorId) {
+            // Vérifier si ce modérateur a déjà un profil assigné
+            $existingAssignment = ModeratorProfileAssignment::where('user_id', $moderatorId)
+                ->where('is_active', true)
+                ->first();
+
+            if ($existingAssignment) {
+                // Le modérateur a déjà un profil, le conserver
+                $allocations[$moderatorId] = $existingAssignment->profile_id;
+
+                // Retirer ce profil de la liste des disponibles
+                $allAvailableProfiles = array_diff($allAvailableProfiles, [$existingAssignment->profile_id]);
+            } else if (!empty($allAvailableProfiles)) {
+                // Attribuer un nouveau profil au modérateur
+                $profileId = array_shift($allAvailableProfiles);
+                $allocations[$moderatorId] = $profileId;
+
+                // Créer l'assignation immédiatement
+                $assignmentService = app(ModeratorAssignmentService::class);
+                $newAssignment = $assignmentService->assignProfileToModerator($moderatorId, $profileId, true);
+
+                if ($newAssignment) {
+                    Log::info("Profil attribué lors de la résolution de collision", [
+                        'moderator_id' => $moderatorId,
+                        'profile_id' => $profileId,
+                        'timestamp' => now()->toDateTimeString()
+                    ]);
+
+                    // Émettre l'événement pour notifier le frontend
+                    event(new \App\Events\ProfileAssigned(
+                        User::find($moderatorId),
+                        $profileId,
+                        $newAssignment->id,
+                        null,
+                        'collision_resolution'
+                    ));
+                }
+            } else {
+                // Plus de profils disponibles, ajouter le modérateur à la file d'attente
+
+                $queueService->addToQueue($moderatorId);
+
+                Log::info("Modérateur ajouté à la file d'attente (collision)", [
+                    'moderator_id' => $moderatorId,
+                    'timestamp' => now()->toDateTimeString()
+                ]);
+            }
         }
 
-        // Logger le conflit pour le monitoring
-        $this->logConflict([
+        // Journaliser le résultat final
+        Log::warning("Conflit d'attribution détecté", [
             'type' => 'connection_collision',
             'moderator_ids' => $moderatorIds,
             'available_profiles' => $availableProfiles,
+            'all_available_profiles' => $allAvailableProfiles,
             'allocations' => $allocations,
-            'timestamp' => now()
+            'timestamp' => now()->toDateTimeString()
         ]);
 
-        return [
-            'status' => 'conflict_resolved',
-            'allocations' => $allocations
-        ];
+        return $allocations;
     }
 
     /**

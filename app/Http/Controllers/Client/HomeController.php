@@ -37,7 +37,7 @@ class HomeController extends Controller
      */
     public function index(Request $request)
     {
-        $user = auth()->user();
+        $user = Auth::user();
         $clientProfile = $user->clientProfile;
 
         // Redirect to profile setup if not completed

@@ -60,6 +60,11 @@ class Profile extends Model
         return $this->hasMany(ModeratorProfileAssignment::class);
     }
 
+    public function moderatorAssignments(): HasMany
+    {
+        return $this->moderatorProfileAssignments();
+    }
+
     /**
      * Get reports for this profile
      */
