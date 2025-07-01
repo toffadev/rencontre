@@ -1,28 +1,11 @@
 <template>
-    <div
-        v-if="!moderatorStore.initialized"
-        class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white"
-    >
+    <div v-if="!moderatorStore.initialized"
+        class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white">
         <div class="flex flex-col items-center space-y-4">
-            <svg
-                class="animate-spin h-12 w-12 text-pink-500"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-            >
-                <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                ></circle>
-                <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                ></path>
+            <svg class="animate-spin h-12 w-12 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none"
+                viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
             </svg>
             <div class="text-lg font-semibold text-pink-600">
                 Chargement de l'espace modérateur...
@@ -34,37 +17,54 @@
     </div>
 
     <!-- Écran de chargement pour le changement de profil -->
-    <div
-        v-else-if="moderatorStore.profileTransition.loadingData"
-        class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white"
-    >
-        <div class="flex flex-col items-center space-y-4">
-            <svg
-                class="animate-spin h-12 w-12 text-pink-500"
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-            >
-                <circle
-                    class="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    stroke-width="4"
-                ></circle>
-                <path
-                    class="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8v8z"
-                ></path>
-            </svg>
-            <div class="text-lg font-semibold text-pink-600">
-                Changement de profil en cours...
+    <div v-else-if="moderatorStore.profileTransition.loadingData"
+        class="fixed inset-0 flex items-center justify-center z-50 bg-white bg-opacity-90">
+        <div class="flex flex-col items-center space-y-6 max-w-md text-center p-8 rounded-xl bg-white shadow-lg">
+            <div class="relative">
+                <!-- Loader circulaire animé -->
+                <svg class="w-24 h-24" viewBox="0 0 100 100">
+                    <circle class="text-gray-200" stroke-width="8" stroke="currentColor" fill="transparent" r="46"
+                        cx="50" cy="50"></circle>
+                    <circle class="text-pink-500 animate-spin origin-center" stroke-width="8" stroke="currentColor"
+                        fill="transparent" r="46" cx="50" cy="50" stroke-dasharray="289.02652413026095"
+                        stroke-dashoffset="217"></circle>
+                </svg>
+                <!-- Logo ou icône au centre -->
+                <div class="absolute inset-0 flex items-center justify-center">
+                    <i class="fas fa-sync-alt text-2xl text-pink-600"></i>
+                </div>
             </div>
-            <div class="text-sm text-gray-500">
-                Nous chargeons les données du nouveau profil et ses
-                conversations
+
+            <div>
+                <h2 class="text-xl font-bold text-gray-800 mb-2">Changement de profil en cours...</h2>
+                <p class="text-gray-600">Nous préparons votre nouveau profil et ses conversations</p>
+            </div>
+
+            <!-- Indicateurs de chargement -->
+            <div class="w-full space-y-3">
+                <div class="flex items-center">
+                    <span class="w-24 text-sm text-gray-500 text-left">Profil</span>
+                    <div class="ml-2 flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-pink-500 animate-pulse rounded-full"></div>
+                    </div>
+                    <i class="fas fa-check text-green-500 ml-2"></i>
+                </div>
+
+                <div class="flex items-center">
+                    <span class="w-24 text-sm text-gray-500 text-left">Conversations</span>
+                    <div class="ml-2 flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-pink-500 animate-pulse rounded-full"></div>
+                    </div>
+                    <i class="fas fa-check text-green-500 ml-2"></i>
+                </div>
+
+                <div class="flex items-center">
+                    <span class="w-24 text-sm text-gray-500 text-left">Messages</span>
+                    <div class="ml-2 flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full bg-pink-500 animate-pulse rounded-full"></div>
+                    </div>
+                    <i class="fas fa-spinner fa-spin text-gray-400 ml-2"></i>
+                </div>
             </div>
         </div>
     </div>
@@ -72,52 +72,28 @@
     <div v-else>
         <MainLayout>
             <!-- Interface de file d'attente -->
-            <div
-                v-if="
+            <div v-if="
                     moderatorStore.queueInfo.inQueue &&
                     !moderatorStore.currentAssignedProfile
-                "
-                class="bg-white p-6 rounded-xl shadow-md text-center mt-4"
-            >
+                " class="bg-white p-6 rounded-xl shadow-md text-center mt-4">
                 <div class="text-lg font-semibold text-pink-600 mb-2">
                     Vous êtes en file d'attente pour l'attribution d'un profil
                 </div>
 
                 <div class="flex items-center justify-center mb-4">
                     <div class="relative w-24 h-24">
-                        <svg
-                            class="w-24 h-24 transform -rotate-90"
-                            viewBox="0 0 100 100"
-                        >
-                            <circle
-                                class="text-gray-200"
-                                stroke-width="8"
-                                stroke="currentColor"
-                                fill="transparent"
-                                r="46"
-                                cx="50"
-                                cy="50"
-                            />
-                            <circle
-                                class="text-pink-500"
-                                stroke-width="8"
-                                stroke="currentColor"
-                                fill="transparent"
-                                r="46"
-                                cx="50"
-                                cy="50"
-                                :stroke-dasharray="2 * Math.PI * 46"
-                                :stroke-dashoffset="
+                        <svg class="w-24 h-24 transform -rotate-90" viewBox="0 0 100 100">
+                            <circle class="text-gray-200" stroke-width="8" stroke="currentColor" fill="transparent"
+                                r="46" cx="50" cy="50" />
+                            <circle class="text-pink-500" stroke-width="8" stroke="currentColor" fill="transparent"
+                                r="46" cx="50" cy="50" :stroke-dasharray="2 * Math.PI * 46" :stroke-dashoffset="
                                     2 *
                                     Math.PI *
                                     46 *
                                     (1 - 1 / moderatorStore.queueInfo.position)
-                                "
-                            />
+                                " />
                         </svg>
-                        <div
-                            class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-pink-600"
-                        >
+                        <div class="absolute inset-0 flex items-center justify-center text-2xl font-bold text-pink-600">
                             {{ moderatorStore.queueInfo.position }}
                         </div>
                     </div>
@@ -129,12 +105,10 @@
 
                 <p class="text-gray-500 text-sm mb-4">
                     Temps d'attente estimé:
-                    <span class="font-semibold"
-                        >{{
-                            moderatorStore.queueInfo.estimatedWaitTime
+                    <span class="font-semibold">{{
+                        moderatorStore.queueInfo.estimatedWaitTime
                         }}
-                        minutes</span
-                    >
+                        minutes</span>
                 </p>
 
                 <p class="text-gray-400 text-xs">
@@ -143,10 +117,8 @@
                 </p>
 
                 <div class="mt-4">
-                    <button
-                        @click="leaveQueue"
-                        class="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors duration-200"
-                    >
+                    <button @click="leaveQueue"
+                        class="bg-red-100 text-red-600 px-4 py-2 rounded-lg hover:bg-red-200 transition-colors duration-200">
                         <i class="fas fa-sign-out-alt mr-2"></i>
                         Quitter la file d'attente
                     </button>
@@ -154,10 +126,8 @@
             </div>
 
             <!-- Indicateurs de verrouillage pour les profils -->
-            <div
-                v-if="isProfileLocked && moderatorStore.currentAssignedProfile"
-                class="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded-md mb-4"
-            >
+            <div v-if="isProfileLocked && moderatorStore.currentAssignedProfile"
+                class="bg-yellow-100 border-l-4 border-yellow-500 p-4 rounded-md mb-4">
                 <div class="flex items-center">
                     <div class="flex-shrink-0 text-yellow-500">
                         <i class="fas fa-lock"></i>
@@ -165,34 +135,25 @@
                     <div class="ml-3">
                         <p class="text-sm text-yellow-700">
                             Ce profil est temporairement verrouillé
-                            <span
-                                v-if="
+                            <span v-if="
                                     profileLockInfo.moderatorId !==
                                     moderatorStore.moderatorId
-                                "
-                            >
+                                ">
                                 par un autre modérateur
                             </span>
                             <span v-else> par vous </span>
                         </p>
-                        <p
-                            class="text-xs text-yellow-600"
-                            v-if="profileLockTimeRemaining > 0"
-                        >
+                        <p class="text-xs text-yellow-600" v-if="profileLockTimeRemaining > 0">
                             Déverrouillage dans
                             {{ formatSeconds(profileLockTimeRemaining) }}
                         </p>
                     </div>
                     <div class="ml-auto">
-                        <button
-                            v-if="canRequestUnlock"
-                            @click="
+                        <button v-if="canRequestUnlock" @click="
                                 requestUnlock(
                                     moderatorStore.currentAssignedProfile.id
                                 )
-                            "
-                            class="bg-yellow-200 text-yellow-800 px-3 py-1 rounded text-sm hover:bg-yellow-300"
-                        >
+                            " class="bg-yellow-200 text-yellow-800 px-3 py-1 rounded text-sm hover:bg-yellow-300">
                             Demander déverrouillage
                         </button>
                     </div>
@@ -200,10 +161,7 @@
             </div>
 
             <!-- Alerte de conflit d'attribution -->
-            <div
-                v-if="hasActiveConflicts"
-                class="bg-red-100 border-l-4 border-red-500 p-4 rounded-md mb-4"
-            >
+            <div v-if="hasActiveConflicts" class="bg-red-100 border-l-4 border-red-500 p-4 rounded-md mb-4">
                 <div class="flex items-center">
                     <div class="flex-shrink-0 text-red-500">
                         <i class="fas fa-exclamation-triangle"></i>
@@ -217,10 +175,8 @@
                         </p>
                     </div>
                     <div class="ml-auto">
-                        <button
-                            @click="acknowledgeConflict(latestConflict.id)"
-                            class="bg-red-200 text-red-800 px-3 py-1 rounded text-sm hover:bg-red-300"
-                        >
+                        <button @click="acknowledgeConflict(latestConflict.id)"
+                            class="bg-red-200 text-red-800 px-3 py-1 rounded text-sm hover:bg-red-300">
                             J'ai compris
                         </button>
                     </div>
@@ -228,55 +184,40 @@
             </div>
 
             <!-- Alerte de réattribution forcée -->
-            <div
-                v-if="showReassignmentAlert"
-                class="bg-pink-100 border-l-4 border-pink-500 p-4 rounded-md mb-4 animate-pulse"
-            >
+            <div v-if="showReassignmentAlert" class="bg-pink-100 border-l-4 border-pink-500 p-4 rounded-md mb-4">
                 <div class="flex items-center">
                     <div class="flex-shrink-0 text-pink-500">
                         <i class="fas fa-exchange-alt"></i>
                     </div>
                     <div class="ml-3">
                         <p class="text-sm font-medium text-pink-700">
-                            Réattribution imminente
+                            Veuillez répondre au client sinon dans {{ reassignmentCountdown }} secondes, un nouveau
+                            profil vous sera attribué
                         </p>
-                        <p class="text-xs text-pink-600">
-                            En raison d'inactivité, ce profil va être réattribué
-                            dans {{ formatSeconds(reassignmentCountdown) }}
-                        </p>
+                        <div class="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+                            <div class="bg-pink-600 h-2.5 rounded-full transition-all duration-1000"
+                                :style="{ width: `${(reassignmentCountdown / 20) * 100}%` }"></div>
+                        </div>
                     </div>
                     <div class="ml-auto">
-                        <button
-                            @click="preventReassignment"
-                            class="bg-pink-200 text-pink-800 px-3 py-1 rounded text-sm hover:bg-pink-300"
-                        >
+                        <button @click="preventReassignment"
+                            class="bg-pink-200 text-pink-800 px-3 py-1 rounded text-sm hover:bg-pink-300">
                             Je suis toujours actif
                         </button>
                     </div>
                 </div>
             </div>
             <!-- Notification de compte à rebours pour le changement de profil -->
-            <div
-                v-if="
+            <div v-if="
                     moderatorStore.profileTransition.inProgress &&
                     !moderatorStore.profileTransition.loadingData
                 "
-                class="fixed top-4 right-4 bg-white shadow-lg rounded-lg p-4 z-50 max-w-md border-l-4 border-pink-500 animate-pulse"
-            >
+                class="fixed top-4 right-4 bg-white shadow-lg rounded-lg p-4 z-50 max-w-md border-l-4 border-pink-500 animate-pulse">
                 <div class="flex items-center space-x-3">
                     <div class="flex-shrink-0">
-                        <svg
-                            class="h-10 w-10 text-pink-500"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                        >
-                            <path
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                stroke-width="2"
-                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                            />
+                        <svg class="h-10 w-10 text-pink-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                     </div>
                     <div>
@@ -287,24 +228,22 @@
                             Votre profil va changer dans
                             <span class="font-bold text-pink-600">{{
                                 moderatorStore.profileTransition.countdown
-                            }}</span>
+                                }}</span>
                             secondes
                         </p>
                         <p class="text-xs text-gray-500 mt-1">
                             Nouveau profil :
                             {{
-                                moderatorStore.profileTransition.newProfile
-                                    ?.name
+                            moderatorStore.profileTransition.newProfile
+                            ?.name
                             }}
                         </p>
                     </div>
                 </div>
                 <!-- Bouton pour demander un délai supplémentaire -->
                 <div class="mt-2" v-if="!moderatorStore.delayRequested">
-                    <button
-                        @click="requestDelay"
-                        class="bg-white text-pink-600 border border-pink-500 px-3 py-1 rounded-md text-sm hover:bg-pink-50 transition-colors"
-                    >
+                    <button @click="requestDelay"
+                        class="bg-white text-pink-600 border border-pink-500 px-3 py-1 rounded-md text-sm hover:bg-pink-50 transition-colors">
                         <i class="fas fa-clock mr-1"></i>
                         Demander 5 min supplémentaires
                     </button>
@@ -327,14 +266,9 @@
                             </div>
                             <div class="flex items-center gap-4">
                                 <!-- Indicateur d'état WebSocket -->
-                                <div
-                                    class="flex items-center gap-2"
-                                    @click="checkWebSocketConnection"
-                                    title="Vérifier la connexion"
-                                >
-                                    <div
-                                        class="w-3 h-3 rounded-full"
-                                        :class="{
+                                <div class="flex items-center gap-2" @click="checkWebSocketConnection"
+                                    title="Vérifier la connexion">
+                                    <div class="w-3 h-3 rounded-full" :class="{
                                             'bg-green-500':
                                                 connectionState === 'healthy',
                                             'bg-yellow-500':
@@ -345,61 +279,44 @@
                                             'bg-blue-500 animate-pulse':
                                                 connectionState ===
                                                 'connecting',
-                                        }"
-                                    ></div>
+                                        }"></div>
                                     <span class="text-xs text-gray-600">{{
                                         connectionStateLabel
-                                    }}</span>
+                                        }}</span>
                                 </div>
 
                                 <!-- Bouton de notifications -->
                                 <div class="relative">
-                                    <button
-                                        @click="
+                                    <button @click="
                                             showNotifications =
                                                 !showNotifications
                                         "
-                                        class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2"
-                                    >
+                                        class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2">
                                         <i class="fas fa-bell"></i>
-                                        <span
-                                            v-if="
+                                        <span v-if="
                                                 notifications.filter(
                                                     (n) => !n.read
                                                 ).length > 0
                                             "
-                                            class="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                                        >
+                                            class="absolute -top-1 -right-1 bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
                                             {{
-                                                notifications.filter(
-                                                    (n) => !n.read
-                                                ).length
+                                            notifications.filter(
+                                            (n) => !n.read
+                                            ).length
                                             }}
                                         </span>
                                     </button>
 
                                     <!-- Panel de notifications -->
-                                    <div
-                                        v-if="showNotifications"
-                                        class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
-                                    >
-                                        <div
-                                            class="p-4 border-b border-gray-100"
-                                        >
-                                            <h3
-                                                class="font-semibold text-gray-700"
-                                            >
+                                    <div v-if="showNotifications"
+                                        class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+                                        <div class="p-4 border-b border-gray-100">
+                                            <h3 class="font-semibold text-gray-700">
                                                 Notifications
                                             </h3>
                                         </div>
-                                        <div
-                                            v-if="notifications.length > 0"
-                                            class="divide-y divide-gray-100"
-                                        >
-                                            <div
-                                                v-for="notification in notifications"
-                                                :key="notification.id"
-                                                @click="
+                                        <div v-if="notifications.length > 0" class="divide-y divide-gray-100">
+                                            <div v-for="notification in notifications" :key="notification.id" @click="
                                                     goToConversation(
                                                         notification.clientId
                                                     );
@@ -412,75 +329,56 @@
                                                 :class="{
                                                     'bg-pink-50':
                                                         !notification.read,
-                                                }"
-                                            >
-                                                <div
-                                                    class="flex items-start gap-3"
-                                                >
+                                                }">
+                                                <div class="flex items-start gap-3">
                                                     <div class="flex-1">
-                                                        <p
-                                                            class="font-medium text-gray-800"
-                                                        >
+                                                        <p class="font-medium text-gray-800">
                                                             {{
-                                                                notification.clientName
+                                                            notification.clientName
                                                             }}
                                                         </p>
-                                                        <p
-                                                            class="text-sm text-gray-600 truncate"
-                                                        >
+                                                        <p class="text-sm text-gray-600 truncate">
                                                             {{
-                                                                notification.message
+                                                            notification.message
                                                             }}
                                                         </p>
-                                                        <p
-                                                            class="text-xs text-gray-400 mt-1"
-                                                        >
+                                                        <p class="text-xs text-gray-400 mt-1">
                                                             {{
-                                                                new Date(
-                                                                    notification.timestamp
-                                                                ).toLocaleTimeString(
-                                                                    [],
-                                                                    {
-                                                                        hour: "2-digit",
-                                                                        minute: "2-digit",
-                                                                    }
-                                                                )
+                                                            new Date(
+                                                            notification.timestamp
+                                                            ).toLocaleTimeString(
+                                                            [],
+                                                            {
+                                                            hour: "2-digit",
+                                                            minute: "2-digit",
+                                                            }
+                                                            )
                                                             }}
                                                         </p>
                                                     </div>
-                                                    <div
-                                                        v-if="
+                                                    <div v-if="
                                                             !notification.read
-                                                        "
-                                                        class="w-2 h-2 bg-pink-500 rounded-full flex-shrink-0 mt-2"
-                                                    ></div>
+                                                        " class="w-2 h-2 bg-pink-500 rounded-full flex-shrink-0 mt-2">
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                        <div
-                                            v-else
-                                            class="p-4 text-center text-gray-500"
-                                        >
+                                        <div v-else class="p-4 text-center text-gray-500">
                                             Aucune notification
                                         </div>
                                     </div>
                                 </div>
 
-                                <Link
-                                    href="/moderateur/profile-stats"
-                                    class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2"
-                                >
-                                    <i class="fas fa-chart-line"></i>
-                                    Mon profil
+                                <Link href="/moderateur/profile-stats"
+                                    class="px-4 py-2 bg-pink-100 text-pink-600 rounded-lg hover:bg-pink-200 transition-colors duration-200 flex items-center gap-2">
+                                <i class="fas fa-chart-line"></i>
+                                Mon profil
                                 </Link>
                             </div>
                         </div>
                     </div>
 
-                    <div
-                        v-if="!currentAssignedProfile"
-                        class="bg-white p-6 rounded-xl shadow-md text-center"
-                    >
+                    <div v-if="!currentAssignedProfile" class="bg-white p-6 rounded-xl shadow-md text-center">
                         <div class="text-lg font-medium text-gray-700">
                             En attente d'attribution...
                         </div>
@@ -489,29 +387,19 @@
                             pour discuter avec des clients.
                         </p>
                         <div class="mt-4">
-                            <div
-                                class="animate-pulse flex space-x-4 justify-center"
-                            >
-                                <div
-                                    class="rounded-full bg-pink-200 h-12 w-12"
-                                ></div>
+                            <div class="animate-pulse flex space-x-4 justify-center">
+                                <div class="rounded-full bg-pink-200 h-12 w-12"></div>
                                 <div class="flex-1 space-y-4 max-w-md">
-                                    <div
-                                        class="h-4 bg-pink-200 rounded w-3/4"
-                                    ></div>
-                                    <div
-                                        class="h-4 bg-pink-200 rounded w-1/2"
-                                    ></div>
+                                    <div class="h-4 bg-pink-200 rounded w-3/4"></div>
+                                    <div class="h-4 bg-pink-200 rounded w-1/2"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Alerte d'erreur WebSocket -->
-                    <div
-                        v-if="webSocketErrors"
-                        class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md mb-4"
-                    >
+                    <div v-if="webSocketErrors"
+                        class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-md mb-4">
                         <div class="flex items-center">
                             <div class="flex-shrink-0">
                                 <i class="fas fa-exclamation-triangle"></i>
@@ -523,10 +411,8 @@
                                 <p class="text-sm">{{ webSocketErrors }}</p>
                             </div>
                             <div class="ml-auto">
-                                <button
-                                    @click="forceReconnect"
-                                    class="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm"
-                                >
+                                <button @click="forceReconnect"
+                                    class="bg-yellow-200 hover:bg-yellow-300 text-yellow-800 px-3 py-1 rounded text-sm">
                                     <i class="fas fa-sync-alt mr-1"></i>
                                     Reconnecter
                                 </button>
@@ -537,31 +423,23 @@
 
                 <div class="flex flex-col lg:flex-row gap-6">
                     <!-- Clients Section (à gauche) -->
-                    <div
-                        class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden"
-                    >
+                    <div class="w-full lg:w-1/4 bg-white rounded-xl shadow-md overflow-hidden">
                         <!-- Tabs -->
                         <div class="flex border-b border-gray-200">
-                            <button
-                                @click="activeTab = 'assigned'"
-                                :class="[
+                            <button @click="activeTab = 'assigned'" :class="[
                                     'flex-1 py-3 text-sm font-medium',
                                     activeTab === 'assigned'
                                         ? 'text-pink-600 border-b-2 border-pink-500'
                                         : 'text-gray-500 hover:text-gray-700',
-                                ]"
-                            >
+                                ]">
                                 Client attribué
                             </button>
-                            <button
-                                @click="activeTab = 'available'"
-                                :class="[
+                            <button @click="activeTab = 'available'" :class="[
                                     'flex-1 py-3 text-sm font-medium',
                                     activeTab === 'available'
                                         ? 'text-pink-600 border-b-2 border-pink-500'
                                         : 'text-gray-500 hover:text-gray-700',
-                                ]"
-                            >
+                                ]">
                                 Clients disponibles
                             </button>
                         </div>
@@ -572,170 +450,110 @@
                                 <div class="flex items-center space-x-2">
                                     <h2 class="text-xl font-semibold">
                                         {{
-                                            currentAssignedProfile?.name ||
-                                            "Aucun profil assigné"
+                                        currentAssignedProfile?.name ||
+                                        "Aucun profil assigné"
                                         }}
                                     </h2>
-                                    <span
-                                        v-if="isProfileShared"
+                                    <span v-if="isProfileShared"
                                         class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded"
-                                        title="Ce profil est partagé avec d'autres modérateurs"
-                                    >
+                                        title="Ce profil est partagé avec d'autres modérateurs">
                                         Partagé
                                     </span>
-                                    <button
-                                        @click="refreshProfileData"
+                                    <button @click="refreshProfileData"
                                         class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition-colors"
-                                        title="Rafraîchir les données"
-                                    >
+                                        title="Rafraîchir les données">
                                         <i class="fas fa-sync-alt"></i>
                                     </button>
                                 </div>
-                                <div
-                                    v-if="assignedClient.length > 0"
-                                    class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm"
-                                >
+                                <div v-if="assignedClient.length > 0"
+                                    class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
                                     En attente de réponse
                                 </div>
-                                <div
-                                    v-else
-                                    class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm"
-                                >
+                                <div v-else class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm">
                                     En attente d'attribution
                                 </div>
                             </div>
 
                             <div class="space-y-4">
                                 <!-- Liste des clients attribués -->
-                                <div
-                                    v-if="assignedClient.length > 0"
-                                    class="space-y-4"
-                                >
-                                    <div
-                                        v-for="client in sortedAssignedClients"
-                                        :key="client.id"
-                                        class="client-card transition duration-300"
-                                        @click="selectClient(client)"
-                                    >
-                                        <div
-                                            :class="[
+                                <div v-if="assignedClient.length > 0" class="space-y-4">
+                                    <div v-for="client in sortedAssignedClients" :key="client.id"
+                                        class="client-card transition duration-300" @click="selectClient(client)">
+                                        <div :class="[
                                                 'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
                                                 selectedClient &&
                                                 selectedClient.id === client.id
                                                     ? 'border-l-4 border-pink-500'
                                                     : '',
-                                            ]"
-                                        >
+                                            ]">
                                             <div class="relative">
                                                 <template v-if="client.avatar">
-                                                    <img
-                                                        :src="client.avatar"
-                                                        :alt="client.name"
-                                                        class="w-12 h-12 rounded-full object-cover"
-                                                    />
+                                                    <img :src="client.avatar" :alt="client.name"
+                                                        class="w-12 h-12 rounded-full object-cover" />
                                                 </template>
                                                 <template v-else>
                                                     <div
-                                                        class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
-                                                    >
-                                                        <i
-                                                            class="fas fa-user text-gray-400 text-xl"
-                                                        ></i>
+                                                        class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                        <i class="fas fa-user text-gray-400 text-xl"></i>
                                                     </div>
                                                 </template>
                                                 <div class="online-dot"></div>
                                             </div>
                                             <div class="flex-1 min-w-0">
-                                                <div
-                                                    class="flex items-center justify-between"
-                                                >
-                                                    <h3
-                                                        class="font-semibold truncate"
-                                                    >
+                                                <div class="flex items-center justify-between">
+                                                    <h3 class="font-semibold truncate">
                                                         {{ client.name }}
                                                     </h3>
-                                                    <span
-                                                        class="text-xs text-gray-500"
-                                                        >{{
-                                                            formatTime(
-                                                                client.createdAt
-                                                            )
-                                                        }}</span
-                                                    >
+                                                    <span class="text-xs text-gray-500">{{
+                                                        formatTime(
+                                                        client.createdAt
+                                                        )
+                                                        }}</span>
                                                 </div>
-                                                <p
-                                                    class="text-sm text-gray-500"
-                                                >
-                                                    <span
-                                                        v-if="
+                                                <p class="text-sm text-gray-500">
+                                                    <span v-if="
                                                             client.lastMessage
-                                                        "
-                                                        class="truncate block"
-                                                        >{{
-                                                            client.lastMessage
-                                                        }}</span
-                                                    >
-                                                    <span
-                                                        v-else
-                                                        class="text-gray-400 italic"
-                                                        >Nouvelle
-                                                        conversation</span
-                                                    >
+                                                        " class="truncate block">{{
+                                                        client.lastMessage
+                                                        }}</span>
+                                                    <span v-else class="text-gray-400 italic">Nouvelle
+                                                        conversation</span>
                                                 </p>
-                                                <div
-                                                    class="flex items-center mt-1 text-xs"
-                                                >
+                                                <div class="flex items-center mt-1 text-xs">
                                                     <!-- Si le client a des infos de profil -->
-                                                    <template
-                                                        v-if="
+                                                    <template v-if="
                                                             client.profileInfo
-                                                        "
-                                                    >
-                                                        <span
-                                                            :class="`${
+                                                        ">
+                                                        <span :class="`${
                                                                 !client
                                                                     .profileInfo
                                                                     .isPrimary
                                                                     ? 'bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full'
                                                                     : 'text-gray-600'
-                                                            }`"
-                                                        >
-                                                            <i
-                                                                class="fas fa-user-circle mr-1"
-                                                            ></i>
+                                                            }`">
+                                                            <i class="fas fa-user-circle mr-1"></i>
                                                             {{
-                                                                client
-                                                                    .profileInfo
-                                                                    .name
+                                                            client
+                                                            .profileInfo
+                                                            .name
                                                             }}
                                                         </span>
                                                     </template>
                                                     <!-- Ancienne façon d'afficher le profil si disponible -->
-                                                    <template
-                                                        v-else-if="
+                                                    <template v-else-if="
                                                             client.profilePhoto
-                                                        "
-                                                    >
-                                                        <img
-                                                            :src="
+                                                        ">
+                                                        <img :src="
                                                                 client.profilePhoto
-                                                            "
-                                                            alt="Profile"
-                                                            class="w-4 h-4 rounded-full mr-1"
-                                                        />
-                                                        <span
-                                                            class="text-gray-600"
-                                                            >{{
-                                                                client.profileName
-                                                            }}</span
-                                                        >
+                                                            " alt="Profile" class="w-4 h-4 rounded-full mr-1" />
+                                                        <span class="text-gray-600">{{
+                                                            client.profileName
+                                                            }}</span>
                                                     </template>
                                                 </div>
                                             </div>
-                                            <div
-                                                v-if="client.unreadCount"
-                                                class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-                                            >
+                                            <div v-if="client.unreadCount"
+                                                class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
                                                 {{ client.unreadCount }}
                                             </div>
                                         </div>
@@ -764,10 +582,8 @@
                                 <h2 class="text-xl font-semibold">
                                     Clients disponibles
                                 </h2>
-                                <button
-                                    @click="loadAvailableClients"
-                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                >
+                                <button @click="loadAvailableClients"
+                                    class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
                                     <i class="fas fa-sync-alt"></i>
                                 </button>
                             </div>
@@ -775,75 +591,46 @@
                             <div class="space-y-4">
                                 <!-- Liste des clients disponibles -->
                                 <div v-if="availableClients.length > 0">
-                                    <div
-                                        v-for="client in availableClients"
-                                        :key="client.id"
+                                    <div v-for="client in availableClients" :key="client.id"
                                         class="client-card transition duration-300 cursor-pointer"
-                                        @click="startConversation(client)"
-                                    >
+                                        @click="startConversation(client)">
                                         <div
-                                            class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200"
-                                        >
+                                            class="bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100 hover:border-pink-200">
                                             <div class="relative">
                                                 <template v-if="client.avatar">
-                                                    <img
-                                                        :src="client.avatar"
-                                                        :alt="client.name"
-                                                        class="w-12 h-12 rounded-full object-cover"
-                                                    />
+                                                    <img :src="client.avatar" :alt="client.name"
+                                                        class="w-12 h-12 rounded-full object-cover" />
                                                 </template>
                                                 <template v-else>
                                                     <div
-                                                        class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
-                                                    >
-                                                        <i
-                                                            class="fas fa-user text-gray-400 text-xl"
-                                                        ></i>
+                                                        class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                        <i class="fas fa-user text-gray-400 text-xl"></i>
                                                     </div>
                                                 </template>
                                                 <div class="online-dot"></div>
                                             </div>
                                             <div class="flex-1 min-w-0">
-                                                <h3
-                                                    class="font-semibold truncate"
-                                                >
+                                                <h3 class="font-semibold truncate">
                                                     {{ client.name }}
                                                 </h3>
-                                                <p
-                                                    class="text-sm text-gray-500"
-                                                >
-                                                    <span
-                                                        v-if="
+                                                <p class="text-sm text-gray-500">
+                                                    <span v-if="
                                                             client.lastMessage
-                                                        "
-                                                        class="truncate block"
-                                                        >{{
-                                                            client.lastMessage
-                                                        }}</span
-                                                    >
-                                                    <span
-                                                        v-else-if="
+                                                        " class="truncate block">{{
+                                                        client.lastMessage
+                                                        }}</span>
+                                                    <span v-else-if="
                                                             client.hasHistory
-                                                        "
-                                                        class="text-gray-400 italic"
-                                                        >Conversation
-                                                        précédente</span
-                                                    >
-                                                    <span
-                                                        v-else
-                                                        class="text-green-500 italic"
-                                                        >Nouveau client</span
-                                                    >
+                                                        " class="text-gray-400 italic">Conversation
+                                                        précédente</span>
+                                                    <span v-else class="text-green-500 italic">Nouveau client</span>
                                                 </p>
-                                                <p
-                                                    class="text-xs text-gray-400 mt-1"
-                                                >
+                                                <p class="text-xs text-gray-400 mt-1">
                                                     {{ client.lastActivity }}
                                                 </p>
                                             </div>
                                             <button
-                                                class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition"
-                                            >
+                                                class="p-2 rounded-full bg-pink-100 text-pink-600 hover:bg-pink-200 transition">
                                                 <i class="fas fa-comments"></i>
                                             </button>
                                         </div>
@@ -852,19 +639,11 @@
 
                                 <!-- État de chargement -->
                                 <div v-else-if="loading" class="py-8">
-                                    <div
-                                        class="animate-pulse flex space-x-4 justify-center"
-                                    >
-                                        <div
-                                            class="rounded-full bg-pink-200 h-12 w-12"
-                                        ></div>
+                                    <div class="animate-pulse flex space-x-4 justify-center">
+                                        <div class="rounded-full bg-pink-200 h-12 w-12"></div>
                                         <div class="flex-1 space-y-4 max-w-md">
-                                            <div
-                                                class="h-4 bg-pink-200 rounded w-3/4"
-                                            ></div>
-                                            <div
-                                                class="h-4 bg-pink-200 rounded w-1/2"
-                                            ></div>
+                                            <div class="h-4 bg-pink-200 rounded w-3/4"></div>
+                                            <div class="h-4 bg-pink-200 rounded w-1/2"></div>
                                         </div>
                                     </div>
                                 </div>
@@ -884,60 +663,40 @@
                     </div>
 
                     <!-- Chat Section -->
-                    <div
-                        class="w-full lg:w-2/4 flex flex-col"
-                        ref="chatSection"
-                    >
+                    <div class="w-full lg:w-2/4 flex flex-col" ref="chatSection">
                         <!-- Version mobile du ClientInfoPanel -->
                         <div class="lg:hidden">
-                            <ClientInfoDrawer
-                                v-if="selectedClient"
-                                :key="`drawer-${selectedClient.id}`"
-                                :client-id="selectedClient.id"
-                                @edit="openFullInfoModal"
-                            />
+                            <ClientInfoDrawer v-if="selectedClient" :key="`drawer-${selectedClient.id}`"
+                                :client-id="selectedClient.id" @edit="openFullInfoModal" />
                         </div>
 
                         <!-- Profil attribué -->
                         <!-- Profil attribué -->
-                        <div
-                            v-if="currentAssignedProfile"
-                            class="bg-white rounded-xl shadow-md p-4 mb-4"
-                        >
+                        <div v-if="currentAssignedProfile" class="bg-white rounded-xl shadow-md p-4 mb-4">
                             <div class="flex items-center space-x-4">
-                                <img
-                                    :src="
+                                <img :src="
                                         currentAssignedProfile.main_photo_path ||
                                         '/images/default-avatar.png'
-                                    "
-                                    :alt="currentAssignedProfile.name"
-                                    class="w-16 h-16 rounded-full object-cover"
-                                />
+                                    " :alt="currentAssignedProfile.name" class="w-16 h-16 rounded-full object-cover" />
                                 <div>
-                                    <h3
-                                        class="text-lg font-semibold text-gray-800"
-                                    >
+                                    <h3 class="text-lg font-semibold text-gray-800">
                                         {{ currentAssignedProfile.name }}
                                     </h3>
                                     <p class="text-sm text-gray-600">
                                         Profil virtuel attribué
                                     </p>
-                                    <div
-                                        class="flex items-center mt-1 text-xs text-gray-500"
-                                    >
+                                    <div class="flex items-center mt-1 text-xs text-gray-500">
                                         <span class="mr-2">
                                             <i class="fas fa-venus-mars"></i>
                                             {{
-                                                currentAssignedProfile.gender ===
-                                                "female"
-                                                    ? "Femme"
-                                                    : "Homme"
+                                            currentAssignedProfile.gender ===
+                                            "female"
+                                            ? "Femme"
+                                            : "Homme"
                                             }}
                                         </span>
                                         <span v-if="currentAssignedProfile.age">
-                                            <i
-                                                class="fas fa-birthday-cake ml-2 mr-1"
-                                            ></i>
+                                            <i class="fas fa-birthday-cake ml-2 mr-1"></i>
                                             {{ currentAssignedProfile.age }} ans
                                         </span>
                                     </div>
@@ -945,75 +704,54 @@
                             </div>
                         </div>
                         <!-- Notification de profil partagé -->
-                        <div
-                            v-if="isProfileShared"
-                            class="shared-profile-indicator bg-blue-100 text-blue-700 px-3 py-2 rounded-md mt-2"
-                        >
+                        <div v-if="isProfileShared"
+                            class="shared-profile-indicator bg-blue-100 text-blue-700 px-3 py-2 rounded-md mt-2">
                             <div class="flex items-center">
                                 <i class="fas fa-users mr-2"></i>
-                                <span
-                                    >Ce profil est partagé avec d'autres
-                                    modérateurs</span
-                                >
+                                <span>Ce profil est partagé avec d'autres
+                                    modérateurs</span>
                             </div>
                         </div>
 
                         <!-- Indicateurs d'activité des autres modérateurs -->
-                        <div
-                            v-if="otherModeratorsActive.length > 0"
-                            class="bg-gray-50 p-2 rounded-md mt-2 border border-gray-100"
-                        >
+                        <div v-if="otherModeratorsActive.length > 0"
+                            class="bg-gray-50 p-2 rounded-md mt-2 border border-gray-100">
                             <p class="text-xs text-gray-600 font-medium">
                                 <i class="fas fa-user-clock mr-1"></i>
                                 Autres modérateurs actifs sur ce profil:
                             </p>
-                            <div
-                                v-for="activity in otherModeratorsActive"
-                                :key="activity.moderatorId"
-                                class="text-xs text-gray-500 mt-1"
-                            >
-                                <span
-                                    >Modérateur #{{
-                                        activity.moderatorId
-                                    }}</span
-                                >
+                            <div v-for="activity in otherModeratorsActive" :key="activity.moderatorId"
+                                class="text-xs text-gray-500 mt-1">
+                                <span>Modérateur #{{
+                                    activity.moderatorId
+                                    }}</span>
                                 <span class="mx-1">•</span>
                                 <span>{{
                                     activity.activityType === "typing"
-                                        ? "écrit"
-                                        : activity.activityType
-                                }}</span>
+                                    ? "écrit"
+                                    : activity.activityType
+                                    }}</span>
                                 <span class="ml-2 text-gray-400">{{
                                     formatTime(activity.timestamp)
-                                }}</span>
+                                    }}</span>
                             </div>
                         </div>
 
                         <!-- Chat Content -->
-                        <div
-                            v-if="selectedClient"
+                        <div v-if="selectedClient"
                             class="bg-white rounded-xl shadow-md overflow-hidden flex flex-col h-[calc(100vh-theme(spacing.32))]"
-                            :key="`chat-${currentAssignedProfile?.id}-${selectedClient.id}`"
-                        >
+                            :key="`chat-${currentAssignedProfile?.id}-${selectedClient.id}`">
                             <!-- Chat Header -->
-                            <div
-                                class="border-b border-gray-200 p-4 flex items-center space-x-3"
-                            >
+                            <div class="border-b border-gray-200 p-4 flex items-center space-x-3">
                                 <div class="relative">
                                     <template v-if="selectedClient.avatar">
-                                        <img
-                                            :src="selectedClient.avatar"
-                                            :alt="selectedClient.name"
-                                            class="w-12 h-12 rounded-full object-cover"
-                                        />
+                                        <img :src="selectedClient.avatar" :alt="selectedClient.name"
+                                            class="w-12 h-12 rounded-full object-cover" />
                                     </template>
                                     <template v-else>
                                         <div
-                                            class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center"
-                                        >
-                                            <i
-                                                class="fas fa-user text-gray-400 text-xl"
-                                            ></i>
+                                            class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                            <i class="fas fa-user text-gray-400 text-xl"></i>
                                         </div>
                                     </template>
                                     <div class="online-dot"></div>
@@ -1026,288 +764,195 @@
                                         En discussion avec vous
                                     </p>
                                 </div>
-                                <div
-                                    class="ml-auto flex items-center space-x-2"
-                                >
+                                <div class="ml-auto flex items-center space-x-2">
                                     <div class="text-sm text-gray-500">
-                                        <span class="font-medium"
-                                            >Client ID:</span
-                                        >
+                                        <span class="font-medium">Client ID:</span>
                                         {{ selectedClient.id }}
                                     </div>
-                                    <button
-                                        @click="openFullInfoModal"
-                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition"
-                                    >
+                                    <button @click="openFullInfoModal"
+                                        class="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition">
                                         <i class="fas fa-info-circle"></i>
                                     </button>
                                 </div>
                             </div>
 
                             <!-- Chat Messages -->
-                            <div
-                                class="chat-container flex-1 overflow-y-auto p-4 space-y-3"
-                                ref="chatContainer"
-                                @scroll="handleScroll"
-                            >
+                            <div class="chat-container flex-1 overflow-y-auto p-4 space-y-3" ref="chatContainer"
+                                @scroll="handleScroll">
                                 <!-- Indicateur de chargement des messages plus anciens -->
-                                <div
-                                    v-if="isLoadingMore"
-                                    class="text-center py-2"
-                                >
+                                <div v-if="isLoadingMore" class="text-center py-2">
                                     <div
-                                        class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent"
-                                    ></div>
-                                    <span class="text-xs text-gray-500 ml-2"
-                                        >Chargement des messages...</span
-                                    >
+                                        class="inline-block animate-spin rounded-full h-4 w-4 border-2 border-pink-500 border-t-transparent">
+                                    </div>
+                                    <span class="text-xs text-gray-500 ml-2">Chargement des messages...</span>
                                 </div>
 
                                 <!-- Indicateur de messages plus anciens disponibles -->
-                                <div
-                                    v-if="hasMoreMessages && !isLoadingMore"
-                                    class="text-center text-xs text-gray-500 my-2"
-                                >
+                                <div v-if="hasMoreMessages && !isLoadingMore"
+                                    class="text-center text-xs text-gray-500 my-2">
                                     Faites défiler vers le haut pour charger
                                     plus de messages
                                 </div>
 
                                 <!-- Date -->
-                                <div
-                                    class="text-center text-xs text-gray-500 my-4"
-                                >
+                                <div class="text-center text-xs text-gray-500 my-4">
                                     Aujourd'hui
                                 </div>
 
-                                <div
-                                    v-for="(
+                                <div v-for="(
                                         message, index
-                                    ) in currentChatMessages"
-                                    :key="message.id || index"
-                                    :class="`flex space-x-2 ${
+                                    ) in currentChatMessages" :key="message.id || index" :class="`flex space-x-2 ${
                                         message.isFromClient
                                             ? ''
                                             : 'justify-end'
-                                    }`"
-                                >
+                                    }`">
                                     <template v-if="message.isFromClient">
                                         <template v-if="selectedClient.avatar">
-                                            <img
-                                                :src="selectedClient.avatar"
-                                                :alt="selectedClient.name"
-                                                class="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                            />
+                                            <img :src="selectedClient.avatar" :alt="selectedClient.name"
+                                                class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                         </template>
                                         <template v-else>
                                             <div
-                                                class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0"
-                                            >
-                                                <i
-                                                    class="fas fa-user text-gray-400 text-sm"
-                                                ></i>
+                                                class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                                                <i class="fas fa-user text-gray-400 text-sm"></i>
                                             </div>
                                         </template>
                                         <div>
-                                            <div
-                                                class="message-in px-4 py-2 max-w-xs lg:max-w-md"
-                                            >
+                                            <div class="message-in px-4 py-2 max-w-xs lg:max-w-md">
                                                 <!-- Contenu du message -->
                                                 <div v-if="message.content">
                                                     {{ message.content }}
                                                 </div>
 
                                                 <!-- Image attachée -->
-                                                <div
-                                                    v-if="
+                                                <div v-if="
                                                         message.attachment &&
                                                         message.attachment.mime_type.startsWith(
                                                             'image/'
                                                         )
-                                                    "
-                                                    class="mt-2"
-                                                >
-                                                    <img
-                                                        :src="
+                                                    " class="mt-2">
+                                                    <img :src="
                                                             message.attachment
                                                                 .url
-                                                        "
-                                                        :alt="
+                                                        " :alt="
                                                             message.attachment
                                                                 .file_name
-                                                        "
-                                                        class="max-w-full rounded-lg cursor-pointer"
-                                                        @click="
+                                                        " class="max-w-full rounded-lg cursor-pointer" @click="
                                                             showImagePreview(
                                                                 message.attachment
                                                             )
-                                                        "
-                                                    />
+                                                        " />
                                                 </div>
                                             </div>
-                                            <div
-                                                class="flex items-center mt-1 text-xs text-gray-500"
-                                            >
+                                            <div class="flex items-center mt-1 text-xs text-gray-500">
                                                 <span>{{ message.time }}</span>
                                                 <span class="mx-1">•</span>
                                                 <span>{{
                                                     selectedClient.name
-                                                }}</span>
+                                                    }}</span>
                                             </div>
                                         </div>
                                     </template>
                                     <template v-else>
                                         <div>
-                                            <div
-                                                class="message-out px-4 py-2 max-w-xs lg:max-w-md"
-                                            >
+                                            <div class="message-out px-4 py-2 max-w-xs lg:max-w-md">
                                                 <!-- Contenu du message -->
                                                 <div v-if="message.content">
                                                     {{ message.content }}
                                                 </div>
 
                                                 <!-- Image attachée -->
-                                                <div
-                                                    v-if="
+                                                <div v-if="
                                                         message.attachment &&
                                                         message.attachment.mime_type.startsWith(
                                                             'image/'
                                                         )
-                                                    "
-                                                    class="mt-2"
-                                                >
-                                                    <img
-                                                        :src="
+                                                    " class="mt-2">
+                                                    <img :src="
                                                             message.attachment
                                                                 .url
-                                                        "
-                                                        :alt="
+                                                        " :alt="
                                                             message.attachment
                                                                 .file_name
-                                                        "
-                                                        class="max-w-full rounded-lg cursor-pointer"
-                                                        @click="
+                                                        " class="max-w-full rounded-lg cursor-pointer" @click="
                                                             showImagePreview(
                                                                 message.attachment
                                                             )
-                                                        "
-                                                    />
+                                                        " />
                                                 </div>
                                             </div>
-                                            <div
-                                                class="flex items-center justify-end mt-1 text-xs text-gray-500"
-                                            >
+                                            <div class="flex items-center justify-end mt-1 text-xs text-gray-500">
                                                 <span>{{ message.time }}</span>
                                                 <span class="mx-1">•</span>
                                                 <span>{{
                                                     currentAssignedProfile?.name ||
                                                     "Vous"
-                                                }}</span>
+                                                    }}</span>
                                             </div>
                                         </div>
-                                        <img
-                                            :src="
+                                        <img :src="
                                                 currentAssignedProfile?.main_photo_path ||
                                                 'https://via.placeholder.com/64'
-                                            "
-                                            :alt="
+                                            " :alt="
                                                 currentAssignedProfile?.name ||
                                                 'Profil'
-                                            "
-                                            class="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                                        />
+                                            " class="w-8 h-8 rounded-full object-cover flex-shrink-0" />
                                     </template>
                                 </div>
                             </div>
 
                             <!-- Indicateur d'activité de frappe -->
-                            <div
-                                v-if="isTyping"
-                                class="typing-indicator text-xs text-gray-500 animate-pulse mb-3 px-4"
-                            >
+                            <div v-if="isTyping" class="typing-indicator text-xs text-gray-500 animate-pulse mb-3 px-4">
                                 <div class="flex items-center">
-                                    <span class="mr-2"
-                                        >{{ selectedClient.name }} est en train
-                                        d'écrire...</span
-                                    >
+                                    <span class="mr-2">{{ selectedClient.name }} est en train
+                                        d'écrire...</span>
                                     <div class="flex space-x-1">
-                                        <div
-                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                                            style="animation-delay: 0s"
-                                        ></div>
-                                        <div
-                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                                            style="animation-delay: 0.2s"
-                                        ></div>
-                                        <div
-                                            class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
-                                            style="animation-delay: 0.4s"
-                                        ></div>
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0s"></div>
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0.2s"></div>
+                                        <div class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"
+                                            style="animation-delay: 0.4s"></div>
                                     </div>
                                 </div>
                             </div>
 
                             <!-- Message Input -->
-                            <div
-                                class="border-t border-gray-200 bg-white z-50 p-4 mb-16 lg:mb-0"
-                            >
+                            <div class="border-t border-gray-200 bg-white z-50 p-4 mb-16 lg:mb-0">
                                 <div class="flex flex-col space-y-2">
                                     <!-- Prévisualisation de l'image -->
-                                    <div
-                                        v-if="selectedFile"
-                                        class="flex justify-end"
-                                    >
+                                    <div v-if="selectedFile" class="flex justify-end">
                                         <div class="relative inline-block">
-                                            <img
-                                                :src="previewUrl"
-                                                class="max-h-32 rounded-lg"
-                                                alt="Preview"
-                                            />
-                                            <button
-                                                @click="removeSelectedFile"
-                                                class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center"
-                                            >
+                                            <img :src="previewUrl" class="max-h-32 rounded-lg" alt="Preview" />
+                                            <button @click="removeSelectedFile"
+                                                class="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
                                                 <i class="fas fa-times"></i>
                                             </button>
                                         </div>
                                     </div>
 
                                     <div class="flex items-center space-x-2">
-                                        <input
-                                            type="file"
-                                            ref="fileInput"
-                                            class="hidden"
-                                            accept="image/*"
-                                            @change="handleFileUpload"
-                                        />
+                                        <input type="file" ref="fileInput" class="hidden" accept="image/*"
+                                            @change="handleFileUpload" />
 
                                         <!-- Sélecteur de photos de profil -->
-                                        <ProfilePhotoSelector
-                                            v-if="
+                                        <ProfilePhotoSelector v-if="
                                                 currentAssignedProfile &&
                                                 selectedClient
-                                            "
-                                            :profile-id="
+                                            " :profile-id="
                                                 currentAssignedProfile.id
-                                            "
-                                            :client-id="selectedClient.id"
-                                            @photo-selected="
+                                            " :client-id="selectedClient.id" @photo-selected="
                                                 handleProfilePhotoSelected
-                                            "
-                                        />
+                                            " />
 
                                         <div class="flex-1 relative">
-                                            <input
-                                                v-model="newMessage"
-                                                type="text"
-                                                placeholder="Écrire un message..."
+                                            <input v-model="newMessage" type="text" placeholder="Écrire un message..."
                                                 class="w-full px-4 py-2 bg-gray-100 rounded-full focus:outline-none focus:ring-2 focus:ring-pink-500"
-                                                @keyup.enter="sendMessage"
-                                            />
+                                                @keyup.enter="sendMessage" />
                                         </div>
                                         <button
                                             class="p-2 rounded-full bg-pink-500 text-white hover:bg-pink-600 transition"
-                                            @click="sendMessage"
-                                        >
+                                            @click="sendMessage">
                                             <i class="fas fa-paper-plane"></i>
                                         </button>
                                     </div>
@@ -1316,10 +961,7 @@
                         </div>
 
                         <!-- État vide pour le chat -->
-                        <div
-                            v-else
-                            class="bg-white rounded-xl shadow-md p-8 flex-1 flex items-center justify-center"
-                        >
+                        <div v-else class="bg-white rounded-xl shadow-md p-8 flex-1 flex items-center justify-center">
                             <div class="text-center">
                                 <div class="text-gray-400 mb-4">
                                     <i class="fas fa-comments text-5xl"></i>
@@ -1337,75 +979,48 @@
 
                     <!-- Informations client (à droite) - Version desktop uniquement -->
                     <div class="hidden lg:block lg:w-1/4">
-                        <ClientInfoPanel
-                            v-if="selectedClient"
-                            :client-id="selectedClient.id"
-                        />
+                        <ClientInfoPanel v-if="selectedClient" :client-id="selectedClient.id" />
                     </div>
                 </div>
 
                 <!-- Modals -->
                 <Teleport to="body">
                     <!-- Modal pour édition complète sur mobile -->
-                    <div
-                        v-if="showFullInfoModal"
-                        class="fixed inset-0 z-50 lg:hidden bg-white"
-                    >
+                    <div v-if="showFullInfoModal" class="fixed inset-0 z-50 lg:hidden bg-white">
                         <div class="h-full overflow-y-auto">
                             <div
-                                class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10"
-                            >
+                                class="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between z-10">
                                 <h2 class="text-lg font-semibold text-gray-800">
                                     Informations du client
                                 </h2>
-                                <button
-                                    @click="showFullInfoModal = false"
-                                    class="p-2 rounded-full hover:bg-gray-100"
-                                >
+                                <button @click="showFullInfoModal = false" class="p-2 rounded-full hover:bg-gray-100">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </div>
                             <div class="p-4 pb-32">
-                                <ClientInfoPanel
-                                    v-if="selectedClient"
-                                    :client-id="selectedClient.id"
-                                />
+                                <ClientInfoPanel v-if="selectedClient" :client-id="selectedClient.id" />
                             </div>
                         </div>
                     </div>
 
                     <!-- Modal de prévisualisation d'image -->
-                    <div
-                        v-if="showPreview"
+                    <div v-if="showPreview"
                         class="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50"
-                        @click="closeImagePreview"
-                    >
+                        @click="closeImagePreview">
                         <div class="max-w-4xl max-h-full p-4">
-                            <img
-                                :src="previewImage.url"
-                                :alt="previewImage.file_name"
-                                class="max-w-full max-h-[90vh] object-contain"
-                            />
+                            <img :src="previewImage.url" :alt="previewImage.file_name"
+                                class="max-w-full max-h-[90vh] object-contain" />
                         </div>
                     </div>
 
                     <!-- Autres modals existants -->
-                    <ProfileActionModal
-                        v-if="showActionModal"
-                        :show="showActionModal"
-                        :profile="selectedProfileForActions"
-                        @close="closeActionModal"
-                        @chat="startChat"
-                    />
+                    <ProfileActionModal v-if="showActionModal" :show="showActionModal"
+                        :profile="selectedProfileForActions" @close="closeActionModal" @chat="startChat" />
 
-                    <ProfileReportModal
-                        v-if="showReportModalFlag && selectedProfileForReport"
-                        :show="showReportModalFlag"
-                        :user-id="selectedProfileForReport.userId"
-                        :profile-id="selectedProfileForReport.profileId"
-                        @close="closeReportModal"
-                        @reported="handleReported"
-                    />
+                    <ProfileReportModal v-if="showReportModalFlag && selectedProfileForReport"
+                        :show="showReportModalFlag" :user-id="selectedProfileForReport.userId"
+                        :profile-id="selectedProfileForReport.profileId" @close="closeReportModal"
+                        @reported="handleReported" />
                 </Teleport>
             </div>
         </MainLayout>
@@ -1620,7 +1235,7 @@ const startReassignmentAlert = () => {
     if (reassignmentInterval.value) return;
 
     showReassignmentAlert.value = true;
-    reassignmentCountdown.value = 60; // 60 secondes avant réattribution
+    reassignmentCountdown.value = 20; // 20 secondes avant réattribution
 
     reassignmentInterval.value = setInterval(() => {
         reassignmentCountdown.value--;
@@ -2154,7 +1769,7 @@ axiosInterceptorId = axios.interceptors.response.use(
     }
 );
 
-// Initialisation
+// onMounted avec les modifications intégrées
 onMounted(async () => {
     try {
         console.log("🚀 Initialisation du composant Moderator...");
@@ -2208,6 +1823,21 @@ onMounted(async () => {
                 moderatorStore.forceProfileRefresh();
             }
         }, 60 * 1000); // Vérification toutes les 60 secondes
+
+        // NOUVEAU: Configurer la surveillance d'inactivité
+        const cleanupInactivityMonitoring = moderatorStore.setupInactivityMonitoring();
+
+        // NOUVEAU: Écouter l'événement d'inactivité
+        window.addEventListener('moderator-inactivity', startReassignmentAlert);
+        window.addEventListener('moderator-activity-resumed', () => {
+            // Arrêter l'alerte de réattribution
+            if (reassignmentInterval.value) {
+                clearInterval(reassignmentInterval.value);
+                reassignmentInterval.value = null;
+            }
+            showReassignmentAlert.value = false;
+        });
+
     } catch (error) {
         console.error(
             "❌ Erreur lors de l'initialisation du composant Moderator:",
@@ -2217,12 +1847,14 @@ onMounted(async () => {
 
     // Configurer l'écouteur d'événement pour la fermeture du navigateur
     window.addEventListener("beforeunload", updateOfflineStatus);
+    
 });
 
-// Nettoyage lors du démontage
+
 onUnmounted(() => {
     console.log("🧹 Nettoyage du composant Moderator...");
     clearInterval(connectionCheckInterval);
+
     // Nettoyer l'intervalle de rafraîchissement CSRF
     if (csrfRefreshInterval) {
         clearInterval(csrfRefreshInterval);
@@ -2245,6 +1877,22 @@ onUnmounted(() => {
 
     // Supprimer l'écouteur d'événement beforeunload
     window.removeEventListener("beforeunload", updateOfflineStatus);
+
+    // NOUVEAU: Supprimer l'écouteur d'inactivité
+    window.removeEventListener('moderator-inactivity', startReassignmentAlert);
+    window.removeEventListener('moderator-activity-resumed', () => { });
+
+    // NOUVEAU: Nettoyer la surveillance d'inactivité
+    if (cleanupInactivityMonitoring) cleanupInactivityMonitoring();
+
+    // Nettoyer les intervalles existants
+    if (profileLockInterval.value) {
+        clearInterval(profileLockInterval.value);
+    }
+
+    if (reassignmentInterval.value) {
+        clearInterval(reassignmentInterval.value);
+    }
 
     // Nettoyer le store
     moderatorStore.cleanup();
@@ -2644,16 +2292,6 @@ watch(
     { deep: true }
 );
 
-// Nettoyage lors du démontage
-onUnmounted(() => {
-    if (profileLockInterval.value) {
-        clearInterval(profileLockInterval.value);
-    }
-
-    if (reassignmentInterval.value) {
-        clearInterval(reassignmentInterval.value);
-    }
-});
 
 /**
  * Rafraîchir manuellement les données du profil

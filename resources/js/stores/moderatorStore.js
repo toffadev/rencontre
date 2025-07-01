@@ -1390,5 +1390,84 @@ export const useModeratorStore = defineStore('moderator', {
                 console.error('❌ Erreur lors du rechargement forcé des données:', error);
             }
         },
+
+        // Dans resources/js/stores/moderatorStore.js
+// Remplacer la méthode setupInactivityMonitoring() par celle-ci :
+
+setupInactivityMonitoring() {
+    // Réinitialiser tout timer existant
+    if (this.inactivityMonitoringInterval) {
+        clearInterval(this.inactivityMonitoringInterval);
+    }
+    
+    let lastActivityTimestamp = Date.now();
+    let warningShown = false;
+    let inactivityWarningTriggered = false;
+    
+    // Fonction pour mettre à jour le timestamp d'activité
+    const updateActivity = () => {
+        lastActivityTimestamp = Date.now();
+        
+        // Si l'alerte était affichée, la masquer et signaler l'activité au serveur
+        if (warningShown) {
+            warningShown = false;
+            inactivityWarningTriggered = false;
+            
+            // Signaler au serveur que l'utilisateur est redevenu actif
+            this.sendHeartbeat();
+            
+            // Masquer l'alerte de réattribution en déclenchant un événement personnalisé
+            window.dispatchEvent(new CustomEvent('moderator-activity-resumed'));
+        }
+    };
+    
+    // Écouter les événements d'activité utilisateur
+    window.addEventListener('mousemove', updateActivity);
+    window.addEventListener('keydown', updateActivity);
+    window.addEventListener('click', updateActivity);
+    window.addEventListener('touchstart', updateActivity); // Ajout pour les appareils tactiles
+    
+    // Vérifier l'inactivité toutes les secondes
+    this.inactivityMonitoringInterval = setInterval(() => {
+        const now = Date.now();
+        const inactiveTime = (now - lastActivityTimestamp) / 1000; // en secondes
+        
+        // Si inactif depuis 40 secondes et alerte pas encore affichée
+        if (inactiveTime >= 40 && !warningShown) {
+            console.log('Inactivité détectée: 40 secondes - Affichage de l\'alerte');
+            
+            // Déclencher l'alerte dans le composant
+            window.dispatchEvent(new CustomEvent('moderator-inactivity'));
+            warningShown = true;
+            inactivityWarningTriggered = true;
+        }
+        
+        // Si inactif depuis 60 secondes (40+20), signaler au serveur
+        if (inactiveTime >= 60 && inactivityWarningTriggered) {
+            inactivityWarningTriggered = false; // Réinitialiser pour éviter les appels multiples
+            
+            console.log('Inactivité détectée: 60 secondes - Signalement au serveur');
+            
+            // Signaler au serveur que l'utilisateur est inactif depuis 1 minute
+            axios.post('/moderateur/update-activity', {
+                profile_id: this.currentAssignedProfile?.id,
+                client_id: this.selectedClient?.id || 0,
+                activity_type: 'inactive'
+            }).catch(error => {
+                console.warn('Erreur lors de la mise à jour du statut d\'inactivité:', error);
+            });
+        }
+    }, 1000);
+    
+    return () => {
+        // Fonction de nettoyage
+        window.removeEventListener('mousemove', updateActivity);
+        window.removeEventListener('keydown', updateActivity);
+        window.removeEventListener('click', updateActivity);
+        window.removeEventListener('touchstart', updateActivity);
+        clearInterval(this.inactivityMonitoringInterval);
+    };
+}
+
     }
 });

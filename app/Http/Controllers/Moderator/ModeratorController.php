@@ -1231,6 +1231,47 @@ class ModeratorController extends Controller
                 'profile_id' => $profileId
             ]);
 
+            // Un profil est partagé s'il est assigné à plus d'un modérateur actif
+            $activeModeratorCount = ModeratorProfileAssignment::where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->count();
+
+            $isShared = $activeModeratorCount > 1;
+
+            $activeModeratorIds = ModeratorProfileAssignment::where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->pluck('user_id')
+                ->toArray();
+
+            Log::info("[DEBUG] Résultat de la vérification", [
+                'is_shared' => $isShared,
+                'active_moderator_count' => $activeModeratorCount,
+                'active_moderator_ids' => $activeModeratorIds
+            ]);
+
+            return response()->json([
+                'isShared' => $isShared,
+                'activeModeratorCount' => $activeModeratorCount,
+                'activeModeratorIds' => $activeModeratorIds
+            ]);
+        } catch (\Exception $e) {
+            Log::error("[DEBUG] Erreur lors de la vérification du partage de profil", [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Une erreur est survenue lors de la vérification du partage de profil'
+            ], 500);
+        }
+    }
+    /* public function isProfileShared($profileId)
+    {
+        try {
+            Log::info("[DEBUG] Vérification si le profil est partagé", [
+                'profile_id' => $profileId
+            ]);
+
             $isShared = ModeratorProfileAssignment::where('profile_id', $profileId)
                 ->where('is_active', true)
                 ->count() > 1;
@@ -1265,11 +1306,12 @@ class ModeratorController extends Controller
                 'error' => 'Une erreur est survenue lors de la vérification du partage de profil'
             ], 500);
         }
-    }
+    } */
 
     /**
      * Met à jour l'activité du modérateur
      */
+    // Dans ModeratorController.php, méthode updateActivity
     public function updateActivity(Request $request)
     {
         $validated = $request->validate([
@@ -1280,14 +1322,17 @@ class ModeratorController extends Controller
 
         try {
             // Mettre à jour l'activité
-            $assignment = ModeratorProfileAssignment::where('user_id', auth::id())
+            $assignment = ModeratorProfileAssignment::where('user_id', Auth::id())
                 ->where('profile_id', $validated['profile_id'])
                 ->where('is_active', true)
                 ->first();
 
             if ($assignment) {
-                // Mettre à jour le timestamp de dernière activité
-                $assignment->last_activity = now();
+                // Si l'activité est de type "inactive", ne pas mettre à jour last_activity
+                // pour permettre au système de détecter l'inactivité côté serveur
+                if ($validated['activity_type'] !== 'inactive') {
+                    $assignment->last_activity = now();
+                }
 
                 // Si c'est un message envoyé, mettre à jour le timestamp spécifique
                 if ($validated['activity_type'] === 'message_sent') {
