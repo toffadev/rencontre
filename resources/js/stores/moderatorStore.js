@@ -1221,6 +1221,41 @@ export const useModeratorStore = defineStore('moderator', {
          * Enregistre l'activité de frappe
          */
         async recordTypingActivity(profileId, clientId) {
+    // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
+    const typingKey = `${profileId}-${clientId}`;
+    
+    // Si le statut existe déjà et qu'il est récent (moins de 2 secondes), ne rien faire
+    if (this.typingStatus[typingKey] && 
+        this.typingStatus[typingKey].timestamp && 
+        (new Date().getTime() - new Date(this.typingStatus[typingKey].timestamp).getTime() < 2000)) {
+        return;
+    }
+    
+    try {
+        // Mettre à jour l'état local avant d'envoyer la requête
+        this.typingStatus[typingKey] = {
+            isTyping: true,
+            timestamp: new Date(),
+        };
+        
+        // Envoyer la requête au serveur avec le type d'activité 'typing'
+        await axios.post('/moderateur/update-activity', {
+            profile_id: profileId,
+            client_id: clientId,
+            activity_type: 'typing'
+        });
+        
+        // Effacer le statut après 5 secondes
+        setTimeout(() => {
+            if (this.typingStatus[typingKey]) {
+                this.typingStatus[typingKey].isTyping = false;
+            }
+        }, 5000);
+    } catch (error) {
+        console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
+    }
+},
+        /* async recordTypingActivity(profileId, clientId) {
             // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
             const typingKey = `${profileId}-${clientId}`;
             
@@ -1253,7 +1288,7 @@ export const useModeratorStore = defineStore('moderator', {
             } catch (error) {
                 console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
             }
-        },
+        }, */
 
         /**
          * Met à jour l'activité de dernière réponse pour un profil et un client

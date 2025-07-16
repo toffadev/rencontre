@@ -54,6 +54,39 @@ class ModeratorActivityService
                 }
             }
 
+            // Mettre à jour uniquement l'horodatage de frappe
+            $assignment->last_typing = now();
+            // Ne pas mettre à jour last_activity pour permettre la détection d'inactivité
+            // selon les critères définis (last_message_sent + last_typing)
+            $assignment->save();
+
+            // N'émettre l'événement que si nécessaire (debounce)
+            if ($shouldEmitEvent) {
+                event(new ModeratorActivityEvent($userId, $profileId, $clientId, 'typing'));
+
+                // Vérifier l'inactivité des autres modérateurs
+                $this->detectInactiveModerators();
+            }
+        }
+    }
+    /* public function recordTypingActivity($userId, $profileId, $clientId)
+    {
+        $assignment = ModeratorProfileAssignment::where('user_id', $userId)
+            ->where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->first();
+
+        if ($assignment) {
+            // Vérifier si la dernière activité de frappe est récente (moins de 3 secondes)
+            $shouldEmitEvent = true;
+            if ($assignment->last_typing) {
+                $timeSinceLastTyping = $assignment->last_typing->diffInSeconds(now());
+                // Ne pas émettre d'événement si moins de 3 secondes se sont écoulées depuis le dernier
+                if ($timeSinceLastTyping < 3) {
+                    $shouldEmitEvent = false;
+                }
+            }
+
             // Mettre à jour les horodatages d'activité
             $assignment->last_typing = now();
             $assignment->last_activity = now();
@@ -68,7 +101,7 @@ class ModeratorActivityService
                 $this->detectInactiveModerators();
             }
         }
-    }
+    } */
 
     /**
      * Détecter les modérateurs inactifs :

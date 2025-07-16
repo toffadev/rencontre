@@ -1311,8 +1311,48 @@ class ModeratorController extends Controller
     /**
      * Met à jour l'activité du modérateur
      */
-    // Dans ModeratorController.php, méthode updateActivity
     public function updateActivity(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'client_id' => 'required|integer',
+            'activity_type' => 'required|string',
+        ]);
+
+        try {
+            // Mettre à jour l'activité
+            $assignment = ModeratorProfileAssignment::where('user_id', Auth::id())
+                ->where('profile_id', $validated['profile_id'])
+                ->where('is_active', true)
+                ->first();
+
+            if ($assignment) {
+                // Mettre à jour le champ approprié en fonction du type d'activité
+                if ($validated['activity_type'] === 'message_sent') {
+                    // Si c'est un message envoyé, mettre à jour last_message_sent
+                    $assignment->last_message_sent = now();
+                } else if ($validated['activity_type'] === 'typing') {
+                    // Si c'est une activité de frappe, mettre à jour last_typing
+                    $assignment->last_typing = now();
+                } else if ($validated['activity_type'] !== 'inactive') {
+                    // Pour d'autres types d'activité (sauf 'inactive'), mettre à jour last_activity
+                    $assignment->last_activity = now();
+                }
+
+                // Toujours mettre à jour last_activity_check pour indiquer que nous avons vérifié
+                $assignment->last_activity_check = now();
+                $assignment->save();
+
+                return response()->json(['success' => true]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Aucune attribution trouvée']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+    // Dans ModeratorController.php, méthode updateActivity
+    /* public function updateActivity(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1348,7 +1388,7 @@ class ModeratorController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-    }
+    } */
 
     /**
      * Endpoint de diagnostic pour vérifier l'état des assignations de profils et des modérateurs

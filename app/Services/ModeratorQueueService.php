@@ -345,17 +345,35 @@ class ModeratorQueueService
             ->pluck('profile_id')
             ->toArray();
 
-        // Combiner les profils non disponibles (seulement ceux qui n'ont PAS de messages en attente)
+        // Créer une liste de tous les profils non disponibles
         $unavailableProfiles = [];
-        foreach (array_merge($assignedProfiles, $lockedProfiles) as $profileId) {
-            // Un profil n'est indisponible que s'il n'a pas de messages en attente
+
+        // Ajouter les profils assignés qui n'ont pas de messages en attente
+        foreach ($assignedProfiles as $profileId) {
             if (!in_array($profileId, $profilesWithPendingMessages)) {
                 $unavailableProfiles[] = $profileId;
             }
         }
 
+        // Ajouter les profils verrouillés qui n'ont pas de messages en attente
+        foreach ($lockedProfiles as $profileId) {
+            // Libérer les verrous sur les profils avec des messages en attente
+            if (in_array($profileId, $profilesWithPendingMessages)) {
+                // Déverrouiller les profils qui ont des messages en attente
+                // pour permettre leur attribution
+                $lockService = new ProfileLockService();
+                $lockService->unlockProfile($profileId);
+                Log::info("Profil déverrouillé de force pour réattribution", [
+                    'profile_id' => $profileId,
+                    'timestamp' => now()->toDateTimeString()
+                ]);
+            } else {
+                $unavailableProfiles[] = $profileId;
+            }
+        }
+
         // Filtrer les profils disponibles
-        $availableProfiles = array_diff($allProfiles, $unavailableProfiles);
+        $availableProfiles = array_diff($allProfiles, array_unique($unavailableProfiles));
 
         // S'assurer que tous les profils avec des messages en attente sont inclus
         foreach ($profilesWithPendingMessages as $profileId) {
@@ -366,7 +384,6 @@ class ModeratorQueueService
 
         return array_values($availableProfiles);
     }
-
     /* private function getAvailableProfiles()
     {
         // Récupérer tous les profils actifs
@@ -384,14 +401,7 @@ class ModeratorQueueService
             ->pluck('profile_id')
             ->toArray();
 
-        // Combiner les profils non disponibles
-        $unavailableProfiles = array_unique(array_merge($assignedProfiles, $lockedProfiles));
-
-        // Filtrer les profils disponibles
-        $availableProfiles = array_diff($allProfiles, $unavailableProfiles);
-
-        // Ajouter les profils avec des messages en attente, même s'ils sont assignés
-        // car ils peuvent être partagés entre modérateurs
+        // Récupérer les profils avec des messages en attente
         $profilesWithPendingMessages = Message::where('is_from_client', true)
             ->whereNull('read_at')
             ->select('profile_id')
@@ -399,6 +409,19 @@ class ModeratorQueueService
             ->pluck('profile_id')
             ->toArray();
 
+        // Combiner les profils non disponibles (seulement ceux qui n'ont PAS de messages en attente)
+        $unavailableProfiles = [];
+        foreach (array_merge($assignedProfiles, $lockedProfiles) as $profileId) {
+            // Un profil n'est indisponible que s'il n'a pas de messages en attente
+            if (!in_array($profileId, $profilesWithPendingMessages)) {
+                $unavailableProfiles[] = $profileId;
+            }
+        }
+
+        // Filtrer les profils disponibles
+        $availableProfiles = array_diff($allProfiles, $unavailableProfiles);
+
+        // S'assurer que tous les profils avec des messages en attente sont inclus
         foreach ($profilesWithPendingMessages as $profileId) {
             if (!in_array($profileId, $availableProfiles)) {
                 $availableProfiles[] = $profileId;
