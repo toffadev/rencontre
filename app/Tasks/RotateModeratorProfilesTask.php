@@ -44,32 +44,56 @@ class RotateModeratorProfilesTask
         Log::info("Profils avec messages en attente: " . count($profilesWithPendingMessages));
 
         // 3. Identifier les modérateurs inactifs (sans activité récente)
-        // MODIFICATION ICI: Utiliser la méthode getInactiveAssignments() avec 1 minute comme seuil
         $inactiveAssignments = $this->getInactiveAssignments();
-        $inactiveModerators = $inactiveAssignments->pluck('user_id')->unique()->toArray();
 
-        Log::info("Modérateurs inactifs: " . count($inactiveModerators));
-
-        // 4. Réattribuer les profils avec messages en attente aux modérateurs inactifs
+        // Modification ici: Nous devons traiter chaque attribution inactive individuellement
         $rotationsPerformed = 0;
 
-        foreach ($profilesWithPendingMessages as $profileId) {
-            // Vérifier si ce profil est déjà attribué à un modérateur actif
-            $hasActiveAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->exists();
+        foreach ($inactiveAssignments as $assignment) {
+            // Désactiver l'assignation inactive
+            $oldModeratorId = $assignment->user_id;
+            $profileId = $assignment->profile_id;
 
-            if (!$hasActiveAssignment && !empty($inactiveModerators)) {
-                // Attribuer ce profil à un modérateur inactif
-                $moderatorId = array_shift($inactiveModerators);
-                $assignment = $this->assignmentService->assignProfileToModerator($moderatorId, $profileId, true);
+            Log::info("Désactivation de l'assignation inactive", [
+                'assignment_id' => $assignment->id,
+                'moderator_id' => $oldModeratorId,
+                'profile_id' => $profileId
+            ]);
 
-                if ($assignment) {
-                    $rotationsPerformed++;
-                    Log::info("Profil réattribué", [
-                        'profile_id' => $profileId,
-                        'moderator_id' => $moderatorId
-                    ]);
+            // Marquer l'assignation comme inactive
+            $assignment->is_active = false;
+            $assignment->save();
+
+            // Trouver un nouveau modérateur disponible (différent de l'ancien)
+            $availableModerators = $activeModerators->filter(function ($moderator) use ($oldModeratorId) {
+                return $moderator->id != $oldModeratorId;
+            });
+
+            if ($availableModerators->isNotEmpty()) {
+                // Prendre le modérateur le moins occupé
+                $newModerator = $this->assignmentService->findLeastBusyModerator(null, $profileId);
+
+                if ($newModerator) {
+                    // Attribuer le profil au nouveau modérateur
+                    $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
+
+                    if ($newAssignment) {
+                        $rotationsPerformed++;
+                        Log::info("Profil réattribué pour cause d'inactivité", [
+                            'profile_id' => $profileId,
+                            'old_moderator_id' => $oldModeratorId,
+                            'new_moderator_id' => $newModerator->id
+                        ]);
+
+                        // Émettre l'événement de réattribution
+                        event(new \App\Events\ProfileAssigned(
+                            $newModerator,
+                            $profileId,
+                            $newAssignment->id,
+                            $oldModeratorId,
+                            'inactivity'
+                        ));
+                    }
                 }
             }
         }
@@ -86,10 +110,15 @@ class RotateModeratorProfilesTask
         // Conserver le délai d'inactivité à 1 minute comme vous le souhaitez
         Log::info("Recherche des attributions inactives (inactivité > 1 minute)");
 
+        $inactiveTime = Carbon::now()->subMinutes(1);
+
         $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
-            ->where(function ($query) {
-                $query->where('last_activity', '<', Carbon::now()->subMinutes(1))
-                    ->orWhereNull('last_activity');
+            ->where(function ($query) use ($inactiveTime) {
+                $query->where('last_message_sent', '<', $inactiveTime)
+                    ->where(function ($q) use ($inactiveTime) {
+                        $q->whereNull('last_typing')
+                            ->orWhere('last_typing', '<', $inactiveTime);
+                    });
             })
             ->with('user')
             ->get();
@@ -101,7 +130,8 @@ class RotateModeratorProfilesTask
                     'id' => $a->id,
                     'user_id' => $a->user_id,
                     'profile_id' => $a->profile_id,
-                    'last_activity' => $a->last_activity ? $a->last_activity->diffForHumans() : 'jamais'
+                    'last_message_sent' => $a->last_message_sent ? $a->last_message_sent->diffForHumans() : 'jamais',
+                    'last_typing' => $a->last_typing ? $a->last_typing->diffForHumans() : 'jamais'
                 ];
             })->toArray()
         ]);
@@ -151,9 +181,9 @@ class RotateModeratorProfilesTask
      */
     public function checkInactivity()
     {
-        Log::info("Vérification de l'inactivité des modérateurs");
+        Log::info("🔎 Vérification de l'inactivité des modérateurs");
 
-        // 1. Modérateurs actifs en ligne
+        // 1. Récupérer les modérateurs actifs et en ligne
         $activeModerators = User::where('type', 'moderateur')
             ->where('status', 'active')
             ->where('is_online', true)
@@ -167,61 +197,67 @@ class RotateModeratorProfilesTask
         // 2. Profils avec messages en attente
         $profilesWithPendingMessages = $this->getProfilesWithPendingMessages();
 
-        Log::info("Profils avec messages en attente", [
+        Log::info("📥 Profils avec messages en attente", [
             'count' => count($profilesWithPendingMessages),
             'profiles' => $profilesWithPendingMessages,
             'timestamp' => now()->toDateTimeString()
         ]);
 
-        // 3. Assignations inactives (> 1 min)
+        // 3. Attributions inactives
+        $inactiveTime = now()->subMinute();
+
         $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
-            ->where(function ($query) {
-                $query->where('last_activity', '<', now()->subMinute())
-                    ->orWhereNull('last_activity');
+            ->where(function ($query) use ($inactiveTime) {
+                $query->where(function ($q) use ($inactiveTime) {
+                    $q->where('last_message_sent', '<', $inactiveTime)
+                        ->where(function ($subq) use ($inactiveTime) {
+                            $subq->whereNull('last_typing')
+                                ->orWhere('last_typing', '<', $inactiveTime);
+                        });
+                })
+                    ->orWhere(function ($q) use ($inactiveTime) {
+                        $q->where('last_activity', '<', $inactiveTime)
+                            ->orWhereNull('last_activity');
+                    });
             })
+            ->join('users', 'moderator_profile_assignments.user_id', '=', 'users.id')
+            ->where(function ($query) {
+                $query->where('users.is_online', false)
+                    ->orWhere('users.last_online_at', '<', now()->subMinutes(3));
+            })
+            ->select('moderator_profile_assignments.*')
             ->get();
 
-        Log::info("Assignations inactives trouvées", [
+        Log::info("🕒 Assignations inactives détectées", [
             'count' => $inactiveAssignments->count(),
-            'assignments' => $inactiveAssignments->map(function ($a) {
-                return [
-                    'id' => $a->id,
-                    'user_id' => $a->user_id,
-                    'profile_id' => $a->profile_id,
-                    'last_activity' => $a->last_activity?->diffForHumans() ?? 'jamais',
-                    'last_activity_timestamp' => $a->last_activity?->toDateTimeString() ?? 'jamais'
-                ];
-            })->toArray(),
             'timestamp' => now()->toDateTimeString()
         ]);
 
         $reassigned = 0;
 
-        // 4. Traitement des assignations inactives
+        // 4. Traiter chaque assignation inactive
         foreach ($inactiveAssignments as $assignment) {
             $oldModeratorId = $assignment->user_id;
             $oldProfileId = $assignment->profile_id;
 
-            // Mettre à jour le champ last_activity_check pour éviter les vérifications multiples
+            // Désactiver l'assignation
             $assignment->last_activity_check = now();
             $assignment->is_active = false;
             $assignment->save();
 
-            Log::info("Assignation désactivée pour inactivité", [
+            Log::info("🚫 Assignation désactivée", [
                 'assignment_id' => $assignment->id,
                 'moderator_id' => $oldModeratorId,
-                'profile_id' => $oldProfileId,
-                'timestamp' => now()->toDateTimeString()
+                'profile_id' => $oldProfileId
             ]);
 
-            // Cas 1 : Réattribuer le profil inactif à un autre modérateur
+            // Cas 1 : Réattribuer le même profil si encore des messages non lus
             $hasUnreadMessages = Message::where('profile_id', $oldProfileId)
                 ->where('is_from_client', true)
                 ->whereNull('read_at')
                 ->exists();
 
             if ($hasUnreadMessages) {
-                // Code existant...
                 $newModerator = $this->assignmentService->findLeastBusyModerator($oldModeratorId, $oldProfileId);
 
                 if ($newModerator) {
@@ -229,19 +265,19 @@ class RotateModeratorProfilesTask
 
                     if ($newAssignment) {
                         $reassigned++;
-                        Log::info("Profil réattribué à un autre modérateur", [
+
+                        Log::info("🔁 Profil réattribué pour inactivité", [
                             'old_moderator' => $oldModeratorId,
                             'new_moderator' => $newModerator->id,
                             'profile_id' => $oldProfileId
                         ]);
 
-                        // 🔔 Événement WebSocket avec informations de réattribution
                         event(new \App\Events\ProfileAssigned(
                             $newModerator,
                             $oldProfileId,
                             $newAssignment->id,
-                            $oldModeratorId,  // Ancien modérateur
-                            'inactivity'      // Raison de la réattribution
+                            $oldModeratorId,
+                            'inactivity'
                         ));
                     }
                 }
@@ -249,53 +285,58 @@ class RotateModeratorProfilesTask
 
             // Cas 2 : Réattribuer un profil en attente à l'ancien modérateur
             if (!empty($profilesWithPendingMessages)) {
-                // Utiliser array_shift au lieu de reset pour retirer l'élément du tableau
                 $pendingProfileId = array_shift($profilesWithPendingMessages);
 
-                $newAssignment = $this->assignmentService->assignProfileToModerator($oldModeratorId, $pendingProfileId);
+                $moderator = User::find($oldModeratorId);
+                if ($moderator && $moderator->is_online && $moderator->status === 'active') {
+                    $newAssignment = $this->assignmentService->assignProfileToModerator($oldModeratorId, $pendingProfileId);
 
-                if ($newAssignment) {
-                    Log::info("Profil en attente assigné à un modérateur inactif", [
+                    if ($newAssignment) {
+                        $reassigned++;
+
+                        Log::info("📌 Profil en attente attribué à l’ancien modérateur", [
+                            'moderator_id' => $oldModeratorId,
+                            'profile_id' => $pendingProfileId
+                        ]);
+
+                        event(new \App\Events\ProfileAssigned(
+                            $moderator,
+                            $pendingProfileId,
+                            $newAssignment->id,
+                            null,
+                            'pending_messages'
+                        ));
+                    }
+                } else {
+                    // Remettre le profil dans la liste s'il ne peut pas le recevoir
+                    array_push($profilesWithPendingMessages, $pendingProfileId);
+                    Log::info("↩️ Profil remis en attente (modérateur hors ligne)", [
                         'moderator_id' => $oldModeratorId,
-                        'profile_id' => $pendingProfileId,
-                        'timestamp' => now()->toDateTimeString()
+                        'profile_id' => $pendingProfileId
                     ]);
-
-                    $reassigned++;
-
-                    // 🔔 Événement WebSocket avec informations de réattribution
-                    event(new \App\Events\ProfileAssigned(
-                        User::find($oldModeratorId),
-                        $pendingProfileId,
-                        $newAssignment->id,
-                        null,               // Pas d'ancien modérateur pour cette assignation
-                        'pending_messages'   // Raison de l'assignation: messages en attente
-                    ));
                 }
             }
         }
 
-        // 5. NOUVEAU: Attribuer des profils aux modérateurs sans assignation
+        // 5. Attribuer un profil aux modérateurs actifs sans profil
         foreach ($activeModerators as $moderator) {
             $hasActiveAssignment = ModeratorProfileAssignment::where('user_id', $moderator->id)
                 ->where('is_active', true)
                 ->exists();
 
             if (!$hasActiveAssignment && !empty($profilesWithPendingMessages)) {
-                // Attribuer un profil disponible à ce modérateur
                 $pendingProfileId = array_shift($profilesWithPendingMessages);
 
                 $newAssignment = $this->assignmentService->assignProfileToModerator($moderator->id, $pendingProfileId, true);
 
                 if ($newAssignment) {
                     $reassigned++;
-                    Log::info("Profil attribué à un modérateur sans assignation", [
+
+                    Log::info("🆕 Profil attribué à un modérateur disponible", [
                         'moderator_id' => $moderator->id,
-                        'profile_id' => $pendingProfileId,
-                        'timestamp' => now()->toDateTimeString()
+                        'profile_id' => $pendingProfileId
                     ]);
 
-                    // 🔔 Événement WebSocket
                     event(new \App\Events\ProfileAssigned(
                         $moderator,
                         $pendingProfileId,
@@ -304,26 +345,23 @@ class RotateModeratorProfilesTask
                         'new_assignment'
                     ));
                 }
-            } else if (!$hasActiveAssignment) {
-                // Ajouter à la file d'attente si aucun profil n'est disponible
+            } elseif (!$hasActiveAssignment) {
+                // Ajouter à la file d’attente s’il n’a rien reçu
                 $inQueue = \App\Models\ModeratorQueue::where('moderator_id', $moderator->id)
                     ->where('status', 'waiting')
                     ->exists();
 
                 if (!$inQueue) {
                     $this->assignmentService->addModeratorToQueue($moderator->id);
-
-                    Log::info("Modérateur ajouté à la file d'attente", [
-                        'moderator_id' => $moderator->id,
-                        'timestamp' => now()->toDateTimeString()
+                    Log::info("🧾 Modérateur ajouté à la file d’attente", [
+                        'moderator_id' => $moderator->id
                     ]);
                 }
             }
         }
 
-        Log::info("Vérification d'inactivité terminée", [
-            'total_reassignments' => $reassigned,
-            'timestamp' => now()->toDateTimeString()
+        Log::info("✅ Vérification d'inactivité terminée", [
+            'total_reassignments' => $reassigned
         ]);
 
         return $reassigned;

@@ -133,23 +133,14 @@ class ModeratorActivityService
             })
             ->get();
 
-        Log::info("Détection des modérateurs inactifs", [
+        Log::info("Recherche d'assignations inactives", [
             'threshold_minutes' => $thresholdMinutes,
             'inactive_count' => $inactiveAssignments->count(),
-            'inactive_details' => $inactiveAssignments->map(function ($a) {
-                return [
-                    'id' => $a->id,
-                    'user_id' => $a->user_id,
-                    'profile_id' => $a->profile_id,
-                    'last_message_sent' => $a->last_message_sent?->toDateTimeString() ?? 'jamais',
-                    'last_typing' => $a->last_typing?->toDateTimeString() ?? 'jamais',
-                ];
-            })->toArray(),
             'timestamp' => now()->toDateTimeString()
         ]);
 
         foreach ($inactiveAssignments as $assignment) {
-            // 🔁 Réattribution pour cause d’inactivité
+            // 🔁 Réattribution pour cause d'inactivité
             $this->triggerReassignmentForInactivity($assignment->user_id);
 
             // ✅ Marquer le contrôle comme fait
@@ -179,6 +170,8 @@ class ModeratorActivityService
             ->where('is_active', true)
             ->get();
 
+        $reassignedAny = false;
+
         foreach ($assignments as $assignment) {
             // Vérifier la réactivité du modérateur
             if ($this->monitorResponseTimes($assignment)) {
@@ -189,6 +182,7 @@ class ModeratorActivityService
             $reassignedCount = $this->assignmentService->reassignInactiveProfiles(1);
 
             if ($reassignedCount > 0) {
+                $reassignedAny = true;
                 Log::info("Réattribution déclenchée pour inactivité", [
                     'moderator_id' => $moderatorId,
                     'profile_id' => $assignment->profile_id,
@@ -211,14 +205,10 @@ class ModeratorActivityService
                         'inactivity'   // Raison de la réattribution
                     ));
                 }
-
-                return true; // Une réattribution a été faite
             }
-
-            break; // Ne pas continuer si aucune réattribution n'a été nécessaire
         }
 
-        return false; // Aucune réattribution déclenchée
+        return $reassignedAny; // Une réattribution a été faite
     }
 
 

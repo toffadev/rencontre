@@ -392,7 +392,7 @@ class ModeratorAssignmentService
     /**
      * Assigner un client à un modérateur avec contrôle de verrouillage
      */
-    public function assignClientToModerator($clientId, $profileId)
+    /* public function assignClientToModerator($clientId, $profileId)
     {
         // Vérifier si le client est déjà verrouillé
         if ($this->profileLockService->isClientLocked($clientId, $profileId)) {
@@ -483,8 +483,12 @@ class ModeratorAssignmentService
         }
 
         return $moderator;
-    }
-    /* public function assignClientToModerator($clientId, $profileId)
+    } */
+
+    /**
+     * Assigner un client à un modérateur avec contrôle de verrouillage
+     */
+    public function assignClientToModerator($clientId, $profileId)
     {
         // Vérifier si le client est déjà verrouillé
         if ($this->profileLockService->isClientLocked($clientId, $profileId)) {
@@ -492,7 +496,7 @@ class ModeratorAssignmentService
             $lockInfo = $this->profileLockService->getLockInfo($clientId, 'client');
 
             // Si le client est verrouillé par un modérateur, utiliser ce modérateur
-            if ($lockInfo && $lockInfo['moderator_id']) {
+            if ($lockInfo && isset($lockInfo['moderator_id'])) {
                 $moderator = User::find($lockInfo['moderator_id']);
                 if ($moderator && $moderator->type === 'moderateur') {
                     return $moderator;
@@ -500,6 +504,26 @@ class ModeratorAssignmentService
             }
 
             return null; // Client verrouillé mais pas par un modérateur valide
+        }
+
+        // NOUVELLE VÉRIFICATION: Vérifier si ce client est déjà assigné à un autre modérateur pour ce profil
+        $existingAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->whereRaw("JSON_CONTAINS(conversation_ids, ?)", [json_encode($clientId)])
+            ->first();
+
+        if ($existingAssignment) {
+            // Le client est déjà assigné à un modérateur pour ce profil
+            $existingModerator = User::find($existingAssignment->user_id);
+
+            Log::warning("Client déjà attribué à un autre modérateur pour ce profil", [
+                'client_id' => $clientId,
+                'profile_id' => $profileId,
+                'current_moderator' => $existingAssignment->user_id
+            ]);
+
+            // Retourner le modérateur existant au lieu d'en assigner un nouveau
+            return $existingModerator;
         }
 
         // Trouver le modérateur le moins occupé qui a déjà ce profil assigné
@@ -531,6 +555,10 @@ class ModeratorAssignmentService
         }
 
         if (!$moderator) {
+            Log::warning("Aucun modérateur disponible pour l'assignation du client", [
+                'client_id' => $clientId,
+                'profile_id' => $profileId
+            ]);
             return null; // Aucun modérateur disponible
         }
 
@@ -544,14 +572,35 @@ class ModeratorAssignmentService
             ->first();
 
         if ($assignment) {
-            $assignment->addConversation($clientId);
+            $success = $assignment->addConversation($clientId);
 
-            // Déclencher l'événement d'assignation de client
-            $this->triggerClientAssignedEvent($moderator, $clientId, $profileId);
+            if ($success) {
+                Log::info("Client assigné avec succès au modérateur", [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderator->id
+                ]);
+
+                // Déclencher l'événement d'assignation de client
+                $this->triggerClientAssignedEvent($moderator, $clientId, $profileId);
+            } else {
+                Log::warning("Échec de l'ajout du client à la conversation", [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderator->id
+                ]);
+            }
+        } else {
+            Log::warning("Aucune assignation trouvée pour ajouter le client", [
+                'client_id' => $clientId,
+                'profile_id' => $profileId,
+                'moderator_id' => $moderator->id
+            ]);
         }
 
         return $moderator;
-    } */
+    }
+
     public function assignClientToModerator2($clientId, $profileId)
     {
         // Vérifier si le client est déjà verrouillé pour ce profil

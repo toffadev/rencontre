@@ -449,10 +449,7 @@
                             <div class="flex justify-between items-center mb-4">
                                 <div class="flex items-center space-x-2">
                                     <h2 class="text-xl font-semibold">
-                                        {{
-                                        currentAssignedProfile?.name ||
-                                        "Aucun profil assigné"
-                                        }}
+                                        {{ currentAssignedProfile?.name || "Aucun profil assigné" }}
                                     </h2>
                                     <span v-if="isProfileShared"
                                         class="bg-blue-100 text-blue-800 text-xs font-medium px-2.5 py-0.5 rounded"
@@ -465,116 +462,92 @@
                                         <i class="fas fa-sync-alt"></i>
                                     </button>
                                 </div>
-                                <div v-if="assignedClient.length > 0"
-                                    class="bg-green-100 text-green-600 px-3 py-1 rounded-full text-sm">
-                                    En attente de réponse
-                                </div>
-                                <div v-else class="bg-yellow-100 text-yellow-600 px-3 py-1 rounded-full text-sm">
-                                    En attente d'attribution
-                                </div>
+                                <span v-if="assignedClients.length > 0"
+                                    class="bg-pink-100 text-pink-600 text-xs px-2 py-1 rounded-full">
+                                    {{ assignedClients.length }} client(s)
+                                </span>
                             </div>
 
-                            <div class="space-y-4">
-                                <!-- Liste des clients attribués -->
-                                <div v-if="assignedClient.length > 0" class="space-y-4">
-                                    <div v-for="client in sortedAssignedClients" :key="client.id"
-                                        class="client-card transition duration-300" @click="selectClient(client)">
-                                        <div :class="[
-                                                'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
-                                                selectedClient &&
-                                                selectedClient.id === client.id
-                                                    ? 'border-l-4 border-pink-500'
-                                                    : '',
-                                            ]">
-                                            <div class="relative">
-                                                <template v-if="client.avatar">
-                                                    <img :src="client.avatar" :alt="client.name"
-                                                        class="w-12 h-12 rounded-full object-cover" />
-                                                </template>
-                                                <template v-else>
-                                                    <div
-                                                        class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                                                        <i class="fas fa-user text-gray-400 text-xl"></i>
-                                                    </div>
-                                                </template>
-                                                <div class="online-dot"></div>
-                                            </div>
-                                            <div class="flex-1 min-w-0">
-                                                <div class="flex items-center justify-between">
-                                                    <h3 class="font-semibold truncate">
-                                                        {{ client.name }}
-                                                    </h3>
-                                                    <span class="text-xs text-gray-500">{{
-                                                        formatTime(
-                                                        client.createdAt
-                                                        )
-                                                        }}</span>
+                            <!-- Loader pour le chargement des clients -->
+                            <div v-if="moderatorStore.loadingClients" class="py-8 flex flex-col items-center justify-center">
+                                <div class="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-pink-500 mb-3"></div>
+                                <p class="text-gray-500 text-sm">Chargement des clients...</p>
+                            </div>
+
+                            <!-- Liste des clients attribués -->
+                            <div v-else-if="assignedClients.length > 0" class="space-y-4">
+                                <div v-for="client in sortedAssignedClients" :key="client.id"
+                                    class="client-card transition duration-300" @click="selectClient(client)">
+                                    <div :class="[
+                                            'bg-white rounded-lg shadow-sm p-4 flex items-center space-x-3 border border-gray-100',
+                                            selectedClient && selectedClient.id === client.id
+                                                ? 'border-l-4 border-pink-500'
+                                                : '',
+                                        ]">
+                                        <div class="relative">
+                                            <template v-if="client.avatar">
+                                                <img :src="client.avatar" :alt="client.name"
+                                                    class="w-12 h-12 rounded-full object-cover" />
+                                            </template>
+                                            <template v-else>
+                                                <div class="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
+                                                    <i class="fas fa-user text-gray-400 text-xl"></i>
                                                 </div>
-                                                <p class="text-sm text-gray-500">
-                                                    <span v-if="
-                                                            client.lastMessage
-                                                        " class="truncate block">{{
-                                                        client.lastMessage
-                                                        }}</span>
-                                                    <span v-else class="text-gray-400 italic">Nouvelle
-                                                        conversation</span>
-                                                </p>
-                                                <div class="flex items-center mt-1 text-xs">
-                                                    <!-- Si le client a des infos de profil -->
-                                                    <template v-if="
-                                                            client.profileInfo
-                                                        ">
-                                                        <span :class="`${
-                                                                !client
-                                                                    .profileInfo
-                                                                    .isPrimary
-                                                                    ? 'bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full'
-                                                                    : 'text-gray-600'
-                                                            }`">
-                                                            <i class="fas fa-user-circle mr-1"></i>
-                                                            {{
-                                                            client
-                                                            .profileInfo
-                                                            .name
-                                                            }}
-                                                        </span>
-                                                    </template>
-                                                    <!-- Ancienne façon d'afficher le profil si disponible -->
-                                                    <template v-else-if="
-                                                            client.profilePhoto
-                                                        ">
-                                                        <img :src="
-                                                                client.profilePhoto
-                                                            " alt="Profile" class="w-4 h-4 rounded-full mr-1" />
-                                                        <span class="text-gray-600">{{
-                                                            client.profileName
-                                                            }}</span>
-                                                    </template>
-                                                </div>
+                                            </template>
+                                            <div class="online-dot"></div>
+                                        </div>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center justify-between">
+                                                <h3 class="font-semibold truncate">
+                                                    {{ client.name }}
+                                                </h3>
+                                                <span class="text-xs text-gray-500">
+                                                    {{ formatTime(client.createdAt) }}
+                                                </span>
                                             </div>
-                                            <div v-if="client.unreadCount"
-                                                class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
-                                                {{ client.unreadCount }}
+                                            <p class="text-sm text-gray-500">
+                                                <span v-if="client.lastMessage" class="truncate block">
+                                                    {{ client.lastMessage }}
+                                                </span>
+                                                <span v-else class="text-gray-400 italic">
+                                                    Nouvelle conversation
+                                                </span>
+                                            </p>
+                                            <div class="flex items-center mt-1 text-xs">
+                                                <template v-if="client.profileInfo">
+                                                    <span :class="`${
+                                                        !client.profileInfo.isPrimary
+                                                            ? 'bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full'
+                                                            : 'text-gray-600'
+                                                    }`">
+                                                        <i class="fas fa-user-circle mr-1"></i>
+                                                        {{ client.profileInfo.name }}
+                                                    </span>
+                                                </template>
+                                                <template v-else-if="client.profilePhoto">
+                                                    <img :src="client.profilePhoto" alt="Profile"
+                                                        class="w-4 h-4 rounded-full mr-1" />
+                                                    <span class="text-gray-600">{{ client.profileName }}</span>
+                                                </template>
                                             </div>
+                                        </div>
+                                        <div v-if="client.unreadCount"
+                                            class="bg-pink-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs">
+                                            {{ client.unreadCount }}
                                         </div>
                                     </div>
                                 </div>
+                            </div>
 
-                                <!-- État vide -->
-                                <div v-else class="text-center py-8">
-                                    <p class="text-gray-500">
-                                        Aucun client ne vous a été attribué pour
-                                        le moment.
-                                    </p>
-                                    <p class="text-gray-400 text-sm mt-2">
-                                        Le système vous attribuera
-                                        automatiquement un client qui attend une
-                                        réponse, ou consultez les clients
-                                        disponibles.
-                                    </p>
-                                </div>
+                            <!-- État vide -->
+                            <div v-else class="text-center py-8 text-gray-500">
+                                Aucun client ne vous a été attribué pour le moment.
+                                <p class="text-gray-400 text-sm mt-2">
+                                    Le système vous attribuera automatiquement un client en attente.
+                                </p>
                             </div>
                         </div>
+
 
                         <!-- Tab Content: Clients disponibles -->
                         <div v-if="activeTab === 'available'" class="p-4">
@@ -1263,7 +1236,7 @@ const sortedAssignedClients = computed(() => {
 const currentAssignedProfile = computed(
     () => moderatorStore.currentAssignedProfile
 );
-const assignedClient = computed(() => moderatorStore.assignedClients);
+const assignedClients = computed(() => moderatorStore.assignedClients);
 const availableClients = computed(() => moderatorStore.availableClients);
 const loading = computed(() => moderatorStore.loading);
 const isLoadingMore = computed(() => moderatorStore.isLoadingMore);

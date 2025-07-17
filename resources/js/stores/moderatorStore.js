@@ -31,6 +31,7 @@ export const useModeratorStore = defineStore('moderator', {
         
         // État de chargement
         loading: false,
+        loadingClients: false,
         isLoadingMore: false,
         
         // État de connexion WebSocket
@@ -320,42 +321,38 @@ export const useModeratorStore = defineStore('moderator', {
         },
         
         /**
-         * Charge les clients attribués au modérateur
+         * Charge les clients assignés au modérateur
          */
         async loadAssignedClients() {
-            if (!this.currentAssignedProfile) {
-                console.warn('⚠️ Impossible de charger les clients: aucun profil principal attribué');
-                return;
-            }
-            
-            this.loading = true;
-            this.errors.clients = null;
-            
             try {
-                console.log('🔍 Chargement des clients attribués...');
+                console.log('🔍 Chargement des clients assignés...');
+                
+                // Activer l'état de chargement spécifique pour les clients
+                this.loadingClients = true;
+                
                 const response = await axios.get('/moderateur/clients');
                 
-                if (response.data.clients) {
+                if (response.data && Array.isArray(response.data.clients)) {
                     this.assignedClients = response.data.clients;
-                    console.log(`✅ ${this.assignedClients.length} clients chargés`);
+                    console.log(`✅ ${this.assignedClients.length} clients assignés chargés`);
                     
-                    // Si un client est sélectionné, mettre à jour ses informations
-                    if (this.selectedClient) {
-                        const updatedClient = this.assignedClients.find(c => c.id === this.selectedClient.id);
-                        if (updatedClient) {
-                            this.selectedClient = updatedClient;
-                        }
+                    // Si aucun client n'est sélectionné mais qu'il y a des clients assignés, sélectionner le premier
+                    if (!this.selectedClient && this.assignedClients.length > 0) {
+                        await this.selectClient(this.assignedClients[0]);
                     }
                 } else {
+                    console.warn('⚠️ Format de réponse inattendu pour les clients assignés');
                     this.assignedClients = [];
-                    console.warn('⚠️ Aucun client retourné par l\'API');
                 }
+                
+                return this.assignedClients;
             } catch (error) {
-                console.error('❌ Erreur lors du chargement des clients:', error);
+                console.error('❌ Erreur lors du chargement des clients assignés:', error);
                 this.errors.clients = 'Erreur lors du chargement des clients';
-                this.assignedClients = [];
+                return [];
             } finally {
-                this.loading = false;
+                // Désactiver l'état de chargement des clients
+                this.loadingClients = false;
             }
         },
         
@@ -923,100 +920,69 @@ export const useModeratorStore = defineStore('moderator', {
                         reason: data.reason,
                         oldModeratorId: data.old_moderator_id
                     });
-                    
-                    // Recharger les données après l'attribution d'un profil
-                    await this.loadAssignedProfiles();
-                    
-                    // Vérifier si c'est une réattribution forcée (inactivité)
-                    
-                    // Amélioration: Vérification plus robuste des conditions de réattribution forcée
+
                     const isReassignment = data.reason === 'inactivity' || data.old_moderator_id;
                     const isForced = data.forced === true;
-                    
-                    // Debug supplémentaire pour la réattribution
-                    console.log('🔍 Analyse de l\'événement profile.assigned:', {
-                        isReassignment,
-                        isForced,
-                        reason: data.reason,
-                        oldModeratorId: data.old_moderator_id,
-                        profileId: data.profileId || (data.profile ? data.profile.id : null),
-                        currentProfileId: this.currentAssignedProfile ? this.currentAssignedProfile.id : null
-                    });
-                    
-                    // Forcer la mise à jour du profil actuel si:
-                    // 1. Le profil principal a changé
-                    // 2. C'est une réattribution forcée (inactivité)
-                    // 3. L'événement indique explicitement que c'est forcé
 
-                    
-                    if (data.profile && data.is_primary && 
-                            (!this.currentAssignedProfile || data.profile.id !== this.currentAssignedProfile.id) ||
-                        isReassignment || 
-                        isForced) {
-                        console.log('🔄 Changement de profil détecté, préparation de la transition...', {
-                            newProfileId: data.profile ? data.profile.id : (data.profileId || 'non spécifié'),
-                            reason: data.reason || 'non spécifié',
-                            isForced: isForced,
-                            isReassignment: isReassignment
-                        });
+                    if (data.is_primary) {
+                        console.log('🔄 Démarrage de la transition vers le nouveau profil principal');
 
-                        
-                       
-                        
-                        // Démarrer le compte à rebours pour le changement de profil
+                        // Réinitialiser l'état
+                        this.selectedClient = null;
+                        this.assignedClients = [];
+                        this.messages = {};
+                        this.loading = true;
+
+                        // Lancer la transition de profil (affichage loader / animation)
                         this.startProfileTransition(data.profile);
-                        
-                        // Attendre la fin du compte à rebours
-                        await new Promise(resolve => {
-                            setTimeout(resolve, 3000); // 3 secondes de compte à rebours
-                        });
-                        
-                        // Activer l'état de chargement global
-                        this.profileTransition.loadingData = true;
-                        
-                        try {
-                            console.log('🔄 Chargement du nouveau profil en cours...');
-                            
-                            // Réinitialiser le client sélectionné et vider le chat avant de changer de profil
-                            this.selectedClient = null;
-                            
-                            // Mettre à jour le profil principal
-                            this.currentAssignedProfile = data.profile;
-                            
-                            // Recharger les clients
-                            await this.loadAssignedClients();
-                            
-                            // Configurer les écouteurs WebSocket pour le nouveau profil
-                            this.setupWebSocketListeners();
-                            
-                            // Si un client est associé à ce changement de profil
-                            if (data.client_id) {
-                                // Charger les messages du client
-                                await this.loadMessages(data.client_id);
-                                
-                                // Trouver et sélectionner le client
-                                const clientInfo = this.assignedClients.find(c => c.id === data.client_id);
-                                if (clientInfo) {
-                                    this.selectedClient = clientInfo;
+
+                        setTimeout(async () => {
+                            this.profileTransition.loadingData = true;
+                            this.loadingClients = true;
+
+                            try {
+                                // Recharger les profils attribués
+                                await this.loadAssignedProfiles();
+
+                                // Mettre à jour le profil principal
+                                this.currentAssignedProfile = data.profile;
+
+                                // Charger les clients du profil principal
+                                await this.loadAssignedClients();
+
+                                // Reconfigurer les WebSocket pour le nouveau profil
+                                this.setupWebSocketListeners();
+
+                                // Sélectionner un client spécifique si fourni
+                                if (data.client_id) {
+                                    await this.loadMessages(data.client_id);
+                                    const clientInfo = this.assignedClients.find(c => c.id === data.client_id);
+                                    if (clientInfo) {
+                                        this.selectedClient = clientInfo;
+                                    }
+                                } else if (this.assignedClients.length > 0) {
+                                    // Sélectionner le premier client disponible
+                                    const firstClient = this.assignedClients[0];
+                                    this.selectedClient = firstClient;
+                                    await this.loadMessages(firstClient.id);
                                 }
-                            } else if (this.assignedClients.length > 0) {
-                                // Si aucun client spécifique n'est associé mais qu'il y a des clients attribués,
-                                // sélectionner le premier client de la liste pour éviter un chat vide
-                                const firstClient = this.assignedClients[0];
-                                this.selectedClient = firstClient;
-                                await this.loadMessages(firstClient.id);
+
+                                console.log('✅ Transition de profil terminée avec succès');
+                            } catch (error) {
+                                console.error('❌ Erreur lors de la transition de profil:', error);
+                            } finally {
+                                this.profileTransition.loadingData = false;
+                                this.loadingClients = false;
+                                this.loading = false;
+                                this.endProfileTransition();
                             }
-                            
-                            console.log('✅ Transition de profil terminée avec succès');
-                        } catch (error) {
-                            console.error('❌ Erreur lors de la transition de profil:', error);
-                        } finally {
-                            // Désactiver l'état de chargement
-                            this.profileTransition.loadingData = false;
-                            this.endProfileTransition();
-                        }
+                        }, 3000); // ⏳ Délai de transition visuelle
                     } else {
                         console.log('ℹ️ Mise à jour des données sans changement de profil principal');
+
+                        // Cas d’assignation non principale : juste recharge les profils si besoin
+                        await this.loadAssignedProfiles();
+                        this.loading = false;
                     }
                 },
                 
@@ -1068,6 +1034,9 @@ export const useModeratorStore = defineStore('moderator', {
             this.profileTransition.inProgress = true;
             this.profileTransition.countdown = 3; // 3 secondes de compte à rebours
             this.profileTransition.newProfile = newProfile;
+            
+            // Activer le loader global
+            this.loading = true; // Ajout: activer le loader global
             
             // Démarrer le compte à rebours
             this.profileTransition.countdownTimer = setInterval(() => {
@@ -1483,14 +1452,19 @@ setupInactivityMonitoring() {
             
             console.log('Inactivité détectée: 60 secondes - Signalement au serveur');
             
-            // Signaler au serveur que l'utilisateur est inactif depuis 1 minute
-            axios.post('/moderateur/update-activity', {
-                profile_id: this.currentAssignedProfile?.id,
-                client_id: this.selectedClient?.id || 0,
-                activity_type: 'inactive'
-            }).catch(error => {
-                console.warn('Erreur lors de la mise à jour du statut d\'inactivité:', error);
-            });
+            // Vérifier que les valeurs requises sont disponibles
+            if (this.currentAssignedProfile?.id) {
+                // Signaler au serveur que l'utilisateur est inactif depuis 1 minute
+                axios.post('/moderateur/update-activity', {
+                    profile_id: this.currentAssignedProfile.id,
+                    client_id: this.selectedClient?.id || 1, // Utiliser 1 comme valeur par défaut valide
+                    activity_type: 'inactive'
+                }).catch(error => {
+                    console.warn('Erreur lors de la mise à jour du statut d\'inactivité:', error);
+                });
+            } else {
+                console.warn('Impossible de signaler l\'inactivité: aucun profil assigné');
+            }
         }
     }, 1000);
     

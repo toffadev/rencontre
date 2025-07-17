@@ -1311,7 +1311,7 @@ class ModeratorController extends Controller
     /**
      * Met à jour l'activité du modérateur
      */
-    public function updateActivity(Request $request)
+    /* public function updateActivity(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1331,8 +1331,11 @@ class ModeratorController extends Controller
                 if ($validated['activity_type'] === 'message_sent') {
                     // Si c'est un message envoyé, mettre à jour last_message_sent
                     $assignment->last_message_sent = now();
+                    // Pour un message envoyé, on met aussi à jour last_activity
+                    $assignment->last_activity = now();
                 } else if ($validated['activity_type'] === 'typing') {
-                    // Si c'est une activité de frappe, mettre à jour last_typing
+                    // Si c'est une activité de frappe, mettre à jour UNIQUEMENT last_typing
+                    // Ne PAS mettre à jour last_activity pour permettre la détection d'inactivité
                     $assignment->last_typing = now();
                 } else if ($validated['activity_type'] !== 'inactive') {
                     // Pour d'autres types d'activité (sauf 'inactive'), mettre à jour last_activity
@@ -1350,9 +1353,12 @@ class ModeratorController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-    }
-    // Dans ModeratorController.php, méthode updateActivity
-    /* public function updateActivity(Request $request)
+    } */
+
+    /**
+     * Met à jour l'activité du modérateur
+     */
+    public function updateActivity(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1368,17 +1374,25 @@ class ModeratorController extends Controller
                 ->first();
 
             if ($assignment) {
-                // Si l'activité est de type "inactive", ne pas mettre à jour last_activity
-                // pour permettre au système de détecter l'inactivité côté serveur
-                if ($validated['activity_type'] !== 'inactive') {
+                // Mettre à jour le champ approprié en fonction du type d'activité
+                if ($validated['activity_type'] === 'message_sent') {
+                    // Si c'est un message envoyé, mettre à jour last_message_sent ET last_activity
+                    $assignment->last_message_sent = now();
+                    $assignment->last_activity = now();
+                } else if ($validated['activity_type'] === 'typing') {
+                    // Si c'est une activité de frappe, mettre à jour UNIQUEMENT last_typing
+                    // Ne PAS mettre à jour last_activity pour permettre la détection d'inactivité
+                    $assignment->last_typing = now();
+                } else if ($validated['activity_type'] === 'inactive') {
+                    // Pour le type 'inactive', ne pas mettre à jour last_activity
+                    // Cela permet de forcer la détection d'inactivité
+                } else {
+                    // Pour d'autres types d'activité, mettre à jour last_activity
                     $assignment->last_activity = now();
                 }
 
-                // Si c'est un message envoyé, mettre à jour le timestamp spécifique
-                if ($validated['activity_type'] === 'message_sent') {
-                    $assignment->last_message_sent = now();
-                }
-
+                // Toujours mettre à jour last_activity_check pour indiquer que nous avons vérifié
+                $assignment->last_activity_check = now();
                 $assignment->save();
 
                 return response()->json(['success' => true]);
@@ -1388,7 +1402,7 @@ class ModeratorController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
-    } */
+    }
 
     /**
      * Endpoint de diagnostic pour vérifier l'état des assignations de profils et des modérateurs
