@@ -1018,6 +1018,18 @@ export const useModeratorStore = defineStore('moderator', {
                 'assignment.conflict': (event) => {
                     this.handleAssignmentConflict(event);
                 },
+                // Nouvel écouteur pour les alertes d'inactivité
+                '.inactivity.warning': (data) => {
+                    console.log('📩 Alerte d\'inactivité reçue:', data);
+                    
+                    // Déclencher l'alerte dans le composant avec le délai restant
+                    window.dispatchEvent(new CustomEvent('moderator-inactivity', {
+                        detail: {
+                            remainingSeconds: data.remaining_seconds || 20,
+                            profileId: data.profile_id
+                        }
+                    }));
+                }
             });
         },
         
@@ -1165,10 +1177,16 @@ export const useModeratorStore = defineStore('moderator', {
          */
         async sendHeartbeat() {
             try {
-                const response = await axios.post('/moderateur/heartbeat');
+                // Collecter les informations d'activité utilisateur
+                const activityData = {
+                    profile_id: this.currentAssignedProfile?.id,
+                    client_id: this.selectedClient?.id,
+                    has_user_activity: document.hasFocus() // Vérifie si la fenêtre est active
+                };
+                
+                const response = await axios.post('/moderateur/heartbeat', activityData);
                 
                 if (response.data.success) {
-                    // Mettre à jour l'état local si nécessaire
                     console.log('✅ Heartbeat envoyé avec succès');
                     return true;
                 }
@@ -1190,41 +1208,6 @@ export const useModeratorStore = defineStore('moderator', {
          * Enregistre l'activité de frappe
          */
         async recordTypingActivity(profileId, clientId) {
-    // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
-    const typingKey = `${profileId}-${clientId}`;
-    
-    // Si le statut existe déjà et qu'il est récent (moins de 2 secondes), ne rien faire
-    if (this.typingStatus[typingKey] && 
-        this.typingStatus[typingKey].timestamp && 
-        (new Date().getTime() - new Date(this.typingStatus[typingKey].timestamp).getTime() < 2000)) {
-        return;
-    }
-    
-    try {
-        // Mettre à jour l'état local avant d'envoyer la requête
-        this.typingStatus[typingKey] = {
-            isTyping: true,
-            timestamp: new Date(),
-        };
-        
-        // Envoyer la requête au serveur avec le type d'activité 'typing'
-        await axios.post('/moderateur/update-activity', {
-            profile_id: profileId,
-            client_id: clientId,
-            activity_type: 'typing'
-        });
-        
-        // Effacer le statut après 5 secondes
-        setTimeout(() => {
-            if (this.typingStatus[typingKey]) {
-                this.typingStatus[typingKey].isTyping = false;
-            }
-        }, 5000);
-    } catch (error) {
-        console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
-    }
-},
-        /* async recordTypingActivity(profileId, clientId) {
             // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
             const typingKey = `${profileId}-${clientId}`;
             
@@ -1242,10 +1225,11 @@ export const useModeratorStore = defineStore('moderator', {
                     timestamp: new Date(),
                 };
                 
-                // Envoyer la requête au serveur
-                await axios.post('/moderateur/typing', {
+                // Envoyer la requête au serveur avec le type d'activité 'typing'
+                await axios.post('/moderateur/update-activity', {
                     profile_id: profileId,
                     client_id: clientId,
+                    activity_type: 'typing'
                 });
                 
                 // Effacer le statut après 5 secondes
@@ -1257,7 +1241,8 @@ export const useModeratorStore = defineStore('moderator', {
             } catch (error) {
                 console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
             }
-        }, */
+        },
+        
 
         /**
          * Met à jour l'activité de dernière réponse pour un profil et un client
@@ -1395,85 +1380,40 @@ export const useModeratorStore = defineStore('moderator', {
             }
         },
 
-        // Dans resources/js/stores/moderatorStore.js
-// Remplacer la méthode setupInactivityMonitoring() par celle-ci :
-
-setupInactivityMonitoring() {
+        setupInactivityMonitoring() {
     // Réinitialiser tout timer existant
     if (this.inactivityMonitoringInterval) {
         clearInterval(this.inactivityMonitoringInterval);
     }
     
-    let lastActivityTimestamp = Date.now();
-    let warningShown = false;
-    let inactivityWarningTriggered = false;
+    // Pas de détection d'inactivité côté client
+    // Envoyer simplement des heartbeats réguliers pour signaler l'activité
     
-    // Fonction pour mettre à jour le timestamp d'activité
-    const updateActivity = () => {
-        lastActivityTimestamp = Date.now();
-        
-        // Si l'alerte était affichée, la masquer et signaler l'activité au serveur
-        if (warningShown) {
-            warningShown = false;
-            inactivityWarningTriggered = false;
-            
-            // Signaler au serveur que l'utilisateur est redevenu actif
-            this.sendHeartbeat();
-            
-            // Masquer l'alerte de réattribution en déclenchant un événement personnalisé
-            window.dispatchEvent(new CustomEvent('moderator-activity-resumed'));
-        }
+    // Fonction pour envoyer un heartbeat
+    const sendHeartbeat = () => {
+        this.sendHeartbeat();
     };
     
-    // Écouter les événements d'activité utilisateur
-    window.addEventListener('mousemove', updateActivity);
-    window.addEventListener('keydown', updateActivity);
-    window.addEventListener('click', updateActivity);
-    window.addEventListener('touchstart', updateActivity); // Ajout pour les appareils tactiles
+    // Envoyer un heartbeat toutes les 15 secondes
+    this.inactivityMonitoringInterval = setInterval(sendHeartbeat, 15000);
     
-    // Vérifier l'inactivité toutes les secondes
-    this.inactivityMonitoringInterval = setInterval(() => {
-        const now = Date.now();
-        const inactiveTime = (now - lastActivityTimestamp) / 1000; // en secondes
-        
-        // Si inactif depuis 40 secondes et alerte pas encore affichée
-        if (inactiveTime >= 40 && !warningShown) {
-            console.log('Inactivité détectée: 40 secondes - Affichage de l\'alerte');
+    // Écouter les événements WebSocket pour l'alerte d'inactivité
+    webSocketManager.subscribeToPrivateChannel(`moderator.${this.moderatorId}`, {
+        '.inactivity.warning': (data) => {
+            console.log('📩 Alerte d\'inactivité reçue:', data);
             
-            // Déclencher l'alerte dans le composant
-            window.dispatchEvent(new CustomEvent('moderator-inactivity'));
-            warningShown = true;
-            inactivityWarningTriggered = true;
+            // Déclencher l'alerte dans le composant avec le délai restant
+            window.dispatchEvent(new CustomEvent('moderator-inactivity', {
+                detail: {
+                    remainingSeconds: data.remaining_seconds || 20,
+                    profileId: data.profile_id
+                }
+            }));
         }
-        
-        // Si inactif depuis 60 secondes (40+20), signaler au serveur
-        if (inactiveTime >= 60 && inactivityWarningTriggered) {
-            inactivityWarningTriggered = false; // Réinitialiser pour éviter les appels multiples
-            
-            console.log('Inactivité détectée: 60 secondes - Signalement au serveur');
-            
-            // Vérifier que les valeurs requises sont disponibles
-            if (this.currentAssignedProfile?.id) {
-                // Signaler au serveur que l'utilisateur est inactif depuis 1 minute
-                axios.post('/moderateur/update-activity', {
-                    profile_id: this.currentAssignedProfile.id,
-                    client_id: this.selectedClient?.id || 1, // Utiliser 1 comme valeur par défaut valide
-                    activity_type: 'inactive'
-                }).catch(error => {
-                    console.warn('Erreur lors de la mise à jour du statut d\'inactivité:', error);
-                });
-            } else {
-                console.warn('Impossible de signaler l\'inactivité: aucun profil assigné');
-            }
-        }
-    }, 1000);
+    });
     
     return () => {
         // Fonction de nettoyage
-        window.removeEventListener('mousemove', updateActivity);
-        window.removeEventListener('keydown', updateActivity);
-        window.removeEventListener('click', updateActivity);
-        window.removeEventListener('touchstart', updateActivity);
         clearInterval(this.inactivityMonitoringInterval);
     };
 }

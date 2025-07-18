@@ -49,7 +49,7 @@ class ProfileAssignmentMonitoringTask
         $this->conflictService = $conflictService ?? new ConflictResolutionService();
         $this->lockService = $lockService ?? new ProfileLockService();
         $this->queueService = $queueService ?? new ModeratorQueueService();
-        $this->rotateTask = $rotateTask ?? new RotateModeratorProfilesTask($this->assignmentService);
+        $this->rotateTask = $rotateTask ?? new RotateModeratorProfilesTask($this->assignmentService, $this->queueService);
     }
 
     /**

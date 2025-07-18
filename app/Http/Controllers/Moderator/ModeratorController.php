@@ -1308,52 +1308,7 @@ class ModeratorController extends Controller
         }
     } */
 
-    /**
-     * Met à jour l'activité du modérateur
-     */
-    /* public function updateActivity(Request $request)
-    {
-        $validated = $request->validate([
-            'profile_id' => 'required|integer',
-            'client_id' => 'required|integer',
-            'activity_type' => 'required|string',
-        ]);
 
-        try {
-            // Mettre à jour l'activité
-            $assignment = ModeratorProfileAssignment::where('user_id', Auth::id())
-                ->where('profile_id', $validated['profile_id'])
-                ->where('is_active', true)
-                ->first();
-
-            if ($assignment) {
-                // Mettre à jour le champ approprié en fonction du type d'activité
-                if ($validated['activity_type'] === 'message_sent') {
-                    // Si c'est un message envoyé, mettre à jour last_message_sent
-                    $assignment->last_message_sent = now();
-                    // Pour un message envoyé, on met aussi à jour last_activity
-                    $assignment->last_activity = now();
-                } else if ($validated['activity_type'] === 'typing') {
-                    // Si c'est une activité de frappe, mettre à jour UNIQUEMENT last_typing
-                    // Ne PAS mettre à jour last_activity pour permettre la détection d'inactivité
-                    $assignment->last_typing = now();
-                } else if ($validated['activity_type'] !== 'inactive') {
-                    // Pour d'autres types d'activité (sauf 'inactive'), mettre à jour last_activity
-                    $assignment->last_activity = now();
-                }
-
-                // Toujours mettre à jour last_activity_check pour indiquer que nous avons vérifié
-                $assignment->last_activity_check = now();
-                $assignment->save();
-
-                return response()->json(['success' => true]);
-            }
-
-            return response()->json(['success' => false, 'message' => 'Aucune attribution trouvée']);
-        } catch (\Exception $e) {
-            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
-        }
-    } */
 
     /**
      * Met à jour l'activité du modérateur
@@ -1367,33 +1322,32 @@ class ModeratorController extends Controller
         ]);
 
         try {
-            // Mettre à jour l'activité
             $assignment = ModeratorProfileAssignment::where('user_id', Auth::id())
                 ->where('profile_id', $validated['profile_id'])
                 ->where('is_active', true)
                 ->first();
 
             if ($assignment) {
-                // Mettre à jour le champ approprié en fonction du type d'activité
+                // CORRECTION: S'assurer que les champs appropriés sont mis à jour
                 if ($validated['activity_type'] === 'message_sent') {
-                    // Si c'est un message envoyé, mettre à jour last_message_sent ET last_activity
                     $assignment->last_message_sent = now();
-                    $assignment->last_activity = now();
                 } else if ($validated['activity_type'] === 'typing') {
-                    // Si c'est une activité de frappe, mettre à jour UNIQUEMENT last_typing
-                    // Ne PAS mettre à jour last_activity pour permettre la détection d'inactivité
                     $assignment->last_typing = now();
-                } else if ($validated['activity_type'] === 'inactive') {
-                    // Pour le type 'inactive', ne pas mettre à jour last_activity
-                    // Cela permet de forcer la détection d'inactivité
-                } else {
-                    // Pour d'autres types d'activité, mettre à jour last_activity
-                    $assignment->last_activity = now();
                 }
 
-                // Toujours mettre à jour last_activity_check pour indiquer que nous avons vérifié
+                // Toujours mettre à jour ces champs pour tout type d'activité
                 $assignment->last_activity_check = now();
+                $assignment->last_activity = now();
                 $assignment->save();
+
+                // Utiliser le service d'activité pour enregistrer l'événement si c'est une frappe
+                if ($validated['activity_type'] === 'typing') {
+                    app(ModeratorActivityService::class)->recordTypingActivity(
+                        Auth::id(),
+                        $validated['profile_id'],
+                        $validated['client_id']
+                    );
+                }
 
                 return response()->json(['success' => true]);
             }
