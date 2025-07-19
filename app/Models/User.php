@@ -127,6 +127,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the active profile assignments for the user
+     */
+    public function activeAssignments()
+    {
+        return $this->hasMany(ModeratorProfileAssignment::class)->where('is_active', true);
+    }
+
+    /**
      * Get the point transactions for this user
      */
     public function pointTransactions()

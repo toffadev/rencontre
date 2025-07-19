@@ -395,12 +395,14 @@ class ModeratorQueueService
      */
     private function addIdleModeratorsToQueue($assignedModerators = [])
     {
-        // Trouver les modérateurs actifs sans assignation et pas déjà assignés dans ce cycle
+        // Trouver les modérateurs actifs sans assignation active et pas déjà assignés dans ce cycle
         $idleModerators = User::where('type', 'moderateur')
             ->where('status', 'active')
             ->where('is_online', true)
             ->whereNotIn('id', $assignedModerators)
-            ->whereDoesntHave('activeAssignments')
+            ->whereDoesntHave('moderatorProfileAssignments', function ($query) {
+                $query->where('is_active', true);
+            })
             ->whereNotIn('id', function ($query) {
                 $query->select('moderator_id')
                     ->from('moderator_queues');

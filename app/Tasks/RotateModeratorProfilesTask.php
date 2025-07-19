@@ -23,110 +23,6 @@ class RotateModeratorProfilesTask
         $this->queueService = $queueService;
     }
 
-    /* public function __invoke()
-    {
-        Log::info("🔄 Début de la rotation des profils modérateurs");
-
-        // 1. Identifier les modérateurs actifs
-        $activeModerators = User::where('type', 'moderateur')
-            ->where('status', 'active')
-            ->where('is_online', true)
-            ->get();
-
-        Log::info("👥 Modérateurs actifs trouvés: " . $activeModerators->count());
-
-        if ($activeModerators->isEmpty()) {
-            Log::info("⚠️ Aucun modérateur actif, rotation annulée");
-            return 0;
-        }
-
-        // 2. Identifier les profils avec des messages en attente (PRIORITÉ ABSOLUE)
-        $profilesWithPendingMessages = $this->getProfilesWithPendingMessages();
-        Log::info("📥 Profils avec messages en attente: " . count($profilesWithPendingMessages));
-
-        // 3. Identifier les modérateurs inactifs avec un seuil plus strict
-        $inactiveAssignments = $this->getInactiveAssignments();
-        Log::info("🕒 Assignations inactives détectées: " . $inactiveAssignments->count());
-
-        $rotationsPerformed = 0;
-
-        // 4. PRIORITÉ 1: Traiter les profils avec messages en attente
-        foreach ($profilesWithPendingMessages as $profileId) {
-            // Vérifier si ce profil a déjà un modérateur actif
-            $existingAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->first();
-
-            if ($existingAssignment) {
-                // Vérifier si le modérateur assigné est vraiment inactif
-                $isInactive = $this->isModeratorInactive($existingAssignment);
-
-                if (!$isInactive) {
-                    Log::info("✅ Profil déjà assigné à un modérateur actif", [
-                        'profile_id' => $profileId,
-                        'moderator_id' => $existingAssignment->user_id
-                    ]);
-                    continue;
-                }
-
-                // Modérateur inactif, procéder à la rotation
-                $this->rotateInactiveAssignment($existingAssignment, $activeModerators);
-                $rotationsPerformed++;
-            } else {
-                // Aucun modérateur assigné, trouver le moins occupé
-                $newModerator = $this->assignmentService->findLeastBusyModerator(null, $profileId);
-
-                if ($newModerator) {
-                    $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
-
-                    if ($newAssignment) {
-                        $rotationsPerformed++;
-                        Log::info("🆕 Profil avec messages en attente assigné", [
-                            'profile_id' => $profileId,
-                            'moderator_id' => $newModerator->id
-                        ]);
-
-                        event(new \App\Events\ProfileAssigned(
-                            $newModerator,
-                            $profileId,
-                            $newAssignment->id,
-                            null,
-                            'pending_messages'
-                        ));
-                    }
-                }
-            }
-        }
-
-        // 5. PRIORITÉ 2: Traiter les autres assignations inactives
-        foreach ($inactiveAssignments as $assignment) {
-            $profileId = $assignment->profile_id;
-
-            // Éviter de traiter deux fois le même profil
-            if (in_array($profileId, $profilesWithPendingMessages)) {
-                continue;
-            }
-
-            $this->rotateInactiveAssignment($assignment, $activeModerators);
-            $rotationsPerformed++;
-        }
-
-        // 6. PRIORITÉ 3: Traiter la file d'attente SEULEMENT après avoir géré les urgences
-        $queueResults = $this->queueService->checkAndProcessQueue();
-        Log::info("📋 Résultats de la file d'attente", [
-            'processed_assignments' => $queueResults['processed_assignments'],
-            'remaining_in_queue' => $queueResults['remaining_in_queue']
-        ]);
-
-        Log::info("✅ Rotation des profils terminée", [
-            'rotations_performed' => $rotationsPerformed,
-            'queue_assignments' => $queueResults['processed_assignments'],
-            'total_assignments' => $rotationsPerformed + $queueResults['processed_assignments']
-        ]);
-
-        return $rotationsPerformed;
-    } */
-
     public function __invoke()
     {
         Log::info("🔄 Début de la rotation des profils modérateurs");
@@ -148,86 +44,69 @@ class RotateModeratorProfilesTask
         $profilesWithPendingMessages = $this->getProfilesWithPendingMessages();
         Log::info("📥 Profils avec messages en attente: " . count($profilesWithPendingMessages));
 
-        // 3. Identifier les modérateurs inactifs avec un seuil plus strict
-        $inactiveAssignments = $this->getInactiveAssignments();
-        Log::info("🕒 Assignations inactives détectées: " . $inactiveAssignments->count());
+        // 3. Identifier TOUTES les assignations inactives avec un seuil plus strict
+        $allInactiveAssignments = $this->getAllInactiveAssignments();
+        Log::info("🕒 Assignations inactives détectées: " . $allInactiveAssignments->count());
 
         $rotationsPerformed = 0;
         $assignedModerators = []; // Tracker les modérateurs déjà assignés dans ce cycle
+        $processedProfiles = []; // Tracker les profils déjà traités pour éviter les doublons
 
         // 4. PRIORITÉ 1: Traiter les profils avec messages en attente
         foreach ($profilesWithPendingMessages as $profileId) {
-            // Vérifier si ce profil a déjà un modérateur actif
-            $existingAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->first();
+            $result = $this->handleProfileWithPendingMessages(
+                $profileId,
+                $activeModerators,
+                $assignedModerators,
+                $processedProfiles,
+                $allInactiveAssignments
+            );
 
-            if ($existingAssignment) {
-                // Vérifier si le modérateur assigné est vraiment inactif
-                $isInactive = $this->isModeratorInactive($existingAssignment);
-
-                if (!$isInactive) {
-                    Log::info("✅ Profil déjà assigné à un modérateur actif", [
-                        'profile_id' => $profileId,
-                        'moderator_id' => $existingAssignment->user_id
-                    ]);
-                    continue;
-                }
-
-                // Modérateur inactif, procéder à la rotation
-                $newModeratorId = $this->rotateInactiveAssignment($existingAssignment, $activeModerators, $assignedModerators);
-                if ($newModeratorId) {
-                    $assignedModerators[] = $newModeratorId;
-                    $rotationsPerformed++;
-                }
-            } else {
-                // Aucun modérateur assigné, trouver le moins occupé parmi les disponibles
-                $availableModerators = $activeModerators->filter(function ($moderator) use ($assignedModerators) {
-                    return !in_array($moderator->id, $assignedModerators);
-                });
-
-                if ($availableModerators->isNotEmpty()) {
-                    $newModerator = $availableModerators->sortBy(function ($moderator) {
-                        return ModeratorProfileAssignment::where('user_id', $moderator->id)
-                            ->where('is_active', true)
-                            ->count();
-                    })->first();
-
-                    if ($newModerator) {
-                        $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
-
-                        if ($newAssignment) {
-                            $assignedModerators[] = $newModerator->id;
-                            $rotationsPerformed++;
-                            Log::info("🆕 Profil avec messages en attente assigné", [
-                                'profile_id' => $profileId,
-                                'moderator_id' => $newModerator->id
-                            ]);
-
-                            event(new \App\Events\ProfileAssigned(
-                                $newModerator,
-                                $profileId,
-                                $newAssignment->id,
-                                null,
-                                'pending_messages'
-                            ));
-                        }
-                    }
-                }
+            if ($result['rotated']) {
+                $rotationsPerformed++;
+                $assignedModerators = array_merge($assignedModerators, $result['assigned_moderators']);
             }
+            $processedProfiles[] = $profileId;
         }
 
-        // 5. PRIORITÉ 2: Traiter les autres assignations inactives
-        foreach ($inactiveAssignments as $assignment) {
+        // 5. PRIORITÉ 2: Traiter TOUTES les autres assignations inactives (CORRECTION CRITIQUE)
+        foreach ($allInactiveAssignments as $assignment) {
             $profileId = $assignment->profile_id;
 
-            // Éviter de traiter deux fois le même profil
-            if (in_array($profileId, $profilesWithPendingMessages)) {
+            // Vérifier si le profil a déjà été traité ET si la rotation a réussi
+            if (in_array($profileId, $processedProfiles)) {
+                // Vérifier si l'assignation est toujours active (rotation a échoué)
+                $currentAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
+                    ->where('is_active', true)
+                    ->first();
+
+                if ($currentAssignment && $currentAssignment->user_id == $assignment->user_id) {
+                    // L'assignation n'a pas changé, le modérateur est toujours inactif
+                    Log::info("🔄 Profil déjà traité mais rotation échouée, nouvelle tentative", [
+                        'profile_id' => $profileId,
+                        'moderator_id' => $assignment->user_id
+                    ]);
+                } else {
+                    // Rotation réussie, passer au suivant
+                    continue;
+                }
+            }
+
+            // Vérifier si le modérateur a déjà été réassigné dans ce cycle
+            if (in_array($assignment->user_id, $assignedModerators)) {
+                Log::info("⏭️ Modérateur déjà réassigné dans ce cycle", [
+                    'moderator_id' => $assignment->user_id,
+                    'profile_id' => $profileId
+                ]);
                 continue;
             }
 
-            // Vérifier si l'ancien modérateur n'a pas déjà été réassigné
-            if (in_array($assignment->user_id, $assignedModerators)) {
+            // CORRECTION : Vérifier à nouveau l'inactivité (état peut avoir changé)
+            if (!$this->isModeratorInactive($assignment)) {
+                Log::info("✅ Modérateur redevenu actif, pas de rotation nécessaire", [
+                    'moderator_id' => $assignment->user_id,
+                    'profile_id' => $profileId
+                ]);
                 continue;
             }
 
@@ -236,7 +115,14 @@ class RotateModeratorProfilesTask
             if ($newModeratorId) {
                 $assignedModerators[] = $newModeratorId;
                 $rotationsPerformed++;
+                Log::info("✅ Rotation d'assignation inactive réussie", [
+                    'old_moderator_id' => $assignment->user_id,
+                    'new_moderator_id' => $newModeratorId,
+                    'profile_id' => $profileId
+                ]);
             }
+
+            $processedProfiles[] = $profileId;
         }
 
         // 6. PRIORITÉ 3: Traiter la file d'attente SEULEMENT après avoir géré les urgences
@@ -246,14 +132,180 @@ class RotateModeratorProfilesTask
             'remaining_in_queue' => $queueResults['remaining_in_queue']
         ]);
 
+        // 7. VÉRIFICATION FINALE : S'assurer qu'aucun modérateur inactif n'a été oublié
+        $this->performFinalInactivityCheck($activeModerators, $assignedModerators);
+
         Log::info("✅ Rotation des profils terminée", [
             'rotations_performed' => $rotationsPerformed,
             'queue_assignments' => $queueResults['processed_assignments'],
             'total_assignments' => $rotationsPerformed + $queueResults['processed_assignments'],
-            'assigned_moderators' => $assignedModerators
+            'assigned_moderators' => $assignedModerators,
+            'processed_profiles' => $processedProfiles
         ]);
 
         return $rotationsPerformed;
+    }
+
+
+
+    /**
+     * MÉTHODE CORRIGÉE: Gérer les profils avec messages en attente
+     */
+    private function handleProfileWithPendingMessages($profileId, $activeModerators, $assignedModerators, $processedProfiles, $allInactiveAssignments)
+    {
+        $result = ['rotated' => false, 'assigned_moderators' => []];
+
+        // Vérifier si ce profil a déjà un modérateur assigné
+        $existingAssignment = ModeratorProfileAssignment::where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->first();
+
+        if ($existingAssignment) {
+            // PROFIL DÉJÀ ASSIGNÉ - Vérifier l'activité du modérateur
+            $isInactive = $this->isModeratorInactive($existingAssignment);
+
+            if (!$isInactive) {
+                Log::info("✅ Profil avec messages déjà assigné à un modérateur actif", [
+                    'profile_id' => $profileId,
+                    'moderator_id' => $existingAssignment->user_id
+                ]);
+                return $result;
+            }
+
+            // Modérateur inactif, procéder à la rotation
+            $newModeratorId = $this->rotateInactiveAssignment($existingAssignment, $activeModerators, $assignedModerators);
+            if ($newModeratorId) {
+                $result['assigned_moderators'][] = $newModeratorId;
+                $result['rotated'] = true;
+                Log::info("🔄 Rotation effectuée pour profil avec messages", [
+                    'profile_id' => $profileId,
+                    'old_moderator_id' => $existingAssignment->user_id,
+                    'new_moderator_id' => $newModeratorId
+                ]);
+            }
+        } else {
+            // PROFIL NON ASSIGNÉ - C'EST LE PROBLÈME PRINCIPAL !
+            Log::info("🆕 Profil avec messages en attente non assigné détecté", [
+                'profile_id' => $profileId
+            ]);
+
+            // Trouver le meilleur modérateur disponible
+            $newModerator = $this->findBestAvailableModerator($activeModerators, $assignedModerators);
+
+            if ($newModerator) {
+                $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
+
+                if ($newAssignment) {
+                    $result['assigned_moderators'][] = $newModerator->id;
+                    $result['rotated'] = true; // Changé : considérer comme une rotation réussie
+                    Log::info("🆕 Profil avec messages en attente assigné avec succès", [
+                        'profile_id' => $profileId,
+                        'moderator_id' => $newModerator->id,
+                        'assignment_id' => $newAssignment->id
+                    ]);
+
+                    // CORRECTION : Déclencher l'événement ProfileAssigned
+                    event(new \App\Events\ProfileAssigned(
+                        $newModerator,
+                        $profileId,
+                        $newAssignment->id,
+                        null, // Pas d'ancien modérateur
+                        'pending_messages_assignment' // Type d'assignation
+                    ));
+                } else {
+                    Log::warning("❌ Échec de l'assignation du profil avec messages", [
+                        'profile_id' => $profileId,
+                        'moderator_id' => $newModerator->id
+                    ]);
+                }
+            } else {
+                Log::warning("⚠️ Aucun modérateur disponible pour profil avec messages", [
+                    'profile_id' => $profileId,
+                    'available_moderators' => $activeModerators->count(),
+                    'already_assigned' => count($assignedModerators)
+                ]);
+
+                // NOUVEAU : Ajouter à la file d'attente si aucun modérateur disponible
+                // Note: Vous pourriez implémenter une méthode addToQueue ici
+            }
+        }
+
+        return $result;
+    }
+
+
+    /**
+     * MÉTHODE CORRIGÉE: Trouver le meilleur modérateur disponible
+     */
+    private function findBestAvailableModerator($activeModerators, $assignedModerators, $excludeModeratorId = null)
+    {
+        $availableModerators = $activeModerators->filter(function ($moderator) use ($assignedModerators, $excludeModeratorId) {
+            // Exclure les modérateurs déjà assignés dans ce cycle
+            if (in_array($moderator->id, $assignedModerators)) {
+                return false;
+            }
+
+            // Exclure explicitement le modérateur à remplacer
+            if ($excludeModeratorId && $moderator->id == $excludeModeratorId) {
+                return false;
+            }
+
+            return true;
+        });
+
+        if ($availableModerators->isEmpty()) {
+            return null;
+        }
+
+        // Prendre le modérateur avec le moins d'assignations actives
+        return $availableModerators->sortBy(function ($moderator) {
+            return ModeratorProfileAssignment::where('user_id', $moderator->id)
+                ->where('is_active', true)
+                ->count();
+        })->first();
+    }
+
+    /**
+     * NOUVELLE MÉTHODE: Vérification finale pour s'assurer qu'aucun modérateur inactif n'est oublié
+     */
+    private function performFinalInactivityCheck($activeModerators, $assignedModerators)
+    {
+        Log::info("🔍 Vérification finale d'inactivité");
+
+        $finalCheck = ModeratorProfileAssignment::where('is_active', true)
+            ->whereHas('user', function ($query) {
+                $query->where('is_online', true)
+                    ->where('status', 'active');
+            })
+            ->with('user')
+            ->get();
+
+        $forgottenInactive = $finalCheck->filter(function ($assignment) use ($assignedModerators) {
+            // Exclure les modérateurs déjà traités dans ce cycle
+            if (in_array($assignment->user_id, $assignedModerators)) {
+                return false;
+            }
+
+            return $this->isModeratorInactive($assignment);
+        });
+
+        if ($forgottenInactive->count() > 0) {
+            Log::warning("⚠️ Modérateurs inactifs oubliés détectés", [
+                'count' => $forgottenInactive->count(),
+                'assignments' => $forgottenInactive->map(function ($a) {
+                    return [
+                        'user_id' => $a->user_id,
+                        'profile_id' => $a->profile_id,
+                        'last_message' => $a->last_message_sent ? $a->last_message_sent->diffForHumans() : 'jamais',
+                        'last_typing' => $a->last_typing ? $a->last_typing->diffForHumans() : 'jamais'
+                    ];
+                })->toArray()
+            ]);
+
+            // Optionnel : Programmer une rotation d'urgence ou ajouter à la file d'attente
+        } else {
+            Log::info("✅ Aucun modérateur inactif oublié");
+        }
     }
 
     /**
@@ -261,7 +313,7 @@ class RotateModeratorProfilesTask
      */
     private function isModeratorInactive($assignment)
     {
-        $inactiveThreshold = now()->subMinutes(1); // Seuil plus strict : 2 minutes
+        $inactiveThreshold = now()->subMinutes(1); // Seuil strict : 1 minute
 
         // Vérifier l'utilisateur
         $user = User::find($assignment->user_id);
@@ -273,18 +325,33 @@ class RotateModeratorProfilesTask
         $lastMessage = $assignment->last_message_sent;
         $lastTyping = $assignment->last_typing;
 
-        // Inactif si :
+        // CORRECTION : Considérer comme inactif si :
         // - Pas de message depuis le seuil ET
-        // - Pas de frappe depuis le seuil ET 
+        // - Pas de frappe depuis le seuil
+        // - Mais vérifier aussi si ces valeurs sont NULL (jamais d'activité)
 
-        return (!$lastMessage || $lastMessage < $inactiveThreshold) &&
-            (!$lastTyping || $lastTyping < $inactiveThreshold);
+        $messageInactive = !$lastMessage || $lastMessage < $inactiveThreshold;
+        $typingInactive = !$lastTyping || $lastTyping < $inactiveThreshold;
+
+        // Forcer la journalisation pour le débogage
+        Log::debug("Vérification d'inactivité détaillée", [
+            'user_id' => $assignment->user_id,
+            'profile_id' => $assignment->profile_id,
+            'last_message_sent' => $lastMessage ? $lastMessage->toDateTimeString() : 'jamais',
+            'last_typing' => $lastTyping ? $lastTyping->toDateTimeString() : 'jamais',
+            'message_inactive' => $messageInactive ? 'oui' : 'non',
+            'typing_inactive' => $typingInactive ? 'oui' : 'non',
+            'threshold' => $inactiveThreshold->toDateTimeString(),
+            'is_inactive' => ($messageInactive && $typingInactive) ? 'OUI' : 'NON'
+        ]);
+
+        return $messageInactive && $typingInactive;
     }
 
     /**
-     * Effectuer la rotation d'une assignation inactive
+     * Effectuer la rotation d'une assignation inactive - VERSION SIMPLIFIÉE
      */
-    /* private function rotateInactiveAssignment($assignment, $activeModerators)
+    private function rotateInactiveAssignment($assignment, $activeModerators, $assignedModerators = [])
     {
         $oldModeratorId = $assignment->user_id;
         $profileId = $assignment->profile_id;
@@ -299,148 +366,51 @@ class RotateModeratorProfilesTask
         $assignment->is_active = false;
         $assignment->save();
 
-        // CORRECTION : Filtrer les modérateurs disponibles en excluant l'ancien
-        $availableModerators = $activeModerators->filter(function ($moderator) use ($oldModeratorId) {
-            return $moderator->id != $oldModeratorId;
-        });
+        // Trouver un nouveau modérateur
+        $newModerator = $this->findBestAvailableModerator($activeModerators, $assignedModerators, $oldModeratorId);
 
-        Log::info("👥 Modérateurs disponibles pour rotation", [
-            'total_active' => $activeModerators->count(),
-            'available_for_rotation' => $availableModerators->count()
-        ]);
-
-        $newModerator = null;
-
-        if ($availableModerators->isNotEmpty()) {
-            // Essayer d'abord avec le service (mais uniquement parmi les disponibles)
-            $newModerator = $this->assignmentService->findLeastBusyModerator($oldModeratorId, $profileId);
-
-            // Si le service ne retourne pas un modérateur valide, prendre le moins occupé manuellement
-            if (!$newModerator || $newModerator->id == $oldModeratorId) {
-                // Prendre le modérateur avec le moins d'assignations actives
-                $newModerator = $availableModerators->sortBy(function ($moderator) {
-                    return ModeratorProfileAssignment::where('user_id', $moderator->id)
-                        ->where('is_active', true)
-                        ->count();
-                })->first();
-            }
-        }
-
-        if ($newModerator && $newModerator->id != $oldModeratorId) {
-            $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
-
-            if ($newAssignment) {
-                Log::info("✅ Profil réattribué avec succès", [
-                    'profile_id' => $profileId,
-                    'old_moderator_id' => $oldModeratorId,
-                    'new_moderator_id' => $newModerator->id
-                ]);
-
-                event(new \App\Events\ProfileAssigned(
-                    $newModerator,
-                    $profileId,
-                    $newAssignment->id,
-                    $oldModeratorId,
-                    'inactivity'
-                ));
-            }
-        } else {
-            // Aucun autre modérateur disponible, profil reste non assigné
-            Log::info("⚠️ Aucun autre modérateur disponible, profil reste non assigné", [
+        if (!$newModerator) {
+            Log::info("⚠️ Aucun modérateur disponible pour rotation", [
                 'profile_id' => $profileId,
                 'old_moderator_id' => $oldModeratorId
             ]);
-
-            // Le profil sera repris par la logique de messages en attente au prochain cycle
-        }
-    } */
-
-    /**
-     * Effectuer la rotation d'une assignation inactive
-     */
-    private function rotateInactiveAssignment($assignment, $activeModerators, $assignedModerators = [])
-    {
-        $oldModeratorId = $assignment->user_id;
-        $profileId = $assignment->profile_id;
-
-        Log::info("🔄 Rotation d'assignation inactive", [
-            'assignment_id' => $assignment->id,
-            'old_moderator_id' => $oldModeratorId,
-            'profile_id' => $profileId,
-            'already_assigned_moderators' => $assignedModerators
-        ]);
-
-        // Désactiver l'assignation
-        $assignment->is_active = false;
-        $assignment->save();
-
-        // Filtrer les modérateurs disponibles en excluant l'ancien ET ceux déjà assignés
-        $availableModerators = $activeModerators->filter(function ($moderator) use ($oldModeratorId, $assignedModerators) {
-            return $moderator->id != $oldModeratorId && !in_array($moderator->id, $assignedModerators);
-        });
-
-        Log::info("👥 Modérateurs disponibles pour rotation", [
-            'total_active' => $activeModerators->count(),
-            'excluded_old' => $oldModeratorId,
-            'excluded_assigned' => $assignedModerators,
-            'available_for_rotation' => $availableModerators->count()
-        ]);
-
-        $newModerator = null;
-
-        if ($availableModerators->isNotEmpty()) {
-            // Prendre le modérateur avec le moins d'assignations actives parmi les disponibles
-            $newModerator = $availableModerators->sortBy(function ($moderator) {
-                return ModeratorProfileAssignment::where('user_id', $moderator->id)
-                    ->where('is_active', true)
-                    ->count();
-            })->first();
+            return null;
         }
 
-        if ($newModerator) {
-            $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
+        $newAssignment = $this->assignmentService->assignProfileToModerator($newModerator->id, $profileId, true);
 
-            if ($newAssignment) {
-                Log::info("✅ Profil réattribué avec succès", [
-                    'profile_id' => $profileId,
-                    'old_moderator_id' => $oldModeratorId,
-                    'new_moderator_id' => $newModerator->id
-                ]);
+        if ($newAssignment) {
+            Log::info("✅ Profil réattribué avec succès", [
+                'profile_id' => $profileId,
+                'old_moderator_id' => $oldModeratorId,
+                'new_moderator_id' => $newModerator->id
+            ]);
 
-                event(new \App\Events\ProfileAssigned(
-                    $newModerator,
-                    $profileId,
-                    $newAssignment->id,
-                    $oldModeratorId,
-                    'inactivity'
-                ));
+            event(new \App\Events\ProfileAssigned(
+                $newModerator,
+                $profileId,
+                $newAssignment->id,
+                $oldModeratorId,
+                'inactivity_rotation'
+            ));
 
-                return $newModerator->id;
-            }
+            return $newModerator->id;
         }
 
-        Log::info("⚠️ Aucun modérateur disponible pour rotation", [
-            'profile_id' => $profileId,
-            'old_moderator_id' => $oldModeratorId,
-            'available_count' => $availableModerators->count()
-        ]);
-
-        // Le profil sera repris par la logique de messages en attente au prochain cycle
         return null;
     }
 
     /**
-     * Récupère les attributions de modérateurs inactifs avec des critères plus stricts
+     * MÉTHODE AMÉLIORÉE : Récupère TOUTES les attributions de modérateurs inactifs
      */
-    protected function getInactiveAssignments()
+    protected function getAllInactiveAssignments()
     {
-        Log::info("🔍 Recherche des attributions inactives (seuil: 1 minute)");
+        Log::info("🔍 Recherche exhaustive des attributions inactives (seuil: 1 minute)");
 
-        $inactiveTime = now()->subMinutes(1); // Seuil de 1 minute au lieu de 2
+        $inactiveTime = now()->subMinutes(1);
 
         $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
             ->where(function ($query) use ($inactiveTime) {
-                // CORRECTION: Ne plus utiliser last_activity dans la requête
                 // Inactif si pas de message récent ET pas de frappe récente
                 $query->where(function ($q) use ($inactiveTime) {
                     $q->where(function ($subq) use ($inactiveTime) {
@@ -459,7 +429,7 @@ class RotateModeratorProfilesTask
             ->with('user')
             ->get();
 
-        Log::info("📊 Attributions inactives trouvées", [
+        Log::info("📊 Attributions inactives trouvées (exhaustives)", [
             'count' => $inactiveAssignments->count(),
             'assignments' => $inactiveAssignments->map(function ($a) {
                 return [
