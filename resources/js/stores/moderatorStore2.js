@@ -83,50 +83,31 @@ export const useModeratorStore = defineStore('moderator', {
             try {
                 console.log('🚀 Initialisation du ModeratorStore...');
                 
-                // Indiquer que le chargement est en cours
-                this.loading = true;
-                
-                // Charger d'abord les données essentielles du modérateur
+                // Chargement initial comme avant...
                 await this.loadModeratorData();
                 
-                // Initialiser le WebSocket en parallèle avec le chargement des profils
-                const webSocketPromise = new Promise(async (resolve) => {
+                // S'assurer que le WebSocketManager est initialisé
+                this.webSocketStatus = webSocketManager.getConnectionStatus();
+                if (this.webSocketStatus !== 'connected') {
+                    console.log('⏳ Attente de l\'initialisation du WebSocketManager...');
+                    await webSocketManager.initialize();
                     this.webSocketStatus = webSocketManager.getConnectionStatus();
-                    if (this.webSocketStatus !== 'connected') {
-                        console.log('⏳ Initialisation du WebSocketManager...');
-                        webSocketManager.initialize().then(() => {
-                            this.webSocketStatus = webSocketManager.getConnectionStatus();
-                            resolve();
-                        }).catch(() => {
-                            // En cas d'échec, continuer quand même
-                            this.webSocketStatus = 'disconnected';
-                            this.errors.websocket = 'Problème de connexion WebSocket';
-                            resolve();
-                        });
-                    } else {
-                        resolve();
-                    }
-                });
-                
-                // Charger les profils attribués
-                const profilesPromise = this.loadAssignedProfiles();
-                
-                // Attendre que les deux opérations soient terminées
-                await Promise.all([webSocketPromise, profilesPromise]);
+                }
                 
                 // Vérifier si le modérateur est en file d'attente
                 await this.checkQueueStatus();
                 
+                // Charger les profils attribués
+                await this.loadAssignedProfiles();
+                
                 // Si un profil principal est attribué, charger les clients
                 if (this.currentAssignedProfile) {
-                    this.loadingClients = true;
-                    this.loadAssignedClients().finally(() => {
-                        this.loadingClients = false;
-                    });
+                    await this.loadAssignedClients();
                     
                     // Configurer les écouteurs WebSocket pour le profil principal
                     this.setupWebSocketListeners();
                 } else if (this.queueInfo.inQueue) {
+                    // Si le modérateur est en file d'attente, afficher l'interface de file d'attente
                     console.log('🔍 Modérateur en file d\'attente, position: ' + this.queueInfo.position);
                 }
                 
@@ -136,10 +117,6 @@ export const useModeratorStore = defineStore('moderator', {
                 console.log('✅ ModeratorStore initialisé avec succès');
                 this.initialized = true;
                 this.startHeartbeat();
-                
-                // Indiquer que le chargement est terminé
-                this.loading = false;
-                
                 return true;
             } catch (error) {
                 console.error('❌ Erreur lors de l\'initialisation du ModeratorStore:', error);
@@ -151,7 +128,6 @@ export const useModeratorStore = defineStore('moderator', {
                 
                 // Réessayer l'initialisation après un délai
                 setTimeout(() => this.initialize(), 5000);
-                this.loading = false;
                 return false;
             }
         },

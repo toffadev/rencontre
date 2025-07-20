@@ -1,5 +1,5 @@
 <template>
-    <div v-if="!moderatorStore.initialized"
+    <div v-if="!moderatorStore.initialized || isLoading"
         class="flex items-center justify-center min-h-screen bg-gradient-to-br from-pink-100 via-purple-100 to-white">
         <div class="flex flex-col items-center space-y-4">
             <svg class="animate-spin h-12 w-12 text-pink-500" xmlns="http://www.w3.org/2000/svg" fill="none"
@@ -8,13 +8,14 @@
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"></path>
             </svg>
             <div class="text-lg font-semibold text-pink-600">
-                Chargement de l'espace modérateur...
+                {{ isLoading ? loadingMessage : "Chargement de l'espace modérateur..." }}
             </div>
             <div class="text-sm text-gray-500">
-                Merci de patienter, nous synchronisons vos profils virtuels 👩‍💻
+                {{ isLoading ? "Veuillez patienter..." : "Merci de patienter, nous synchronisons vos profils virtuels 👩‍💻" }}
             </div>
         </div>
     </div>
+
 
     <!-- Écran de chargement pour le changement de profil -->
     <div v-else-if="moderatorStore.profileTransition.loadingData"
@@ -1078,6 +1079,22 @@ const showReassignmentAlert = ref(false);
 const reassignmentCountdown = ref(0);
 const reassignmentInterval = ref(null);
 
+// Ajouter ces variables dans la section "État local du composant"
+const isLoading = ref(false);
+const loadingMessage = ref("Chargement en cours");
+const connectionCheckInterval = ref(null);
+
+
+// Fonction utilitaire pour afficher le loader global
+function showLoader(message = "Chargement en cours") {
+    loadingMessage.value = message;
+    isLoading.value = true;
+}
+
+// Fonction utilitaire pour masquer le loader global
+function hideLoader() {
+    isLoading.value = false;
+}
 // Formater le temps depuis une date
 const formatRelativeTime = (isoString) => {
     if (!isoString) return "N/A";
@@ -1700,6 +1717,27 @@ function setupCSRFErrorHandler() {
     }
 }
 
+// Ajouter cette fonction avec les autres fonctions de votre composant
+function setupNotificationListeners() {
+    console.log("Configuration des écouteurs de notifications");
+    
+    // Écouteur pour les nouvelles notifications (exemple)
+    window.addEventListener('new-notification', (event) => {
+        if (event.detail && event.detail.message) {
+            notifications.value.unshift({
+                id: Date.now(),
+                message: event.detail.message,
+                clientId: event.detail.clientId || null,
+                clientName: event.detail.clientName || "Système",
+                timestamp: new Date(),
+                read: false
+            });
+        }
+    });
+    
+    // Vous pouvez ajouter d'autres écouteurs selon vos besoins
+}
+
 // Variables pour le nettoyage
 let csrfRefreshInterval;
 let axiosInterceptorId;
@@ -1742,68 +1780,61 @@ axiosInterceptorId = axios.interceptors.response.use(
     }
 );
 
+let cleanupInactivityMonitoring = null;
+
 // onMounted avec les modifications intégrées
 onMounted(async () => {
+
     try {
         console.log("🚀 Initialisation du composant Moderator...");
+        showLoader("Initialisation de l'espace modérateur...");
 
-        // S'assurer que la connexion WebSocket est établie
+        // 1. Établir connexion WebSocket
         const connected = await ensureWebSocketConnection();
-        const connectionCheckInterval = setInterval(
-            checkWebSocketConnection,
-            5000
-        );
-
+        // Vérifier périodiquement l'état de la connexion WebSocket
+        connectionCheckInterval.value = setInterval(() => {
+            checkWebSocketConnection();
+        }, 5000); // Vérifier toutes les 30 secondes
         if (connected) {
-            console.log("✅ Connexion WebSocket établie avec succès");
-
-            // Configurer l'intercepteur d'authentification WebSocket
+            console.log("✅ Connexion WebSocket établie");
             setupWebSocketAuthInterceptor();
         } else {
-            console.warn(
-                "⚠️ Connexion WebSocket non établie, fonctionnalités limitées"
-            );
+            console.warn("⚠️ Connexion WebSocket échouée");
         }
 
-        // Initialiser le store du modérateur
-        await moderatorStore.initialize();
+        // 2. Initialiser le store avec protection contre double init
+        if (!moderatorStore.initialized) {
+            await moderatorStore.initialize();
+        }
 
-        // Envoyer un heartbeat initial pour mettre à jour le statut en ligne
+        // 3. Envoyer un heartbeat pour signaler présence
         await moderatorStore.sendHeartbeat();
 
-        // Configurer les écouteurs spécifiques au modérateur
+        // 4. Configurer les écouteurs si un profil est actif
         if (currentAssignedProfile.value) {
-            moderatorStore.setupProfileListeners(
-                currentAssignedProfile.value.id
-            );
+            moderatorStore.setupProfileListeners(currentAssignedProfile.value.id);
         }
 
-        // Vérifier l'état de la connexion WebSocket
-        checkWebSocketConnection();
+        // 5. Rafraîchissement CSRF
+        csrfRefreshInterval = setInterval(refreshCSRFToken, 30 * 60 * 1000);
 
-        // Configurer un intervalle pour rafraîchir le token CSRF périodiquement
-        csrfRefreshInterval = setInterval(refreshCSRFToken, 30 * 60 * 1000); // 30 minutes
-
-        // Configurer l'intervalle de heartbeat pour maintenir le statut en ligne
-        heartbeatInterval = setInterval(() => {
-            moderatorStore.sendHeartbeat();
-        }, 2 * 60 * 1000); // 2 minutes
-
-        // Configurer l'intervalle de rafraîchissement périodique des données
+        // 6. Rafraîchissement des données toutes les 60s
         dataRefreshInterval = setInterval(() => {
             if (moderatorStore.currentAssignedProfile) {
                 console.log('🔄 Rafraîchissement périodique des données...');
                 moderatorStore.forceProfileRefresh();
             }
-        }, 60 * 1000); // Vérification toutes les 60 secondes
+        }, 60 * 1000);
 
-        // NOUVEAU: Configurer la surveillance d'inactivité
+        // 7. Heartbeat régulier pour présence en ligne
+        heartbeatInterval = setInterval(() => {
+            moderatorStore.sendHeartbeat();
+        }, 2 * 60 * 1000);
+
+        // 8. Surveiller l'inactivité et gérer les alertes
         const cleanupInactivityMonitoring = moderatorStore.setupInactivityMonitoring();
-
-        // NOUVEAU: Écouter l'événement d'inactivité
         window.addEventListener('moderator-inactivity', startReassignmentAlert);
         window.addEventListener('moderator-activity-resumed', () => {
-            // Arrêter l'alerte de réattribution
             if (reassignmentInterval.value) {
                 clearInterval(reassignmentInterval.value);
                 reassignmentInterval.value = null;
@@ -1811,17 +1842,23 @@ onMounted(async () => {
             showReassignmentAlert.value = false;
         });
 
-    } catch (error) {
-        console.error(
-            "❌ Erreur lors de l'initialisation du composant Moderator:",
-            error
-        );
-    }
+        // 9. Gestion erreurs CSRF (si utile chez toi)
+        setupCSRFErrorHandler?.();
 
-    // Configurer l'écouteur d'événement pour la fermeture du navigateur
-    window.addEventListener("beforeunload", updateOfflineStatus);
-    
+        // 10. Écoute de la fermeture du navigateur
+        window.addEventListener("beforeunload", updateOfflineStatus);
+
+        // 11. Écoute notifications globales (optionnel)
+        setupNotificationListeners?.();
+
+    } catch (error) {
+        console.error("❌ Erreur lors de l'initialisation:", error);
+        toast.error("Erreur lors de l'initialisation. Veuillez rafraîchir la page.");
+    } finally {
+        hideLoader();
+    }
 });
+
 
 
 onUnmounted(() => {
@@ -1872,34 +1909,45 @@ onUnmounted(() => {
 });
 
 // Sélectionner un client
+// Remplacer ou modifier la fonction selectClient existante
 async function selectClient(client) {
-    selectedClient.value = client;
-
+    if (!client) return;
+    
+    // Afficher un loader pendant le chargement des messages
+    showLoader("Chargement de la conversation...");
+    
     try {
-        // Charger les messages
-        await moderatorStore.loadMessages(client.id);
-
-        // Marquer les notifications comme lues
-        const notification = notifications.value.find(
-            (n) => n.clientId === client.id && !n.read
-        );
-        if (notification) {
-            markNotificationAsRead(notification.id);
+        // Mettre à jour le client sélectionné
+        selectedClient.value = client;
+        
+        // Charger les messages si nécessaire
+        if (!currentChatMessages.value || currentChatMessages.value.length === 0) {
+            await moderatorStore.loadMessages(client.id);
         }
-
-        // Faire défiler jusqu'à la section de chat sur mobile
+        
+        // Marquer les notifications comme lues
+        if (client.unreadCount > 0) {
+            moderatorStore.markClientNotificationsAsRead(client.id);
+        }
+        
+        // Faire défiler vers le bas après le rendu
         nextTick(() => {
+            if (chatContainer.value) {
+                chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+            }
+            
+            // Sur mobile, faire défiler jusqu'à la section de chat
             if (window.innerWidth < 1024) {
                 chatSection.value?.scrollIntoView({ behavior: "smooth" });
-            }
-            // Faire défiler le conteneur de messages vers le bas
-            if (chatContainer.value) {
-                chatContainer.value.scrollTop =
-                    chatContainer.value.scrollHeight;
             }
         });
     } catch (error) {
         console.error("Erreur lors de la sélection du client:", error);
+        // Afficher une notification d'erreur
+        toast.error("Erreur lors du chargement de la conversation");
+    } finally {
+        // Masquer le loader
+        hideLoader();
     }
 }
 
@@ -1950,50 +1998,83 @@ function handleScroll(event) {
 }
 
 // Envoyer un message
+// Remplacer ou modifier la fonction sendMessage existante
 async function sendMessage() {
-    if (
-        (!newMessage.value.trim() && !selectedFile.value) ||
-        !currentAssignedProfile.value ||
-        !selectedClient.value
-    ) {
-        return;
+    if (!newMessage.value && !selectedFile.value) return;
+    
+    const content = newMessage.value.trim();
+    const file = selectedFile.value;
+    
+    // Réinitialiser les champs
+    newMessage.value = "";
+    selectedFile.value = null;
+    previewUrl.value = null;
+    
+    if (fileInput.value) {
+        fileInput.value.value = "";
     }
-
-    const messageContent = newMessage.value.trim();
-
+    
+    // Afficher un indicateur de chargement local pour le message
+    const tempMessageId = Date.now();
+    const tempMessage = {
+        id: tempMessageId,
+        content: content,
+        isFromClient: false,
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        status: 'sending',
+        attachment: file ? { 
+            url: URL.createObjectURL(file),
+            file_name: file.name,
+            mime_type: file.type
+        } : null
+    };
+    
+    // Ajouter le message temporaire à la liste
+    if (moderatorStore.messages[selectedClient.value.id]) {
+        moderatorStore.messages[selectedClient.value.id].messages.push(tempMessage);
+    } else {
+        moderatorStore.messages[selectedClient.value.id] = {
+            messages: [tempMessage],
+            pagination: { page: 1, hasMore: false }
+        };
+    }
+    
+    // Faire défiler vers le bas
+    nextTick(() => {
+        if (chatContainer.value) {
+            chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+        }
+    });
+    
     try {
-        // Effacer le champ avant d'envoyer pour éviter les doublons visuels
-        newMessage.value = "";
-
         // Envoyer le message
         await moderatorStore.sendMessage({
             clientId: selectedClient.value.id,
             profileId: currentAssignedProfile.value.id,
-            content: messageContent,
-            file: selectedFile.value,
+            content: content,
+            file: file
         });
-
-        // Mettre à jour l'activité de dernière réponse
-        if (currentAssignedProfile.value && selectedClient.value) {
-            // Cette ligne est nouvelle
-            moderatorStore.updateLastMessageActivity(
-                currentAssignedProfile.value.id,
-                selectedClient.value.id
-            );
-        }
-
-        // Réinitialiser le fichier sélectionné
-        removeSelectedFile();
-
-        // Faire défiler vers le bas
-        nextTick(() => {
-            if (chatContainer.value) {
-                chatContainer.value.scrollTop =
-                    chatContainer.value.scrollHeight;
+        
+        // Mettre à jour le statut du message temporaire
+        if (moderatorStore.messages[selectedClient.value.id]) {
+            const tempMessageIndex = moderatorStore.messages[selectedClient.value.id].messages.findIndex(m => m.id === tempMessageId);
+            if (tempMessageIndex !== -1) {
+                moderatorStore.messages[selectedClient.value.id].messages[tempMessageIndex].status = 'sent';
             }
-        });
+        }
     } catch (error) {
         console.error("Erreur lors de l'envoi du message:", error);
+        
+        // Mettre à jour le statut du message temporaire pour indiquer l'erreur
+        if (moderatorStore.messages[selectedClient.value.id]) {
+            const tempMessageIndex = moderatorStore.messages[selectedClient.value.id].messages.findIndex(m => m.id === tempMessageId);
+            if (tempMessageIndex !== -1) {
+                moderatorStore.messages[selectedClient.value.id].messages[tempMessageIndex].status = 'error';
+            }
+        }
+        
+        // Afficher une notification d'erreur
+        toast.error("Erreur lors de l'envoi du message");
     }
 }
 

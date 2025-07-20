@@ -123,7 +123,7 @@ class ModeratorController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function getClients()
+    /* public function getClients()
     {
         $currentModeratorId = Auth::id();
 
@@ -230,9 +230,14 @@ class ModeratorController extends Controller
         return response()->json([
             'clients' => $clientsNeedingResponse
         ]);
-    }
+    } */
 
-    /* public function getClients()
+    /**
+     * Récupère les clients attribués au modérateur
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getClients()
     {
         $currentModeratorId = Auth::id();
 
@@ -240,41 +245,58 @@ class ModeratorController extends Controller
             'moderator_id' => $currentModeratorId
         ]);
 
-        // Récupérer le profil principal actif du modérateur
-        $primaryAssignment = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
+        // Récupérer le profil actif du modérateur
+        $assignment = ModeratorProfileAssignment::where('user_id', $currentModeratorId)
             ->where('is_active', true)
-            ->where('is_primary', true)
             ->first();
 
-        if (!$primaryAssignment) {
-            Log::warning("[DEBUG] Aucun profil principal actif trouvé pour le modérateur");
+        if (!$assignment) {
+            Log::warning("[DEBUG] Aucun profil actif trouvé pour le modérateur");
             return response()->json([
                 'clients' => []
             ]);
         }
 
-        $primaryProfileId = $primaryAssignment->profile_id;
+        $profileId = $assignment->profile_id;
 
         // Vérifier si des clients sont explicitement assignés
-        $conversationIds = $primaryAssignment->conversation_ids ?? [];
+        $conversationIds = $assignment->conversation_ids ?? [];
 
         // Si aucun client n'est explicitement assigné, chercher les clients avec des messages récents
         if (empty($conversationIds)) {
-            // Trouver les clients qui ont des messages non lus pour ce profil
-            $clientsWithMessages = Message::where('profile_id', $primaryProfileId)
+            // Optimisation: Utiliser une seule requête pour trouver les clients avec des messages non lus
+            $clientsWithMessages = Message::where('profile_id', $profileId)
                 ->where('is_from_client', true)
                 ->whereNull('read_at')
                 ->select('client_id')
                 ->distinct()
+                ->limit(20) // Limiter pour améliorer les performances
                 ->pluck('client_id')
                 ->toArray();
 
             // Ajouter ces clients à l'assignation
             if (!empty($clientsWithMessages)) {
                 foreach ($clientsWithMessages as $clientId) {
-                    $primaryAssignment->addConversation($clientId);
+                    $assignment->addConversation($clientId);
                 }
-                $conversationIds = $primaryAssignment->conversation_ids ?? [];
+                $conversationIds = $assignment->conversation_ids ?? [];
+            }
+
+            // Si toujours pas de clients, chercher les clients avec des conversations existantes
+            if (empty($conversationIds)) {
+                $clientsWithConversation = Message::where('profile_id', $profileId)
+                    ->select('client_id')
+                    ->distinct()
+                    ->limit(20) // Limiter pour améliorer les performances
+                    ->pluck('client_id')
+                    ->toArray();
+
+                if (!empty($clientsWithConversation)) {
+                    foreach ($clientsWithConversation as $clientId) {
+                        $assignment->addConversation($clientId);
+                    }
+                    $conversationIds = $assignment->conversation_ids ?? [];
+                }
             }
         }
 
@@ -285,18 +307,60 @@ class ModeratorController extends Controller
             ]);
         }
 
-        // Le reste de la méthode reste inchangé...
-        // Continuer avec la récupération des informations des clients
+        // Optimisation: Récupérer les informations des clients en une seule requête
+        $clients = User::whereIn('id', $conversationIds)->get()->keyBy('id');
+
+        // Optimisation: Récupérer les derniers messages en une seule requête
+        $lastMessages = Message::whereIn('client_id', $conversationIds)
+            ->where('profile_id', $profileId)
+            ->orderBy('created_at', 'desc')
+            ->get()
+            ->groupBy('client_id')
+            ->map(function ($messages) {
+                return $messages->first();
+            });
+
+        // Optimisation: Compter les messages non lus en une seule requête
+        $unreadCounts = Message::whereIn('client_id', $conversationIds)
+            ->where('profile_id', $profileId)
+            ->where('is_from_client', true)
+            ->whereNull('read_at')
+            ->select('client_id', DB::raw('count(*) as unread_count'))
+            ->groupBy('client_id')
+            ->get()
+            ->keyBy('client_id');
+
+        // Récupérer les informations des clients
         $clientsNeedingResponse = [];
 
         foreach ($conversationIds as $clientId) {
-            // Code existant pour récupérer les informations des clients...
+            // Récupérer le client
+            $client = $clients[$clientId] ?? null;
+            if (!$client) continue;
+
+            // Récupérer le dernier message échangé
+            $lastMessage = $lastMessages[$clientId] ?? null;
+            if (!$lastMessage) continue;
+
+            // Ajouter le client à la liste
+            $clientsNeedingResponse[] = [
+                'id' => $client->id,
+                'name' => $client->name,
+                'avatar' => $client->profile_photo_url ?? null,
+                'lastMessage' => $lastMessage->content,
+                'lastMessageTime' => $lastMessage->created_at->diffForHumans(),
+                'unreadCount' => $unreadCounts[$clientId]->unread_count ?? 0,
+                'isTyping' => false, // Par défaut, le client n'est pas en train de taper
+                'profileId' => $profileId
+            ];
         }
 
         return response()->json([
             'clients' => $clientsNeedingResponse
         ]);
-    } */
+    }
+
+
 
     /**
      * Récupère le profil actuellement attribué au modérateur

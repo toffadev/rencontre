@@ -291,10 +291,13 @@ messagesForDate, date
                                                             " />
                                                     </div>
 
-                                                    <span v-if="message.pending"
-                                                        class="ml-2 inline-block text-xs">⌛</span>
-                                                    <span v-if="message.failed"
-                                                        class="ml-2 inline-block text-xs">❌</span>
+                                                    <!-- Indicateur de statut du message -->
+                                                    <div class="message-status">
+                                                        <span v-if="message.pending" class="message-pending"></span>
+                                                        <span v-if="message.failed" class="message-failed">
+                                                            <i class="fas fa-exclamation-circle"></i>
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <div class="flex items-center mt-1 text-xs text-gray-500" :class="{
                                                         'justify-end':
@@ -496,7 +499,7 @@ const selectedProfileForActions = ref(null);
 const connectionReady = ref(false);
 
 const isProfilesLoaded = ref(false);
-const isConversationsLoaded = ref(false);
+//const isConversationsLoaded = ref(false);
 
 let typingTimeout;
 
@@ -763,10 +766,13 @@ onMounted(async () => {
     }, 100);
 
     // Charger les conversations avec un délai pour permettre au reste de l'interface de se rendre
-    setTimeout(() => {
+    /* setTimeout(() => {
         isConversationsLoaded.value = true;
-    }, 500);
+    }, 500); */
 });
+
+// Ajoutez ce computed pour suivre l'état de chargement
+const isConversationsLoaded = computed(() => !clientStore.loadingConversations);
 
 // Sélectionner un profil et charger les messages
 async function selectProfile(profile) {
@@ -1240,6 +1246,48 @@ watch(
 /* Style pour le fond de la page principale */
 :deep(body) {
     background: linear-gradient(135deg, #111827, #1f2937);
+}
+
+/* Styles pour les indicateurs de statut des messages */
+.message-in, .message-out {
+    position: relative;
+}
+
+.message-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    position: absolute;
+    bottom: 2px;
+    right: 6px;
+}
+
+.message-pending {
+    width: 10px;
+    height: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+}
+
+.message-out .message-pending {
+    border-color: rgba(255, 255, 255, 0.9);
+    border-top-color: transparent;
+}
+
+.message-failed {
+    color: #ef4444;
+    font-size: 12px;
+}
+
+.message-out .message-failed {
+    color: #fecaca;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
 }
 </style>
                                                        

@@ -25,6 +25,7 @@ export const useClientStore = defineStore('client', {
         lastActivity: Date.now(),
         activityInterval: null,
         heartbeatInterval: null,
+        loadingConversations: false,
     }),
 
     getters: {
@@ -185,48 +186,55 @@ export const useClientStore = defineStore('client', {
         },
         
         /**
-         * Charge toutes les conversations actives
-         */
-        async loadAllConversations() {
-            try {
-                console.log('🔍 Chargement des conversations actives...');
-                const response = await axios.get("/active-conversations");
-                
-                if (response.data && response.data.conversations) {
-                    // Initialiser les états de conversation d'abord
-                    for (const conv of response.data.conversations) {
-                        this.initConversationState(conv.profile_id, {
-                            unreadCount: conv.unread_count || 0,
-                            lastReadMessageId: conv.last_read_message_id,
-                            isOpen: false,
-                            hasBeenOpened: conv.has_been_opened || false,
-                            awaitingReply: conv.awaiting_reply || false
-                        });
-                    }
-                    
-                    // Charger les messages des conversations prioritaires (les 3 premières)
-                    const priorityConversations = response.data.conversations.slice(0, 3);
-                    await Promise.all(
-                        priorityConversations.map(conv => this.loadMessages(conv.profile_id))
-                    );
-                    
-                    // Charger les messages des autres conversations en arrière-plan
-                    if (response.data.conversations.length > 3) {
-                        setTimeout(() => {
-                            const remainingConversations = response.data.conversations.slice(3);
-                            for (const conv of remainingConversations) {
-                                this.loadMessages(conv.profile_id);
-                            }
-                        }, 2000); // Délai de 2 secondes pour permettre à l'interface de se stabiliser
-                    }
-                    
-                    console.log(`✅ ${response.data.conversations.length} conversations chargées`);
-                }
-            } catch (error) {
-                console.error('❌ Erreur lors du chargement des conversations:', error);
-                this.errors.conversations = 'Erreur lors du chargement des conversations';
+ * Charge toutes les conversations actives
+ */
+async loadAllConversations() {
+    try {
+        this.loadingConversations = true;
+        console.log('🔍 Chargement des conversations actives...');
+
+        const response = await axios.get("/active-conversations");
+
+        if (response.data && response.data.conversations) {
+            // Initialiser les états de conversation d'abord
+            for (const conv of response.data.conversations) {
+                this.initConversationState(conv.profile_id, {
+                    unreadCount: conv.unread_count || 0,
+                    lastReadMessageId: conv.last_read_message_id,
+                    isOpen: false,
+                    hasBeenOpened: conv.has_been_opened || false,
+                    awaitingReply: conv.awaiting_reply || false
+                });
             }
-        },
+
+            // Charger les messages des conversations prioritaires (les 3 premières)
+            const priorityConversations = response.data.conversations.slice(0, 3);
+            await Promise.all(
+                priorityConversations.map(conv => this.loadMessages(conv.profile_id))
+            );
+
+            // Charger les messages des autres conversations en arrière-plan
+            if (response.data.conversations.length > 3) {
+                setTimeout(() => {
+                    const remainingConversations = response.data.conversations.slice(3);
+                    for (const conv of remainingConversations) {
+                        this.loadMessages(conv.profile_id);
+                    }
+                }, 2000); // Délai de 2 secondes pour permettre à l'interface de se stabiliser
+            }
+
+            console.log(`✅ ${response.data.conversations.length} conversations chargées`);
+        }
+        
+        // CORRECTION: Mettre loadingConversations à false à la fin du chargement
+        this.loadingConversations = false;
+
+    } catch (error) {
+        console.error('❌ Erreur lors du chargement des conversations:', error);
+        this.errors.conversations = 'Erreur lors du chargement des conversations';
+        this.loadingConversations = false;
+    }
+},
         
         /**
          * Charge les messages d'un profil spécifique

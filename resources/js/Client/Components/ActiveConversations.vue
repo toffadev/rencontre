@@ -53,8 +53,14 @@
             </div>
         </div>
 
+        <!-- Indicateur de chargement -->
+        <div v-if="loadingConversations" class="flex flex-col items-center justify-center py-8">
+            <div class="w-12 h-12 border-4 border-pink-200 border-t-pink-500 rounded-full animate-spin mb-3"></div>
+            <p class="text-pink-500 font-medium">Chargement de vos conversations...</p>
+        </div>
+
         <!-- Liste des conversations -->
-        <div class="space-y-2">
+        <div v-else class="space-y-2">
             <div v-for="profile in sortedConversations" :key="profile.id"
                 class="conversation-card transition duration-300 cursor-pointer" @click="$emit('select', profile)"
                 :class="{
@@ -132,6 +138,10 @@
 
 <script setup>
 import { computed } from 'vue';
+import { useClientStore } from '@/stores/clientStore';
+
+const clientStore = useClientStore();
+const loadingConversations = computed(() => clientStore.loadingConversations);
 
 const props = defineProps({
     profiles: {
