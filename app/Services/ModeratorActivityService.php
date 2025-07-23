@@ -9,34 +9,34 @@ use App\Events\ModeratorActivityEvent;
 use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
 use App\Services\ModeratorAssignmentService;
+use App\Services\TimeoutManagementService;
+use App\Events\ModeratorInactivityDetected;
 
 /**
  * Service pour gérer les activités des modérateurs dans l'application.
  * 
+ * Nouvelle version réactive basée sur des événements plutôt que des vérifications périodiques.
+ * 
  * Ce service permet de :
- * - enregistrer l'activité de frappe (typing) des modérateurs,
- * - détecter les modérateurs inactifs afin de pouvoir réassigner leurs profils,
- * - calculer la charge de travail de chaque modérateur,
- * - surveiller les temps de réponse pour détecter d'éventuels retards,
- * - identifier si une majorité de modérateurs sont surchargés.
- * 
- * Il utilise le service `ModeratorAssignmentService` pour gérer les réassignations.
- * 
- * L'objectif global est d'assurer une gestion efficace des modérateurs pour que
- * les clients reçoivent des réponses rapides et qu'aucun profil ne reste sans modérateur actif.
+ * - Enregistrer les activités des modérateurs (frappe, messages envoyés, etc.)
+ * - Réinitialiser les timers d'inactivité via le TimeoutManagementService
+ * - Coordonner les événements d'activité avec le frontend
  */
 class ModeratorActivityService
 {
     protected $assignmentService;
-    private static $lastGlobalCheck = null;
+    protected $timeoutService;
 
-    public function __construct(?ModeratorAssignmentService $assignmentService = null)
-    {
-        $this->assignmentService = $assignmentService ?? new ModeratorAssignmentService();
+    public function __construct(
+        ModeratorAssignmentService $assignmentService,
+        TimeoutManagementService $timeoutService
+    ) {
+        $this->assignmentService = $assignmentService;
+        $this->timeoutService = $timeoutService;
     }
 
     /**
-     * Record typing activity with inactivity monitoring
+     * Enregistre une activité de frappe et réinitialise le timer d'inactivité
      */
     public function recordTypingActivity($userId, $profileId, $clientId)
     {
@@ -46,376 +46,122 @@ class ModeratorActivityService
             ->first();
 
         if ($assignment) {
-            // Vérifier si la dernière activité de frappe est récente (moins de 3 secondes)
-            $shouldEmitEvent = true;
-            if ($assignment->last_typing) {
-                $timeSinceLastTyping = $assignment->last_typing->diffInSeconds(now());
-                // Ne pas émettre d'événement si moins de 3 secondes se sont écoulées depuis le dernier
-                if ($timeSinceLastTyping < 3) {
-                    $shouldEmitEvent = false;
-                }
-            }
+            // Debounce pour éviter des événements trop fréquents
+            $shouldEmitEvent = !$assignment->last_typing ||
+                $assignment->last_typing->diffInSeconds(now()) >= 3;
 
             // Mettre à jour les horodatages
             $assignment->last_typing = now();
-            $assignment->last_activity = now(); // ✅ CORRECTION : Mise à jour de l'activité globale
+            $assignment->last_activity = now();
             $assignment->last_activity_check = now();
             $assignment->save();
 
-            // N'émettre l'événement que si nécessaire (debounce)
+            // Réinitialiser le timer d'inactivité
+            $this->timeoutService->resetTimer($userId, $profileId, $clientId);
+
+            // Émettre l'événement si nécessaire
             if ($shouldEmitEvent) {
                 event(new ModeratorActivityEvent($userId, $profileId, $clientId, 'typing'));
-
-                // Vérifier l'inactivité des autres modérateurs
-                $this->detectInactiveModerators();
             }
         }
     }
 
     /**
-     * Détecter les modérateurs inactifs :
-     * - Aucun message envoyé depuis plus de 1 minute
-     * - Et pas en train d'écrire
+     * Méthode générique pour enregistrer tout type d'activité
      */
-    /* public function detectInactiveModerators($thresholdMinutes = 1)
+    public function recordActivity($userId, $profileId, $clientId, $activityType)
     {
-        // Debounce global pour éviter les vérifications trop fréquentes
-        if (self::$lastGlobalCheck && self::$lastGlobalCheck->diffInSeconds(now()) < 10) {
-            return false;
-        }
+        $assignment = ModeratorProfileAssignment::where('user_id', $userId)
+            ->where('profile_id', $profileId)
+            ->where('is_active', true)
+            ->first();
 
-        self::$lastGlobalCheck = now();
-
-        $inactiveTime = now()->subMinutes($thresholdMinutes);
-
-        // Détecter les modérateurs réellement inactifs
-        $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
-            ->where(function ($query) use ($inactiveTime) {
-                // CORRECTION: Gérer le cas où last_message_sent est NULL (nouveau modérateur)
-                $query->where('last_message_sent', '<', $inactiveTime)
-                    ->orWhereNull('last_message_sent'); // ✅ Ajout pour nouveaux modérateurs
-            })->where(function ($query) use ($inactiveTime) {
-                $query->where(function ($q) use ($inactiveTime) {
-                    // Cas 1: A déjà envoyé des messages ET dernier message > 1 min
-                    $q->where('last_message_sent', '<', $inactiveTime);
-                })->orWhere(function ($q) use ($inactiveTime) {
-                    // Cas 2: Jamais envoyé de message ET assigné depuis > 1 min
-                    $q->whereNull('last_message_sent')
-                        ->where('assigned_at', '<', $inactiveTime);
-                });
-            })
-            ->where(function ($q) use ($inactiveTime) {
-                // Logique originale conservée : pas de frappe en cours
-                $q->whereNull('last_typing')
-                    ->orWhere('last_typing', '<', $inactiveTime);
-            })
-            // Vérifier aussi le statut en ligne du modérateur
-            ->whereHas('user', function ($query) {
-                $query->where('is_online', true)
-                    ->where('status', 'active');
-            })
-            ->get();
-
-        Log::info("Recherche d'assignations inactives", [
-            'threshold_minutes' => $thresholdMinutes,
-            'inactive_count' => $inactiveAssignments->count(),
-            'timestamp' => now()->toDateTimeString()
-        ]);
-
-        $processedCount = 0;
-
-        foreach ($inactiveAssignments as $assignment) {
-            // Vérifier s'il y a des messages en attente avant de décider
-            $hasUnreadMessages = $this->hasUnreadMessages($assignment->profile_id);
-
-            if ($hasUnreadMessages || $this->shouldForceRotation()) {
-                // 🔁 Réattribution pour cause d'inactivité
-                $this->triggerReassignmentForInactivity($assignment->user_id);
-                $processedCount++;
+        if ($assignment) {
+            // Mettre à jour les horodatages selon le type d'activité
+            switch ($activityType) {
+                case 'message_sent':
+                    $assignment->last_message_sent = now();
+                    break;
+                case 'typing':
+                    $assignment->last_typing = now();
+                    break;
+                case 'view':
+                    $assignment->last_view = now();
+                    break;
             }
 
-            // Marquer le contrôle comme fait
+            // Mettre à jour l'activité globale
+            $assignment->last_activity = now();
             $assignment->last_activity_check = now();
             $assignment->save();
+
+            // Réinitialiser le timer d'inactivité
+            $this->timeoutService->resetTimer($userId, $profileId, $clientId);
+
+            // Émettre l'événement
+            event(new ModeratorActivityEvent($userId, $profileId, $clientId, $activityType));
+
+            return true;
         }
 
-        return $processedCount;
-    } */
-
-    public function detectInactiveModerators($thresholdMinutes = 1)
-    {
-        // Debounce global pour éviter les vérifications trop fréquentes
-        if (self::$lastGlobalCheck && self::$lastGlobalCheck->diffInSeconds(now()) < 10) {
-            return 0;
-        }
-
-        self::$lastGlobalCheck = now();
-
-        $inactiveTime = now()->subMinutes($thresholdMinutes);
-
-        // Règle métier exacte : Un modérateur est inactif SI ET SEULEMENT SI :
-        // 1. Aucun message envoyé depuis 1 minute (ou jamais envoyé depuis plus d'1 minute)
-        // 2. ET aucune saisie en cours (pas de frappe récente)
-        $inactiveAssignments = ModeratorProfileAssignment::where('is_active', true)
-            ->where(function ($query) use ($inactiveTime) {
-                // CONDITION 1: Inactivité des messages
-                $query->where(function ($q) use ($inactiveTime) {
-                    // Cas A: A déjà envoyé des messages ET dernier message > 1 min
-                    $q->where('last_message_sent', '<', $inactiveTime)
-                        // Cas B: Jamais envoyé de message ET assigné depuis > 1 min
-                        ->orWhere(function ($subQ) use ($inactiveTime) {
-                            $subQ->whereNull('last_message_sent')
-                                ->where('assigned_at', '<', $inactiveTime);
-                        });
-                })
-                    // CONDITION 2: ET aucune frappe en cours
-                    ->where(function ($q) use ($inactiveTime) {
-                        $q->whereNull('last_typing')
-                            ->orWhere('last_typing', '<', $inactiveTime);
-                    });
-            })
-            // Vérifier aussi le statut en ligne du modérateur
-            ->whereHas('user', function ($query) {
-                $query->where('is_online', true)
-                    ->where('status', 'active');
-            })
-            ->get();
-
-        Log::info("🔍 Recherche d'assignations inactives", [
-            'threshold_minutes' => $thresholdMinutes,
-            'inactive_count' => $inactiveAssignments->count(),
-            'timestamp' => now()->toDateTimeString(),
-            'conditions' => [
-                'message_threshold' => $inactiveTime->toDateTimeString(),
-                'typing_threshold' => $inactiveTime->toDateTimeString()
-            ]
-        ]);
-
-        $processedCount = 0;
-        $processedModerators = []; // Tracker les modérateurs déjà traités
-
-        foreach ($inactiveAssignments as $assignment) {
-            // Éviter de traiter le même modérateur plusieurs fois
-            if (in_array($assignment->user_id, $processedModerators)) {
-                continue;
-            }
-
-            // Debug: Vérifier pourquoi ce modérateur est considéré inactif
-            Log::debug("Modérateur potentiellement inactif", [
-                'user_id' => $assignment->user_id,
-                'profile_id' => $assignment->profile_id,
-                'last_message_sent' => $assignment->last_message_sent,
-                'last_typing' => $assignment->last_typing,
-                'assigned_at' => $assignment->assigned_at,
-                'is_typing_active' => $assignment->last_typing && $assignment->last_typing->gt($inactiveTime),
-                'is_message_active' => $assignment->last_message_sent && $assignment->last_message_sent->gt($inactiveTime)
-            ]);
-
-            // Vérifier s'il y a des messages en attente avant de décider
-            $hasUnreadMessages = $this->hasUnreadMessages($assignment->profile_id);
-
-            if ($hasUnreadMessages || $this->shouldForceRotation()) {
-                // Réattribution pour cause d'inactivité
-                $reassigned = $this->triggerReassignmentForInactivity($assignment->user_id);
-                if ($reassigned) {
-                    $processedModerators[] = $assignment->user_id;
-                    $processedCount++;
-                }
-            }
-
-            // Marquer le contrôle comme fait
-            $assignment->last_activity_check = now();
-            $assignment->save();
-        }
-
-        Log::info("✅ Détection d'inactivité terminée", [
-            'processed_count' => $processedCount,
-            'processed_moderators' => $processedModerators
-        ]);
-
-        return $processedCount;
+        return false;
     }
 
-
     /**
-     * ✅ NOUVELLE MÉTHODE : Vérifier s'il y a des messages non lus pour un profil
+     * Réinitialise explicitement un timer d'inactivité
      */
-    private function hasUnreadMessages($profileId)
+    public function resetInactivityTimer($userId, $profileId, $clientId = null)
     {
-        return Message::where('profile_id', $profileId)
-            ->where('is_from_client', true)
-            ->whereNull('read_at')
+        $exists = ModeratorProfileAssignment::where('user_id', $userId)
+            ->where('profile_id', $profileId)
+            ->where('is_active', true)
             ->exists();
+
+        if ($exists) {
+            return $this->timeoutService->resetTimer($userId, $profileId, $clientId);
+        }
+
+        return false;
     }
 
     /**
-     * ✅ NOUVELLE MÉTHODE : Détermine si la rotation doit être forcée
+     * Demander un délai avant le changement de profil
      */
-    private function shouldForceRotation()
+    public function requestDelay($moderatorId, $profileId, $minutes = 5)
     {
-        $onlineModerators = User::where('type', 'moderateur')
-            ->where('is_online', true)
-            ->where('status', 'active')
-            ->count();
+        try {
+            $assignment = ModeratorProfileAssignment::where('user_id', $moderatorId)
+                ->where('profile_id', $profileId)
+                ->where('is_active', true)
+                ->first();
 
-        $profilesWithMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->distinct('profile_id')
-            ->count();
-
-        // Forcer la rotation si plus de profils en attente que de modérateurs
-        return $profilesWithMessages > $onlineModerators;
-    }
-
-    /**
-     * ✅ CORRECTION : Déclencher la réattribution pour inactivité
-     */
-    /* public function triggerReassignmentForInactivity($moderatorId)
-    {
-        // ✅ CORRECTION : Ne plus vérifier la surcharge globale, prioriser les messages en attente
-        $profilesWithMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->distinct('profile_id')
-            ->count();
-
-        $availableModerators = User::where('type', 'moderateur')
-            ->where('is_online', true)
-            ->where('status', 'active')
-            ->where('id', '!=', $moderatorId)
-            ->count();
-
-        // Si pas assez de modérateurs disponibles et pas de messages urgents, reporter
-        if ($availableModerators == 0 && $profilesWithMessages == 0) {
-            Log::info("Réattribution reportée - aucun modérateur disponible et pas de messages urgents", [
-                'moderator_id' => $moderatorId
-            ]);
-            return false;
-        }
-
-        // Récupérer les assignations actives du modérateur
-        $assignments = ModeratorProfileAssignment::where('user_id', $moderatorId)
-            ->where('is_active', true)
-            ->get();
-
-        $reassignedAny = false;
-
-        foreach ($assignments as $assignment) {
-            // ✅ CORRECTION : Vérifier si ce profil a des messages en attente
-            $hasUnreadMessages = $this->hasUnreadMessages($assignment->profile_id);
-
-            if (!$hasUnreadMessages && !$this->shouldForceRotation()) {
-                Log::info("Réattribution ignorée - pas de messages en attente", [
-                    'moderator_id' => $moderatorId,
-                    'profile_id' => $assignment->profile_id
-                ]);
-                continue;
+            if (!$assignment) {
+                return false;
             }
 
-            // Déclencher la logique de réattribution pour inactivité (1 minute)
-            $reassignedCount = $this->assignmentService->reassignInactiveProfiles(1);
-
-            if ($reassignedCount > 0) {
-                $reassignedAny = true;
-                Log::info("Réattribution déclenchée pour inactivité", [
-                    'moderator_id' => $moderatorId,
-                    'profile_id' => $assignment->profile_id,
-                    'reassigned' => $reassignedCount
-                ]);
-
-                // Émettre un événement pour informer le frontend de la réattribution
-                $newAssignment = ModeratorProfileAssignment::where('profile_id', $assignment->profile_id)
-                    ->where('is_active', true)
-                    ->first();
-
-                if ($newAssignment && $newAssignment->user_id != $moderatorId) {
-                    event(new \App\Events\ProfileAssigned(
-                        User::find($newAssignment->user_id),
-                        $assignment->profile_id,
-                        $newAssignment->id,
-                        $moderatorId,
-                        'inactivity'
-                    ));
-                }
-            }
-        }
-
-        return $reassignedAny;
-    } */
-
-    public function triggerReassignmentForInactivity($moderatorId)
-    {
-        // Vérifier la disponibilité des ressources
-        $profilesWithMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->distinct('profile_id')
-            ->count();
-
-        $availableModerators = User::where('type', 'moderateur')
-            ->where('is_online', true)
-            ->where('status', 'active')
-            ->where('id', '!=', $moderatorId)
-            ->count();
-
-        // Si pas assez de modérateurs disponibles et pas de messages urgents, reporter
-        if ($availableModerators == 0 && $profilesWithMessages == 0) {
-            Log::info("Réattribution reportée - aucun modérateur disponible et pas de messages urgents", [
-                'moderator_id' => $moderatorId
-            ]);
-            return false;
-        }
-
-        // Récupérer les assignations actives du modérateur
-        $assignments = ModeratorProfileAssignment::where('user_id', $moderatorId)
-            ->where('is_active', true)
-            ->get();
-
-        $reassignedAny = false;
-
-        foreach ($assignments as $assignment) {
-            // Vérifier si ce profil a des messages en attente
-            $hasUnreadMessages = $this->hasUnreadMessages($assignment->profile_id);
-
-            if (!$hasUnreadMessages && !$this->shouldForceRotation()) {
-                Log::info("Réattribution ignorée - pas de messages en attente", [
-                    'moderator_id' => $moderatorId,
-                    'profile_id' => $assignment->profile_id
-                ]);
-                continue;
-            }
-
-            // Désactiver l'assignation actuelle
-            $assignment->is_active = false;
+            // Mettre à jour la dernière activité
+            $assignment->last_activity = now();
+            $assignment->last_activity_check = now();
             $assignment->save();
 
-            // Déclencher la logique de réattribution via le service
-            $reassignedCount = $this->assignmentService->reassignInactiveProfiles(1);
+            // Prolonger le timer d'inactivité
+            $this->timeoutService->extendTimeout($moderatorId, $profileId, $minutes);
 
-            if ($reassignedCount > 0) {
-                $reassignedAny = true;
-                Log::info("Réattribution déclenchée pour inactivité", [
-                    'moderator_id' => $moderatorId,
-                    'profile_id' => $assignment->profile_id,
-                    'reassigned_count' => $reassignedCount
-                ]);
+            Log::info("Délai demandé pour le changement de profil", [
+                'moderator_id' => $moderatorId,
+                'profile_id' => $profileId,
+                'minutes' => $minutes
+            ]);
 
-                // Émettre un événement pour informer le frontend de la réattribution
-                $newAssignment = ModeratorProfileAssignment::where('profile_id', $assignment->profile_id)
-                    ->where('is_active', true)
-                    ->first();
-
-                if ($newAssignment && $newAssignment->user_id != $moderatorId) {
-                    event(new \App\Events\ProfileAssigned(
-                        User::find($newAssignment->user_id),
-                        $assignment->profile_id,
-                        $newAssignment->id,
-                        $moderatorId,
-                        'inactivity'
-                    ));
-                }
-            }
+            return true;
+        } catch (\Exception $e) {
+            Log::error("Erreur lors de la demande de délai", [
+                'error' => $e->getMessage(),
+                'moderator_id' => $moderatorId,
+                'profile_id' => $profileId
+            ]);
+            return false;
         }
-
-        return $reassignedAny;
     }
 
     /**
@@ -436,9 +182,7 @@ class ModeratorActivityService
             $activeProfiles++;
         }
 
-        // Calculer le score de charge: 100 - (conversations actives × 20)
-        $score = 100 - ($totalLoad * 20);
-        $score = max(0, min(100, $score));
+        $score = max(0, min(100, 100 - ($totalLoad * 20)));
 
         return [
             'score' => $score,
@@ -449,38 +193,17 @@ class ModeratorActivityService
     }
 
     /**
-     * Surveiller les temps de réponse par client
-     */
-    public function monitorResponseTimes($assignment)
-    {
-        $conversations = $assignment->conversation_ids ?? [];
-        if (empty($conversations)) {
-            return true; // Pas de conversations à surveiller
-        }
-
-        $profileId = $assignment->profile_id;
-        $lastResponseTime = $assignment->last_message_sent;
-
-        if (!$lastResponseTime || $lastResponseTime->diffInMinutes(now()) > 5) {
-            // Pas de réponse depuis plus de 5 minutes, signaler possible inactivité
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * ✅ CORRECTION : Identifier les modérateurs surchargés de manière plus intelligente
+     * Identifier les modérateurs surchargés
      */
     public function identifyOverloadedModerators()
     {
         $moderators = User::where('type', 'moderateur')
             ->where('status', 'active')
-            ->where('is_online', true) // ✅ CORRECTION : Seulement les modérateurs en ligne
+            ->where('is_online', true)
             ->get();
 
         if ($moderators->isEmpty()) {
-            return false; // Pas de modérateurs en ligne
+            return false;
         }
 
         $overloadedCount = 0;
@@ -495,48 +218,109 @@ class ModeratorActivityService
             }
         }
 
-        // ✅ CORRECTION : Considérer la charge moyenne aussi
         $averageLoad = $totalWorkload / $moderators->count();
-        $highAverageLoad = $averageLoad > 3; // Plus de 3 conversations par modérateur en moyenne
+        $highAverageLoad = $averageLoad > 3;
 
-        // Si plus de 70% des modérateurs sont surchargés ET charge moyenne élevée
         return ($overloadedCount / $moderators->count()) > 0.7 && $highAverageLoad;
     }
 
-    /**
-     * Demander un délai avant le changement de profil
-     */
-    public function requestDelay($moderatorId, $profileId, $minutes = 5)
+    public function checkInactivity()
     {
-        try {
-            $assignment = ModeratorProfileAssignment::where('user_id', $moderatorId)
-                ->where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->first();
+        Log::info("Vérification de l'inactivité des modérateurs");
 
-            if (!$assignment) {
-                return false;
+        $thresholdMinutes = config('moderator.inactivity_threshold', 1);
+        $threshold = now()->subMinutes($thresholdMinutes);
+
+        // Modification ici : utilisation de 'activeAssignments' au lieu de 'assignments'
+        $moderators = User::with('activeAssignments') // Utilise la relation existante
+            ->where('type', 'moderateur')
+            ->where('status', 'active')
+            ->where('is_online', true)
+            ->get();
+
+        Log::info("Modérateurs actifs trouvés", ['count' => $moderators->count()]);
+
+        foreach ($moderators as $moderator) {
+            // Modification ici : utilisation directe de la relation pré-chargée
+            $activeAssignments = $moderator->activeAssignments;
+
+            if ($activeAssignments->isEmpty()) {
+                continue;
             }
 
-            // Mettre à jour la dernière activité pour prolonger l'assignation
-            $assignment->last_activity = now();
-            $assignment->last_activity_check = now();
-            $assignment->save();
+            $lastActivity = $this->getLastActivity($moderator->id);
 
-            Log::info("Délai demandé pour le changement de profil", [
-                'moderator_id' => $moderatorId,
-                'profile_id' => $profileId,
-                'minutes' => $minutes
+            Log::info("Dernière activité du modérateur", [
+                'moderator_id' => $moderator->id,
+                'moderator_name' => $moderator->name,
+                'last_activity' => $lastActivity ? $lastActivity->format('Y-m-d H:i:s') : 'Jamais',
+                'threshold' => $threshold->format('Y-m-d H:i:s')
             ]);
 
-            return true;
-        } catch (\Exception $e) {
-            Log::error("Erreur lors de la demande de délai", [
-                'error' => $e->getMessage(),
-                'moderator_id' => $moderatorId,
-                'profile_id' => $profileId
-            ]);
-            return false;
+            if ($lastActivity && $lastActivity < $threshold) {
+                $inactivityDuration = $lastActivity->diffInMinutes(now());
+
+                Log::info("Modérateur inactif détecté", [
+                    'moderator_id' => $moderator->id,
+                    'moderator_name' => $moderator->name,
+                    'inactivity_duration' => $inactivityDuration,
+                    'threshold_minutes' => $thresholdMinutes
+                ]);
+
+                try {
+                    foreach ($activeAssignments as $assignment) {
+                        event(new ModeratorInactivityDetected(
+                            $moderator->id,
+                            $assignment->profile_id,
+                            $assignment->client_id,
+                            $assignment->id,
+                            'inactivity'
+                        ));
+                    }
+
+                    Log::info("Événement ModeratorInactivityDetected émis avec succès", [
+                        'moderator_id' => $moderator->id,
+                        'assignments_count' => $activeAssignments->count()
+                    ]);
+                } catch (\Exception $e) {
+                    Log::error("Erreur lors de l'émission de ModeratorInactivityDetected", [
+                        'error' => $e->getMessage(),
+                        'moderator_id' => $moderator->id
+                    ]);
+                }
+            }
         }
+        Log::info("Vérification de l'inactivité des modérateurs - Fin");
+    }
+
+    private function getLastActivity($moderatorId)
+    {
+        // Vérifier la dernière activité (message envoyé ou saisie)
+        $lastMessage = Message::where('moderator_id', $moderatorId)
+            ->where('is_from_client', false)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        // Récupérer la dernière saisie depuis les assignations
+        $lastTypingAssignment = ModeratorProfileAssignment::where('user_id', $moderatorId)
+            ->whereNotNull('last_typing')
+            ->orderBy('last_typing', 'desc')
+            ->first();
+
+        $lastTyping = $lastTypingAssignment ? $lastTypingAssignment->last_typing : null;
+
+        // Déterminer la dernière activité entre message et saisie
+        $lastMessageTime = $lastMessage ? $lastMessage->created_at : null;
+        $lastTypingTime = $lastTyping;
+
+        if ($lastMessageTime && $lastTypingTime) {
+            return $lastMessageTime->gt($lastTypingTime) ? $lastMessageTime : $lastTypingTime;
+        } else if ($lastMessageTime) {
+            return $lastMessageTime;
+        } else if ($lastTypingTime) {
+            return $lastTypingTime;
+        }
+
+        return null; // Aucune activité trouvée
     }
 }

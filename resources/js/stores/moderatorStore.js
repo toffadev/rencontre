@@ -1232,70 +1232,120 @@ export const useModeratorStore = defineStore('moderator', {
          * Enregistre l'activité de frappe
          */
         async recordTypingActivity(profileId, clientId) {
-            // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
-            const typingKey = `${profileId}-${clientId}`;
-            
-            // Si le statut existe déjà et qu'il est récent (moins de 2 secondes), ne rien faire
-            if (this.typingStatus[typingKey] && 
-                this.typingStatus[typingKey].timestamp && 
-                (new Date().getTime() - new Date(this.typingStatus[typingKey].timestamp).getTime() < 2000)) {
-                return;
+    // Vérifier si une requête est déjà en cours pour éviter les requêtes multiples
+    const typingKey = `${profileId}-${clientId}`;
+    
+    // Debounce: Si le statut existe déjà et qu'il est récent (moins de 3 secondes), ne rien faire
+    if (this.typingStatus[typingKey] && 
+        this.typingStatus[typingKey].timestamp && 
+        (Date.now() - new Date(this.typingStatus[typingKey].timestamp).getTime() < 3000)) {
+        return Promise.resolve(); // ✅ Cohérent avec async
+    }
+    
+    try {
+        // Mettre à jour l'état local avant d'envoyer la requête
+        this.typingStatus[typingKey] = {
+            isTyping: true,
+            timestamp: new Date(),
+        };
+        
+        // Envoyer la requête au serveur avec le type d'activité 'typing'
+        // MODIFICATION: Utiliser le nouvel endpoint optimisé pour la réactivité
+        await axios.post('/moderateur/update-activity', {
+            profile_id: profileId,
+            client_id: clientId,
+            activity_type: 'typing',
+            reset_timeout: true // Nouveau paramètre pour signaler explicitement de réinitialiser le timer
+        });
+        
+        // Effacer le statut après 5 secondes
+        setTimeout(() => {
+            if (this.typingStatus[typingKey]) {
+                this.typingStatus[typingKey].isTyping = false;
             }
-            
-            try {
-                // Mettre à jour l'état local avant d'envoyer la requête
-                this.typingStatus[typingKey] = {
-                    isTyping: true,
-                    timestamp: new Date(),
-                };
-                
-                // Envoyer la requête au serveur avec le type d'activité 'typing'
-                await axios.post('/moderateur/update-activity', {
-                    profile_id: profileId,
-                    client_id: clientId,
-                    activity_type: 'typing'
-                });
-                
-                // Effacer le statut après 5 secondes
-                setTimeout(() => {
-                    if (this.typingStatus[typingKey]) {
-                        this.typingStatus[typingKey].isTyping = false;
-                    }
-                }, 5000);
-            } catch (error) {
-                console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
-            }
-        },
+        }, 5000);
+    } catch (error) {
+        console.error('Erreur lors de l\'enregistrement de l\'activité:', error);
+    }
+},
         
 
         /**
          * Met à jour l'activité de dernière réponse pour un profil et un client
          */
-        updateLastMessageActivity(profileId, clientId) {
-            try {
-                // Mettre à jour l'état local pour indiquer que le modérateur a répondu
-                const key = `${profileId}-${clientId}`;
-                this.currentConversationActivity = {
-                    profileId,
-                    clientId,
-                    lastResponse: new Date(),
-                };
-                
-                // Vous pouvez également envoyer cette information au serveur si nécessaire
-                axios.post('/moderateur/update-activity', {
-                    profile_id: profileId,
-                    client_id: clientId,
-                    activity_type: 'message_sent'
-                }).catch(error => {
-                    console.warn('Erreur lors de la mise à jour de l\'activité:', error);
-                });
-                
-                return true;
-            } catch (error) {
-                console.error('Erreur lors de la mise à jour de l\'activité de message:', error);
-                return false;
-            }
+       updateLastMessageActivity(profileId, clientId) {
+    try {
+        // Mettre à jour l'état local pour indiquer que le modérateur a répondu
+        const key = `${profileId}-${clientId}`;
+        this.currentConversationActivity = {
+            profileId,
+            clientId,
+            lastResponse: new Date(),
+        };
+        
+        // MODIFICATION: Utiliser le nouvel endpoint avec le paramètre reset_timeout
+        axios.post('/moderateur/update-activity', {
+            profile_id: profileId,
+            client_id: clientId,
+            activity_type: 'message_sent',
+            reset_timeout: true // Signaler explicitement de réinitialiser le timer
+        }).catch(error => {
+            console.warn('Erreur lors de la mise à jour de l\'activité:', error);
+        });
+        
+        return true;
+    } catch (error) {
+        console.error('Erreur lors de la mise à jour de l\'activité de message:', error);
+        return false;
+    }
+},
+
+setupInactivityListeners() {
+    // Écouter les événements d'alerte d'inactivité
+    window.addEventListener('moderator-inactivity', (event) => {
+        const { remainingSeconds, profileId } = event.detail;
+        
+        // Afficher une alerte à l'utilisateur
+        this.showInactivityWarning(remainingSeconds, profileId);
+    });
+},
+
+showInactivityWarning(remainingSeconds, profileId) {
+    // Cette méthode pourrait déclencher une alerte UI
+    // ou une notification pour informer le modérateur
+    console.warn(`⚠️ Alerte d'inactivité: ${remainingSeconds} secondes restantes avant réattribution du profil ${profileId}`);
+    
+    // Déclencher un événement que les composants peuvent écouter pour afficher une UI
+    window.dispatchEvent(new CustomEvent('show-inactivity-warning', {
+        detail: {
+            remainingSeconds,
+            profileId
+        }
+    }));
+},
+
+subscribeToInactivityEvents() {
+    if (!this.moderatorId) return;
+    
+    // S'abonner au canal spécifique pour les alertes d'inactivité
+    webSocketManager.subscribeToPrivateChannel(`moderator.${this.moderatorId}.inactivity`, {
+        '.warning': (data) => {
+            this.showInactivityWarning(data.remaining_seconds, data.profile_id);
         },
+        '.timeout': (data) => {
+            // Gérer l'expiration du délai d'inactivité
+            console.warn(`⚠️ Timeout d'inactivité pour le profil ${data.profile_id}`);
+            
+            // Déclencher un événement pour informer l'UI
+            window.dispatchEvent(new CustomEvent('inactivity-timeout', {
+                detail: {
+                    profileId: data.profile_id,
+                    reason: data.reason
+                }
+            }));
+        }
+    });
+},
 
         /**
          * Demander un délai avant changement de profil

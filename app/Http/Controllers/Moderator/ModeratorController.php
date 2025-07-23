@@ -20,6 +20,7 @@ use App\Services\MessageAttachmentService;
 use Illuminate\Support\Facades\Storage;
 use App\Models\MessageAttachment;
 use App\Services\ModeratorActivityService;
+use App\Services\TimeoutManagementService;
 
 class ModeratorController extends Controller
 {
@@ -1222,7 +1223,8 @@ class ModeratorController extends Controller
     /**
      * Signale une activité de frappe
      */
-    /* public function recordTyping(Request $request)
+
+    public function recordTyping(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1230,16 +1232,18 @@ class ModeratorController extends Controller
         ]);
 
         $activityService = app(ModeratorActivityService::class);
-        $activityService->recordTypingActivity(
+        // MODIFICATION: Utiliser la nouvelle méthode qui gère les timeouts
+        $activityService->recordActivity(
             Auth::id(),
             $validated['profile_id'],
-            $validated['client_id']
+            $validated['client_id'],
+            'typing' // Spécifier le type d'activité
         );
 
         return response()->json(['status' => 'success']);
-    } */
+    }
 
-    public function recordTyping(Request $request)
+    /* public function recordTyping(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1255,7 +1259,7 @@ class ModeratorController extends Controller
 
         // Retourner immédiatement sans appeler d'autres services
         return response()->json(['status' => 'success']);
-    }
+    } */
 
     /**
      * Demande un délai avant changement de profil
@@ -1329,55 +1333,68 @@ class ModeratorController extends Controller
             ], 500);
         }
     }
-    /* public function isProfileShared($profileId)
-    {
-        try {
-            Log::info("[DEBUG] Vérification si le profil est partagé", [
-                'profile_id' => $profileId
-            ]);
-
-            $isShared = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->count() > 1;
-
-            $activeModeratorCount = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->count();
-
-            $activeModeratorIds = ModeratorProfileAssignment::where('profile_id', $profileId)
-                ->where('is_active', true)
-                ->pluck('user_id')
-                ->toArray();
-
-            Log::info("[DEBUG] Résultat de la vérification", [
-                'is_shared' => $isShared,
-                'active_moderator_count' => $activeModeratorCount,
-                'active_moderator_ids' => $activeModeratorIds
-            ]);
-
-            return response()->json([
-                'isShared' => $isShared,
-                'activeModeratorCount' => $activeModeratorCount,
-                'activeModeratorIds' => $activeModeratorIds
-            ]);
-        } catch (\Exception $e) {
-            Log::error("[DEBUG] Erreur lors de la vérification du partage de profil", [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
-            return response()->json([
-                'error' => 'Une erreur est survenue lors de la vérification du partage de profil'
-            ], 500);
-        }
-    } */
-
 
 
     /**
      * Met à jour l'activité du modérateur
      */
     public function updateActivity(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'client_id' => 'required|integer',
+            'activity_type' => 'required|string',
+            'reset_timeout' => 'boolean', // Nouveau paramètre optionnel
+        ]);
+
+        try {
+            $assignment = ModeratorProfileAssignment::where('user_id', Auth::id())
+                ->where('profile_id', $validated['profile_id'])
+                ->where('is_active', true)
+                ->first();
+
+            if ($assignment) {
+                // Mettre à jour les champs appropriés selon le type d'activité
+                if ($validated['activity_type'] === 'message_sent') {
+                    $assignment->last_message_sent = now();
+                } else if ($validated['activity_type'] === 'typing') {
+                    $assignment->last_typing = now();
+                }
+
+                // Toujours mettre à jour ces champs pour tout type d'activité
+                $assignment->last_activity_check = now();
+                $assignment->last_activity = now();
+                $assignment->save();
+
+                // MODIFICATION: Utiliser le service d'activité avec gestion réactive des timeouts
+                $activityService = app(ModeratorActivityService::class);
+
+                // Si reset_timeout est explicitement demandé, réinitialiser le timer d'inactivité
+                if ($request->input('reset_timeout', false)) {
+                    $activityService->resetInactivityTimer(
+                        Auth::id(),
+                        $validated['profile_id'],
+                        $validated['client_id']
+                    );
+                } else {
+                    // Sinon, enregistrer simplement l'activité
+                    $activityService->recordActivity(
+                        Auth::id(),
+                        $validated['profile_id'],
+                        $validated['client_id'],
+                        $validated['activity_type']
+                    );
+                }
+
+                return response()->json(['success' => true]);
+            }
+
+            return response()->json(['success' => false, 'message' => 'Aucune attribution trouvée']);
+        } catch (\Exception $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
+        }
+    }
+    /* public function updateActivity(Request $request)
     {
         $validated = $request->validate([
             'profile_id' => 'required|integer',
@@ -1420,6 +1437,37 @@ class ModeratorController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
+    } */
+
+    public function handleInactivityTimeout(Request $request)
+    {
+        $validated = $request->validate([
+            'profile_id' => 'required|integer',
+            'action' => 'required|in:extend,acknowledge',
+            'duration' => 'integer|min:1|max:5',
+        ]);
+
+        $timeoutService = app(TimeoutManagementService::class);
+
+        if ($validated['action'] === 'extend' && isset($validated['duration'])) {
+            // Prolonger le délai d'inactivité
+            $success = $timeoutService->extendTimeout(
+                Auth::id(),
+                $validated['profile_id'],
+                $validated['duration']
+            );
+        } else {
+            // Accusé de réception du timeout
+            $success = $timeoutService->acknowledgeTimeout(
+                Auth::id(),
+                $validated['profile_id']
+            );
+        }
+
+        return response()->json([
+            'success' => $success,
+            'message' => $success ? 'Action traitée avec succès' : 'Échec du traitement'
+        ]);
     }
 
     /**

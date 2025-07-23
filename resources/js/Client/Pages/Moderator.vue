@@ -997,6 +997,15 @@
                         @reported="handleReported" />
                 </Teleport>
             </div>
+            <InactivityWarning
+            v-if="currentAssignedProfile"
+            :profile-id="currentAssignedProfile.id"
+            :profile-name="currentAssignedProfile.name"
+            :initial-seconds="30"
+            @timeout-extended="handleTimeoutExtended"
+            @timeout-acknowledged="handleTimeoutAcknowledged"
+            @timeout-expired="handleTimeoutExpired"
+            />
         </MainLayout>
     </div>
 </template>
@@ -1014,6 +1023,7 @@ import ClientInfoDrawer from "@client/Components/ClientInfoDrawer.vue";
 import ProfileActionModal from "@client/Components/ProfileActionModal.vue";
 import ProfileReportModal from "@client/Components/ProfileReportModal.vue";
 import ProfilePhotoSelector from "@client/Components/ProfilePhotoSelector.vue";
+import InactivityWarning from "@client/Components/InactivityWarning.vue";
 import { toast } from 'vue3-toastify';
 import 'vue3-toastify/dist/index.css';
 
@@ -1084,6 +1094,21 @@ const isLoading = ref(false);
 const loadingMessage = ref("Chargement en cours");
 const connectionCheckInterval = ref(null);
 
+
+// Gérer les événements de timeout
+const handleTimeoutExtended = () => {
+  console.log('Délai d\'inactivité prolongé');
+  toast.success('Délai d\'inactivité prolongé de 2 minutes');
+};
+
+const handleTimeoutAcknowledged = () => {
+  console.log('Alerte d\'inactivité reconnue');
+};
+
+const handleTimeoutExpired = () => {
+  console.log('Délai d\'inactivité expiré, le profil va être réattribué');
+  toast.warning('Délai d\'inactivité expiré. Un nouveau profil va vous être attribué.');
+};
 
 // Fonction utilitaire pour afficher le loader global
 function showLoader(message = "Chargement en cours") {
@@ -1833,7 +1858,22 @@ onMounted(async () => {
 
         // 8. Surveiller l'inactivité et gérer les alertes
         const cleanupInactivityMonitoring = moderatorStore.setupInactivityMonitoring();
-        window.addEventListener('moderator-inactivity', startReassignmentAlert);
+       
+        window.addEventListener('moderator-inactivity', (event) => {
+            const { remainingSeconds, profileId } = event.detail;
+
+            // Déclencher une alerte dans l'interface
+            window.dispatchEvent(new CustomEvent('show-inactivity-warning', {
+                detail: {
+                    remainingSeconds,
+                    profileId
+                }
+            }));
+
+            // Démarrer l'alerte de réattribution
+            startReassignmentAlert();
+        });
+
         window.addEventListener('moderator-activity-resumed', () => {
             if (reassignmentInterval.value) {
                 clearInterval(reassignmentInterval.value);
@@ -1841,6 +1881,7 @@ onMounted(async () => {
             }
             showReassignmentAlert.value = false;
         });
+
 
         // 9. Gestion erreurs CSRF (si utile chez toi)
         setupCSRFErrorHandler?.();
@@ -1888,9 +1929,14 @@ onUnmounted(() => {
     // Supprimer l'écouteur d'événement beforeunload
     window.removeEventListener("beforeunload", updateOfflineStatus);
 
-    // NOUVEAU: Supprimer l'écouteur d'inactivité
-    window.removeEventListener('moderator-inactivity', startReassignmentAlert);
-    window.removeEventListener('moderator-activity-resumed', () => { });
+   // NOUVEAU: Supprimer les écouteurs d'inactivité
+    window.removeEventListener('moderator-inactivity', (event) => {
+        const { remainingSeconds, profileId } = event.detail;
+        window.dispatchEvent(new CustomEvent('show-inactivity-warning', {
+            detail: { remainingSeconds, profileId }
+        }));
+    });
+    window.removeEventListener('moderator-activity-resumed', () => {});
 
     // NOUVEAU: Nettoyer la surveillance d'inactivité
     if (cleanupInactivityMonitoring) cleanupInactivityMonitoring();
@@ -2054,6 +2100,12 @@ async function sendMessage() {
             content: content,
             file: file
         });
+
+        moderatorStore.updateLastMessageActivity(
+        currentAssignedProfile.value.id,
+        selectedClient.value.id,
+        true // Réinitialise explicitement le timer d'inactivité
+    );
         
         // Mettre à jour le statut du message temporaire
         if (moderatorStore.messages[selectedClient.value.id]) {
@@ -2294,38 +2346,38 @@ let typingTimeout = null;
 let lastTypingTime = 0;
 
 watch(newMessage, (value) => {
-    if (
-        value &&
-        value.length > 0 &&
-        currentAssignedProfile.value &&
-        selectedClient.value
-    ) {
-        // Vérifier si assez de temps s'est écoulé depuis le dernier événement (500ms)
-        const now = Date.now();
-        if (now - lastTypingTime < 500) {
-            return; // Trop tôt pour envoyer un autre événement
-        }
-
-        lastTypingTime = now;
-
-        // Annuler le timeout précédent s'il existe
-        if (typingTimeout) {
-            clearTimeout(typingTimeout);
-        }
-
-        // Envoyer l'événement de frappe
-        moderatorStore.recordTypingActivity(
-            currentAssignedProfile.value.id,
-            selectedClient.value.id
-        );
-
-        // Définir un nouveau timeout pour arrêter l'indicateur après 3 secondes d'inactivité
-        typingTimeout = setTimeout(() => {
-            // Envoyer un événement pour indiquer que l'utilisateur a arrêté de taper
-            // Vous pourriez ajouter une méthode stopTypingActivity dans votre store
-            typingTimeout = null;
-        }, 3000);
+  if (
+    value &&
+    value.length > 0 &&
+    currentAssignedProfile.value &&
+    selectedClient.value
+  ) {
+    // Vérifier si assez de temps s'est écoulé depuis le dernier événement (500ms)
+    const now = Date.now();
+    if (now - lastTypingTime < 500) {
+      return; // Trop tôt pour envoyer un autre événement
     }
+
+    lastTypingTime = now;
+
+    // Annuler le timeout précédent s'il existe
+    if (typingTimeout) {
+      clearTimeout(typingTimeout);
+    }
+
+    // Envoyer l'événement de frappe avec le paramètre reset_timeout à true
+    // pour explicitement réinitialiser le timer d'inactivité
+    moderatorStore.recordTypingActivity(
+      currentAssignedProfile.value.id,
+      selectedClient.value.id,
+      true // Ajouter ce paramètre pour indiquer de réinitialiser le timer
+    );
+
+    // Définir un nouveau timeout pour arrêter l'indicateur après 3 secondes d'inactivité
+    typingTimeout = setTimeout(() => {
+      typingTimeout = null;
+    }, 3000);
+  }
 });
 
 // Observer les changements de verrouillage

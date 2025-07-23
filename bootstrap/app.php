@@ -36,34 +36,78 @@ return Application::configure(basePath: dirname(__DIR__))
             'client_or_admin' => \App\Http\Middleware\ClientOrAdminMiddleware::class,
             'client_only' => \App\Http\Middleware\ClientOnlyMiddleware::class,
             'broadcast_auth' => \App\Http\Middleware\EnsureBroadcastAuthentication::class,
-
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })
     ->withSchedule(function ($schedule) {
-        // Exécuter la commande de traitement des messages toutes les minutes
+        // 💬 CONSERVÉ : Traitement des messages
         $schedule->command('messages:process')->everyMinute();
-        // Exécuter la commande de traitement des notifications toutes les 15 minutes
-        $schedule->command('app:process-notifications')->everyMinute();
-        // Enregistrement du job de calcul d'activité des modérateurs
-        $schedule->job(new \App\Jobs\CalculateModeratorActivity())->everyFiveMinutes();
-        // Ajouter une tâche pour exécuter la rotation des profils toutes les minutes
-        $schedule->call(function () {
-            $task = app()->make(\App\Tasks\RotateModeratorProfilesTask::class);
-            $task();
-        })->everyMinute();
 
-        // Ajouter une tâche pour la surveillance des assignations toutes les 15 secondes
-        $schedule->call(function () {
-            $task = app()->make(\App\Tasks\ProfileAssignmentMonitoringTask::class);
-            $task();
-        })->everyFifteenSeconds();
+        // 🔔 CONSERVÉ : Notifications
+        $schedule->command('app:process-notifications')->everyMinute();
+
+        // 📊 CONSERVÉ : Statistiques des modérateurs (mais moins fréquent)
+        $schedule->job(new \App\Jobs\CalculateModeratorActivity())->everyTenMinutes();
+
+        // ❌ SUPPRIMÉ : Anciennes tâches de polling remplacées par le système réactif
+        // $schedule->call(RotateModeratorProfilesTask)->everyMinute(); // ❌ OBSOLÈTE
+        // $schedule->call(ProfileAssignmentMonitoringTask)->everyFifteenSeconds(); // ❌ OBSOLÈTE
+
+        // ✅ NOUVEAU : Système réactif de modération
+
+        // 🧹 Nettoyage périodique des timers expirés (sécurité uniquement)
+        $schedule->command('moderator:check-timers --cleanup')
+            ->everyFiveMinutes()
+            ->withoutOverlapping()
+            ->runInBackground()
+            ->onFailure(function () {
+                \Illuminate\Support\Facades\Log::error('Échec du nettoyage des timers réactifs');
+            });
+
+        // 📊 Génération de statistiques des timers
+        $schedule->command('moderator:check-timers --stats')
+            ->hourly()
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/moderator-timer-stats.log'));
+
+        // 🚨 Fallback de sécurité (DÉSACTIVÉ par défaut - seulement si problème avec le système réactif)
+        if (config('moderator.enable_fallback_polling', false)) {
+            $schedule->command('moderator:check-timers --force')
+                ->everyMinute()
+                ->withoutOverlapping()
+                ->runInBackground()
+                ->onFailure(function () {
+                    \Illuminate\Support\Facades\Log::critical('CRITIQUE: Fallback de modération échoué');
+                    // Ici on pourrait notifier les admins
+                });
+        }
+
+        // 🧹 Nettoyage des données anciennes
+        $schedule->command('moderator:cleanup-old-data')
+            ->daily()
+            ->at('02:30')
+            ->runInBackground();
+
+        // 🗄️ Archivage des métriques
+        $schedule->command('moderator:archive-metrics')
+            ->weekly()
+            ->sundays()
+            ->at('03:00')
+            ->runInBackground();
     })
     ->withCommands([
+        // 📊 CONSERVÉ : Commandes existantes
         \App\Console\Commands\UpdateModeratorStatistics::class,
         \App\Console\Commands\ProcessNotifications::class,
         \App\Console\Commands\ProcessMessages::class,
+
+        // ✅ NOUVEAU : Commandes du système réactif
+        \App\Console\Commands\CheckInactivityTimers::class,
+
+        // 🧹 NOUVEAU : Commandes de maintenance (à créer si nécessaire)
+        // \App\Console\Commands\CleanupModeratorData::class,
+        // \App\Console\Commands\ArchiveModeratorMetrics::class,
     ])
     ->create();

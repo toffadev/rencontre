@@ -61,18 +61,28 @@ class ProfileAssigned implements ShouldBroadcast
      *
      * @return array
      */
-    public function broadcastWith(): array
+    public function broadcastWith()
     {
-        // Récupérer les informations du profil pour les inclure dans l'événement
-        $profile = Profile::with('photos')->find($this->profileId);
+        // Vérifiez si le profil existe et a les propriétés nécessaires
+        $profileData = [
+            'id' => $this->profile->id ?? null,
+            'name' => $this->profile->name ?? null,
+        ];
+
+        // Vérifiez si is_primary existe avant de l'utiliser
+        if (isset($this->profile->is_primary)) {
+            $profileData['is_primary'] = $this->profile->is_primary;
+        } else {
+            $profileData['is_primary'] = false; // ou une valeur par défaut appropriée
+        }
 
         return [
-            'profile' => $profile,
-            'is_primary' => ModeratorProfileAssignment::find($this->assignmentId)->is_primary ?? false,
-            'is_shared' => $this->isShared,
-            'old_moderator_id' => $this->oldModeratorId,
-            'forced' => $this->forced,
-            'reason' => $this->reason,
+            'profile' => $profileData,
+            'moderator' => [
+                'id' => $this->moderator->id ?? null,
+                'name' => $this->moderator->name ?? null,
+            ],
+            'timestamp' => now()->toIso8601String(),
         ];
     }
 }

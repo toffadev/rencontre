@@ -586,47 +586,57 @@ async loadAllConversations() {
          * Initialise le tracking d'activité utilisateur
          */
         setupActivityTracking() {
-            // Événements à surveiller pour l'activité
             const activityEvents = ['mousedown', 'mousemove', 'keypress', 'scroll', 'touchstart', 'click'];
             
-            // Fonction pour mettre à jour le timestamp de dernière activité
+            const THROTTLE_DELAY = 5000; // Délai minimal entre deux signaux serveur (5 sec)
+            let lastServerUpdateTime = Date.now();
+            this.lastActivity = Date.now(); // Timestamp local
+
+            // Fonction : envoyer activité si nécessaire
+            const sendActivityToServer = () => {
+                const now = Date.now();
+                if (now - lastServerUpdateTime > THROTTLE_DELAY) {
+                    lastServerUpdateTime = now;
+                    axios.post('/client/record-activity')
+                        .then(() => console.log('📡 Activité signalée au serveur'))
+                        .catch(err => console.error('❌ Erreur signal activité:', err));
+                }
+            };
+
+            // Fonction : déclenchée à chaque événement utilisateur
             const updateActivity = () => {
                 this.lastActivity = Date.now();
+                sendActivityToServer();
             };
-            
-            // Ajouter les écouteurs d'événements
+
+            // Ajouter les écouteurs d'événements utilisateur
             activityEvents.forEach(event => {
                 window.addEventListener(event, updateActivity, { passive: true });
             });
-            
-            // Vérifier l'activité toutes les 30 secondes
+
+            // Vérification locale de l’inactivité toutes les 30 secondes
             this.activityInterval = setInterval(() => {
                 const now = Date.now();
                 const inactiveTime = now - this.lastActivity;
-                
-                // Si l'utilisateur est actif dans les 5 dernières minutes
+
                 if (inactiveTime < 5 * 60 * 1000) {
-                    console.log('👤 Utilisateur actif, dernier mouvement il y a', Math.round(inactiveTime / 1000), 'secondes');
+                    console.log('👤 Actif : dernier mouvement il y a', Math.round(inactiveTime / 1000), 'sec');
                 } else {
-                    console.log('💤 Utilisateur inactif depuis', Math.round(inactiveTime / 60000), 'minutes');
+                    console.log('💤 Inactif depuis', Math.round(inactiveTime / 60000), 'min');
                 }
             }, 30000);
-            
-            // Envoyer un heartbeat toutes les 2 minutes si l'utilisateur est actif
-            this.heartbeatInterval = setInterval(async () => {
+
+            // Heartbeat toutes les 2 minutes, même sans interaction directe
+            this.heartbeatInterval = setInterval(() => {
                 const now = Date.now();
                 const inactiveTime = now - this.lastActivity;
-                
-                // Si l'utilisateur est actif dans les 5 dernières minutes, envoyer un heartbeat
+
                 if (inactiveTime < 5 * 60 * 1000) {
-                    try {
-                        await axios.post('/user/heartbeat');
-                        console.log('💓 Heartbeat envoyé au serveur');
-                    } catch (error) {
-                        console.error('❌ Erreur lors de l\'envoi du heartbeat:', error);
-                    }
+                    axios.post('/user/heartbeat')
+                        .then(() => console.log('💓 Heartbeat envoyé'))
+                        .catch(err => console.error('❌ Erreur heartbeat:', err));
                 }
-            }, 2 * 60 * 1000); // 2 minutes
+            }, 2 * 60 * 1000);
         },
 
         /**

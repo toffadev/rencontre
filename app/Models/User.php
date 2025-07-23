@@ -256,11 +256,17 @@ class User extends Authenticatable
         return $this->hasMany(ClientLock::class, 'moderator_id');
     }
 
+
     /**
      * Alias pour moderatorProfileAssignments() pour compatibilité
      */
     public function profileAssignments()
     {
         return $this->moderatorProfileAssignments();
+    }
+
+    public function assignments()
+    {
+        return $this->hasMany(\App\Models\ModeratorProfileAssignment::class, 'user_id');
     }
 }

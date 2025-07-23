@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Profile;
 use App\Services\WebSocketHealthService;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Log;
@@ -171,6 +172,19 @@ class HomeController extends Controller
                 'error' => 'Erreur lors de la vérification de la connexion: ' . $e->getMessage()
             ], 500);
         }
+    }
+
+    /**
+     * Enregistrer l'activité de l'utilisateur
+     */
+    public function recordActivity(Request $request)
+    {
+        $user = Auth::user();
+        $user->last_activity_at = now();
+        $user->is_online = true;
+        $user->save();
+
+        return response()->json(['success' => true]);
     }
 
     /**

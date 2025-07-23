@@ -27,6 +27,9 @@ use App\Http\Controllers\Moderator\ClientInfoController;
 use App\Http\Controllers\Moderator\ModeratorProfileController;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Http\Request;
+use App\Events\ModeratorInactivityDetected;
+use App\Listeners\HandleModeratorInactivity;
+use App\Models\ModeratorProfileAssignment;
 
 
 /*
@@ -35,19 +38,6 @@ use Illuminate\Http\Request;
 |--------------------------------------------------------------------------
 */
 
-// Dans routes/web.php
-Route::get('/test-reactivation', function () {
-    Log::info('Test manuel du job de réactivation');
-
-    // Forcer l'exécution synchrone
-    try {
-        $job = new \App\Jobs\SendReactivationNotification();
-        $job->handle();
-        return 'Job de réactivation exécuté. Vérifiez les logs.';
-    } catch (\Exception $e) {
-        return 'Erreur: ' . $e->getMessage();
-    }
-});
 
 // Route d'authentification pour les broadcasts
 Route::post('/broadcasting/auth', function (Illuminate\Http\Request $request) {
@@ -153,6 +143,9 @@ Route::middleware(['auth', 'client_only'])->group(function () {
         Route::get('/transactions/profile/{profile}', [App\Http\Controllers\Client\ProfilePointController::class, 'getProfileTransactionHistory'])->name('transactions.profile');
         Route::get('/transactions/client', [App\Http\Controllers\Client\ProfilePointController::class, 'getClientTransactionHistory'])->name('transactions.client');
     });
+
+    Route::post('/client/record-activity', [App\Http\Controllers\Client\HomeController::class, 'recordActivity'])
+        ->name('client.record-activity');
 });
 
 // Route pour le heartbeat d'activité utilisateur
@@ -343,6 +336,7 @@ Route::middleware(['auth', 'moderator'])->prefix('moderateur')->name('moderator.
 
     // Page principale des modérateurs
     Route::get('/chat', [ModeratorController::class, 'index'])->name('chat');
+    Route::post('/inactivity-timeout', [ModeratorController::class, 'handleInactivityTimeout']);
 
     // API pour les modérateurs
     Route::get('/clients', [ModeratorController::class, 'getClients'])->name('clients');
