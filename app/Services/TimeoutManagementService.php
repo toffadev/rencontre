@@ -11,8 +11,8 @@ use Carbon\Carbon;
 class TimeoutManagementService
 {
     protected $inactivityThreshold = 60; // Secondes avant inactivité
-    protected $warningThreshold = 30; // Secondes avant avertissement
-    protected $activeTimersKey = 'active_inactivity_timers'; // Clé pour maintenir la liste des timers actifs
+    protected $warningThreshold = 30; // Secondes avant avertissement (calculé avant expiration)
+    protected $activeTimersKey = 'active_inactivity_timers';
 
     /**
      * Démarre un timer d'inactivité pour une assignation modérateur-profil
@@ -75,12 +75,8 @@ class TimeoutManagementService
     {
         $lockKey = "timer_reset_lock:{$moderatorId}:{$profileId}";
 
-        // Utiliser un verrou pour éviter les conflits de concurrence
         return Cache::lock($lockKey, 5)->get(function () use ($moderatorId, $profileId, $clientId) {
-            // Annuler l'ancien timer
             $this->cancelTimer($moderatorId, $profileId);
-
-            // Démarrer un nouveau timer
             return $this->startInactivityTimer($moderatorId, $profileId, $clientId);
         });
     }
@@ -95,12 +91,10 @@ class TimeoutManagementService
         if (Cache::has($key)) {
             $timerData = Cache::get($key);
 
-            // Prolonger le délai d'expiration
             $expiresAt = Carbon::parse($timerData['expires_at'])->addMinutes($minutes);
             $timerData['expires_at'] = $expiresAt;
             $timerData['warning_sent'] = false;
 
-            // Mettre à jour le timer dans le cache
             Cache::put($key, $timerData, $expiresAt->addMinutes(1));
 
             Log::info("Timer d'inactivité prolongé", [
@@ -124,11 +118,8 @@ class TimeoutManagementService
 
         if (Cache::has($key)) {
             $timerData = Cache::get($key);
-
-            // Marquer l'avertissement comme reconnu
             $timerData['warning_acknowledged'] = true;
 
-            // Mettre à jour le timer dans le cache
             Cache::put($key, $timerData, Carbon::parse($timerData['expires_at'])->addMinutes(1));
 
             Log::info("Timer d'inactivité reconnu", [
@@ -142,54 +133,23 @@ class TimeoutManagementService
         return false;
     }
 
-    // Ajouter cette méthode temporaire pour le debug
-    public function debugActiveTimers()
-    {
-        $activeKeys = $this->getActiveTimers();
-
-        Log::info("🔍 [DEBUG] Liste des timers actifs", [
-            'count' => count($activeKeys),
-            'keys' => $activeKeys
-        ]);
-
-        foreach ($activeKeys as $key) {
-            $timerData = Cache::get($key);
-            if ($timerData) {
-                $expiresAt = Carbon::parse($timerData['expires_at']);
-                $now = now();
-                $remainingSeconds = $expiresAt->diffInSeconds($now, false);
-
-                Log::info("🔍 [DEBUG] Timer détails", [
-                    'key' => $key,
-                    'moderator_id' => $timerData['moderator_id'],
-                    'profile_id' => $timerData['profile_id'],
-                    'expires_at' => $expiresAt->toDateTimeString(),
-                    'current_time' => $now->toDateTimeString(),
-                    'remaining_seconds' => $remainingSeconds,
-                    'is_expired' => $remainingSeconds < 0 ? 'OUI' : 'NON'
-                ]);
-            } else {
-                Log::warning("🔍 [DEBUG] Timer key sans données: " . $key);
-            }
-        }
-    }
     /**
      * Vérifie les timers d'inactivité et envoie des avertissements si nécessaire
+     * VERSION CORRIGÉE
      */
     public function checkTimers()
     {
         Log::info("🚀 [DEBUG] checkTimers() DÉMARRÉ - " . now()->toDateTimeString());
 
         $activeKeys = $this->getActiveTimers();
-        Log::info("🚀 [DEBUG] checkTimers() DÉMARRÉ - " . now()->toDateTimeString());
-
         $processedCount = 0;
         $expiredCount = 0;
         $warningsCount = 0;
+        $now = now();
 
         Log::debug("[TimeoutManagementService] Début de checkTimers", [
             'active_timers_count' => count($activeKeys),
-            'current_time' => now()->toDateTimeString()
+            'current_time' => $now->toDateTimeString()
         ]);
 
         foreach ($activeKeys as $key) {
@@ -201,14 +161,11 @@ class TimeoutManagementService
                 continue;
             }
 
-            $now = now();
             $expiresAt = Carbon::parse($timerData['expires_at']);
-            // Temps restant = temps d'expiration - temps actuel
-            $remainingSeconds = $expiresAt->diffInSeconds($now, false);
 
-            // Si le résultat est négatif, le timer a expiré
-            $isExpired = $remainingSeconds < 0;
-            $remainingSeconds = abs($remainingSeconds); // Valeur absolue pour les logs
+            // CORRECTION MAJEURE : Calcul correct de l'expiration
+            $isExpired = $now->isAfter($expiresAt);
+            $remainingSeconds = $isExpired ? 0 : $expiresAt->diffInSeconds($now);
 
             Log::debug("[TimeoutManagementService] Vérification timer", [
                 'key' => $key,
@@ -217,12 +174,8 @@ class TimeoutManagementService
                 'expires_at' => $expiresAt->toDateTimeString(),
                 'current_time' => $now->toDateTimeString(),
                 'remaining_seconds' => $remainingSeconds,
-                'expires_at_timestamp' => $expiresAt->timestamp,
-                'current_time_timestamp' => $now->timestamp,
                 'is_expired' => $isExpired ? 'OUI' : 'NON',
-                'calculation_method' => 'expires_at - now',
-                'should_call_expiration' => $isExpired ? 'OUI' : 'NON'
-
+                'calculation_method' => 'now->isAfter(expires_at)'
             ]);
 
             // Si le timer a expiré
@@ -230,11 +183,10 @@ class TimeoutManagementService
                 Log::info("🚨 [DEBUG] TIMER EXPIRÉ - Appel de handleTimeoutExpiration");
                 $this->handleTimeoutExpiration($timerData);
                 $expiredCount++;
-                Log::info("🚨 [DEBUG] handleTimeoutExpiration terminé");
                 continue;
             }
 
-            // Si l'avertissement n'a pas été envoyé et qu'on est dans la période d'avertissement
+            // CORRECTION : Avertissement basé sur le temps restant avant expiration
             if (!$timerData['warning_sent'] && $remainingSeconds <= $this->warningThreshold) {
                 Log::info("⚠️ [TimeoutManagementService] Envoi d'avertissement", [
                     'moderator_id' => $timerData['moderator_id'],
@@ -287,16 +239,10 @@ class TimeoutManagementService
 
         try {
             // Vérifier que l'assignation existe encore
-            Log::info("🎯 [DEBUG] Vérification de l'assignation...");
             $assignment = ModeratorProfileAssignment::where('user_id', $moderatorId)
                 ->where('profile_id', $profileId)
                 ->where('is_active', true)
                 ->first();
-
-            Log::info("🎯 [DEBUG] Résultat assignation", [
-                'found' => $assignment ? 'OUI' : 'NON',
-                'assignment_id' => $assignment->id ?? 'N/A'
-            ]);
 
             if (!$assignment) {
                 Log::warning("⚠️ [TimeoutManagementService] Assignation non trouvée ou déjà inactive", [
@@ -304,23 +250,12 @@ class TimeoutManagementService
                     'profile_id' => $profileId
                 ]);
 
-                // Nettoyer le timer
                 $this->cancelTimer($moderatorId, $profileId);
                 return false;
             }
 
-            Log::debug("📣 [TimeoutManagementService] Création de l'événement ModeratorInactivityDetected", [
-                'moderator_id' => $moderatorId,
-                'profile_id' => $profileId,
-                'client_id' => $clientId,
-                'assignment_id' => $assignment->id
-            ]);
-
-            // Création de l'événement
-            Log::info("🎯 [DEBUG] Création de l'événement...");
+            // Création et déclenchement de l'événement
             $event = new ModeratorInactivityDetected($moderatorId, $profileId, $clientId);
-            Log::info("🎯 [DEBUG] Événement créé: " . get_class($event));
-
 
             Log::info("📣 [TimeoutManagementService] DÉCLENCHEMENT de l'événement", [
                 'event_class' => get_class($event),
@@ -329,40 +264,26 @@ class TimeoutManagementService
                 'client_id' => $clientId
             ]);
 
-            // Déclenchement de l'événement
-            // Déclenchement
-            Log::info("🎯 [DEBUG] DÉCLENCHEMENT de l'événement...");
             event($event);
-            Log::info("🎯 [DEBUG] Événement déclenché - SUCCESS !");
 
-            Log::info("✅ [TimeoutManagementService] Événement déclenché avec SUCCÈS", [
-                'moderator_id' => $moderatorId,
-                'profile_id' => $profileId
-            ]);
+            Log::info("✅ [TimeoutManagementService] Événement déclenché avec SUCCÈS");
 
             // Supprimer le timer après traitement réussi
-            Log::info("🎯 [DEBUG] Nettoyage du timer...");
             $this->cancelTimer($moderatorId, $profileId);
-            Log::info("🎯 [DEBUG] Timer nettoyé - SUCCESS !");
 
-            Log::info("🎯 [DEBUG] handleTimeoutExpiration() TERMINÉ avec succès");
             return true;
         } catch (\Throwable $e) {
             Log::error("❌ [TimeoutManagementService] ERREUR CRITIQUE lors du traitement", [
                 'error_message' => $e->getMessage(),
                 'error_file' => $e->getFile(),
                 'error_line' => $e->getLine(),
-                'trace' => $e->getTraceAsString(),
                 'moderator_id' => $moderatorId,
                 'profile_id' => $profileId,
                 'client_id' => $clientId
             ]);
 
-            // Ne pas supprimer le timer en cas d'erreur pour pouvoir réessayer
             throw $e;
         }
-
-        return true;
     }
 
     /**
@@ -380,17 +301,13 @@ class TimeoutManagementService
         ]);
 
         try {
-            // Diffuser l'événement d'avertissement
             broadcast(new \App\Events\ModeratorInactivityWarning(
                 $moderatorId,
                 $profileId,
                 $remainingSeconds
             ));
 
-            Log::info("✅ [TimeoutManagementService] Avertissement envoyé avec succès", [
-                'moderator_id' => $moderatorId,
-                'profile_id' => $profileId
-            ]);
+            Log::info("✅ [TimeoutManagementService] Avertissement envoyé avec succès");
         } catch (\Throwable $e) {
             Log::error("❌ [TimeoutManagementService] Erreur lors de l'envoi d'avertissement", [
                 'error' => $e->getMessage(),
@@ -400,6 +317,41 @@ class TimeoutManagementService
         }
 
         return true;
+    }
+
+    /**
+     * Méthode utilitaire pour débugger les timers actifs
+     */
+    public function debugActiveTimers()
+    {
+        $activeKeys = $this->getActiveTimers();
+        $now = now();
+
+        Log::info("🔍 [DEBUG] Liste des timers actifs", [
+            'count' => count($activeKeys),
+            'keys' => $activeKeys
+        ]);
+
+        foreach ($activeKeys as $key) {
+            $timerData = Cache::get($key);
+            if ($timerData) {
+                $expiresAt = Carbon::parse($timerData['expires_at']);
+                $isExpired = $now->isAfter($expiresAt);
+                $remainingSeconds = $isExpired ? 0 : $expiresAt->diffInSeconds($now);
+
+                Log::info("🔍 [DEBUG] Timer détails", [
+                    'key' => $key,
+                    'moderator_id' => $timerData['moderator_id'],
+                    'profile_id' => $timerData['profile_id'],
+                    'expires_at' => $expiresAt->toDateTimeString(),
+                    'current_time' => $now->toDateTimeString(),
+                    'remaining_seconds' => $remainingSeconds,
+                    'is_expired' => $isExpired ? 'OUI' : 'NON'
+                ]);
+            } else {
+                Log::warning("🔍 [DEBUG] Timer key sans données: " . $key);
+            }
+        }
     }
 
     /**
@@ -415,7 +367,6 @@ class TimeoutManagementService
             if ($timerData) {
                 $timers[] = $timerData;
             } else {
-                // Nettoyer les clés orphelines
                 $this->removeFromActiveTimers($key);
             }
         }
@@ -430,11 +381,12 @@ class TimeoutManagementService
     {
         $activeKeys = $this->getActiveTimers();
         $cleaned = 0;
+        $now = now();
 
         foreach ($activeKeys as $key) {
             $timerData = Cache::get($key);
 
-            if (!$timerData || Carbon::parse($timerData['expires_at'])->isPast()) {
+            if (!$timerData || $now->isAfter(Carbon::parse($timerData['expires_at']))) {
                 Cache::forget($key);
                 $this->removeFromActiveTimers($key);
                 $cleaned++;
@@ -451,53 +403,12 @@ class TimeoutManagementService
     }
 
     /**
-     * Génère la clé de cache pour un timer
-     */
-    protected function getTimerKey($moderatorId, $profileId)
-    {
-        return "inactivity_timer:{$moderatorId}:{$profileId}";
-    }
-
-    /**
-     * Ajoute une clé à la liste des timers actifs
-     */
-    protected function addToActiveTimers($key)
-    {
-        $activeTimers = Cache::get($this->activeTimersKey, []);
-
-        if (!in_array($key, $activeTimers)) {
-            $activeTimers[] = $key;
-            Cache::put($this->activeTimersKey, $activeTimers, now()->addHours(2));
-        }
-    }
-
-    /**
-     * Supprime une clé de la liste des timers actifs
-     */
-    protected function removeFromActiveTimers($key)
-    {
-        $activeTimers = Cache::get($this->activeTimersKey, []);
-        $activeTimers = array_filter($activeTimers, function ($activeKey) use ($key) {
-            return $activeKey !== $key;
-        });
-
-        Cache::put($this->activeTimersKey, array_values($activeTimers), now()->addHours(2));
-    }
-
-    /**
-     * Retourne la liste des clés des timers actifs
-     */
-    protected function getActiveTimers()
-    {
-        return Cache::get($this->activeTimersKey, []);
-    }
-
-    /**
-     * Retourne des statistiques sur les timers
+     * Retourne des statistiques sur les timers - VERSION CORRIGÉE
      */
     public function getTimerStats()
     {
         $activeKeys = $this->getActiveTimers();
+        $now = now();
         $stats = [
             'total_active' => count($activeKeys),
             'warning_zone' => 0,
@@ -511,12 +422,10 @@ class TimeoutManagementService
 
             $moderatorId = $timerData['moderator_id'];
             $expiresAt = Carbon::parse($timerData['expires_at']);
-            $now = now();
 
-            // Calcul correct du temps restant
-            $remainingSeconds = $expiresAt->diffInSeconds($now, false);
-            $isExpired = $remainingSeconds < 0;
-            $remainingSeconds = abs($remainingSeconds);
+            // Calcul correct
+            $isExpired = $now->isAfter($expiresAt);
+            $remainingSeconds = $isExpired ? 0 : $expiresAt->diffInSeconds($now);
 
             // Compter par modérateur
             if (!isset($stats['by_moderator'][$moderatorId])) {
@@ -533,5 +442,36 @@ class TimeoutManagementService
         }
 
         return $stats;
+    }
+
+    // Méthodes utilitaires inchangées
+    protected function getTimerKey($moderatorId, $profileId)
+    {
+        return "inactivity_timer:{$moderatorId}:{$profileId}";
+    }
+
+    protected function addToActiveTimers($key)
+    {
+        $activeTimers = Cache::get($this->activeTimersKey, []);
+
+        if (!in_array($key, $activeTimers)) {
+            $activeTimers[] = $key;
+            Cache::put($this->activeTimersKey, $activeTimers, now()->addHours(2));
+        }
+    }
+
+    protected function removeFromActiveTimers($key)
+    {
+        $activeTimers = Cache::get($this->activeTimersKey, []);
+        $activeTimers = array_filter($activeTimers, function ($activeKey) use ($key) {
+            return $activeKey !== $key;
+        });
+
+        Cache::put($this->activeTimersKey, array_values($activeTimers), now()->addHours(2));
+    }
+
+    protected function getActiveTimers()
+    {
+        return Cache::get($this->activeTimersKey, []);
     }
 }

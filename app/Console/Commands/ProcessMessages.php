@@ -48,25 +48,54 @@ class ProcessMessages extends Command
 
         // Réattribuer les profils des modérateurs inactifs
         $this->info('Réattribution des profils inactifs...');
-        // Changé de 30 minutes à 1 minute pour le seuil d'inactivité
         $inactiveProfilesCount = $this->assignmentService->reassignInactiveProfiles(1);
         $this->info("Nombre de profils inactifs réattribués: $inactiveProfilesCount");
         Log::info("[ProcessMessages] Profils inactifs réattribués: $inactiveProfilesCount");
 
-        // Traiter les messages non attribués
+        // Récupérer le nombre de clients avec messages en attente avant traitement
+        $clientsNeedingResponse = $this->assignmentService->getClientsNeedingResponse();
+        $this->info("Nombre de clients avec messages sans réponse: " . $clientsNeedingResponse->count());
+
+        // Traiter les messages non assignés
         $this->info('Attribution des messages aux modérateurs...');
-        $clientsAssigned = $this->assignmentService->processUnassignedMessages();
-        $this->info("Nombre de clients attribués à des modérateurs: $clientsAssigned");
-        Log::info("[ProcessMessages] Clients attribués: $clientsAssigned");
+        $assignmentStats = $this->assignmentService->processUnassignedMessages();
+
+        // Afficher les statistiques détaillées d'assignation
+        $this->info("Nombre de clients nouvellement assignés: " . $assignmentStats['new']);
+        $this->info("Nombre de clients réassignés: " . $assignmentStats['reassigned']);
+        $this->info("Nombre de clients avec assignation confirmée: " . $assignmentStats['confirmed']);
+        $this->info("Nombre total de clients assignés: " . $assignmentStats['total']);
 
         // Traiter spécifiquement les clients en attente de réponse
         $this->info('Traitement des clients en attente de réponse...');
+
+        // Récupérer les statistiques avant traitement
+        $clientsByActivity = $clientsNeedingResponse->groupBy('activity_level');
+
+        $activityStats = [
+            'actifs' => ($clientsByActivity[1] ?? collect())->count(),
+            'semi_actifs' => ($clientsByActivity[2] ?? collect())->count(),
+            'inactifs' => ($clientsByActivity[3] ?? collect())->count(),
+        ];
+
+        $this->info("Répartition des clients sans réponse: " .
+            "{$activityStats['actifs']} actifs, " .
+            "{$activityStats['semi_actifs']} semi-actifs, " .
+            "{$activityStats['inactifs']} inactifs");
+
+        // Traiter les clients selon leur priorité
         $clientsProcessed = $this->assignmentService->processClientsNeedingResponse();
-        $this->info("Nombre de clients en attente traités: $clientsProcessed");
-        Log::info("[ProcessMessages] Clients en attente traités: $clientsProcessed");
+
+        $this->info("Nombre de clients dont les messages ont été traités: $clientsProcessed");
+
+        Log::info("[ProcessMessages] Traitement terminé", [
+            'clients_sans_reponse' => $clientsNeedingResponse->count(),
+            'clients_assignes' => $assignmentStats['total'],
+            'clients_traites' => $clientsProcessed,
+            'repartition' => $activityStats
+        ]);
 
         $this->info('Traitement terminé avec succès.');
-        Log::info('[ProcessMessages] Traitement terminé avec succès');
 
         return Command::SUCCESS;
     }

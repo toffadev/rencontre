@@ -1,1 +1,0 @@
-<?php echo e($slot); ?> <?php /**PATH C:\Users\ROYAL COMPUTER\Desktop\projets\laravel\rencontre\resources\views/vendor/mail/text/footer.blade.php ENDPATH**/ ?>

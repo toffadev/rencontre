@@ -115,105 +115,6 @@ class ModeratorQueueService
         return $queue->position;
     }
 
-    /**
-     * Traiter la file d'attente pour attribution
-     */
-    /* public function processQueue()
-    {
-        // Vérifier s'il y a des profils disponibles
-        $availableProfiles = $this->getAvailableProfiles();
-
-        // Ajouter les profils avec messages en attente
-        $profilesWithPendingMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->select('profile_id')
-            ->distinct()
-            ->pluck('profile_id')
-            ->toArray();
-
-        foreach ($profilesWithPendingMessages as $profileId) {
-            if (!in_array($profileId, $availableProfiles)) {
-                $availableProfiles[] = $profileId;
-            }
-        }
-
-        if (empty($availableProfiles)) {
-            Log::info("Aucun profil disponible pour attribution");
-            return 0;
-        }
-
-        // Récupérer les modérateurs en attente
-        $queuedModerators = ModeratorQueue::orderBy('position')
-            ->with('moderator')
-            ->get();
-
-        if ($queuedModerators->isEmpty()) {
-            Log::info("Aucun modérateur en file d'attente");
-            return 0;
-        }
-
-        $assignmentCount = 0;
-        $assignmentService = new ModeratorAssignmentService();
-
-        // CORRECTION : Attribuer UN profil par modérateur et continuer tant qu'il y a des profils
-        foreach ($queuedModerators as $queue) {
-            if (empty($availableProfiles)) {
-                break; // Plus de profils disponibles
-            }
-
-            $moderator = $queue->moderator;
-
-            // Vérifier si le modérateur est toujours actif
-            if (!$moderator || $moderator->status !== 'active') {
-                $this->removeFromQueue($queue->moderator_id);
-                continue;
-            }
-
-            // Sélectionner le profil prioritaire (avec messages en attente)
-            $profileId = null;
-            foreach ($availableProfiles as $key => $availableProfileId) {
-                if (in_array($availableProfileId, $profilesWithPendingMessages)) {
-                    $profileId = $availableProfileId;
-                    unset($availableProfiles[$key]);
-                    $availableProfiles = array_values($availableProfiles); // Réindexer
-                    break;
-                }
-            }
-
-            // Si aucun profil prioritaire, prendre le premier disponible
-            if (!$profileId && !empty($availableProfiles)) {
-                $profileId = array_shift($availableProfiles);
-            }
-
-            if (!$profileId) {
-                break; // Plus de profils disponibles
-            }
-
-            // Attribuer le profil au modérateur
-            $assignment = $assignmentService->assignProfileToModerator(
-                $moderator->id,
-                $profileId,
-                true // Définir comme profil principal
-            );
-
-            if ($assignment) {
-                // Retirer le modérateur de la file d'attente APRÈS attribution réussie
-                $this->removeFromQueue($moderator->id);
-                $assignmentCount++;
-
-                Log::info("Profil attribué depuis la file d'attente", [
-                    'moderator_id' => $moderator->id,
-                    'profile_id' => $profileId,
-                    'profils_restants' => count($availableProfiles)
-                ]);
-            }
-        }
-
-        // NOUVEAU : Après attribution, traiter les modérateurs sans profil
-        $this->addIdleModeratorsToQueue();
-
-        return $assignmentCount;
-    } */
 
     public function processQueue($assignedModerators = [])
     {
@@ -345,50 +246,6 @@ class ModeratorQueueService
         ];
     }
 
-    /**
-     * Ajouter automatiquement les modérateurs sans profil à la file d'attente
-     * SOLUTION au dysfonctionnement 2
-     */
-    /* public function addIdleModeratorsToQueue()
-    {
-        // Récupérer tous les modérateurs actifs
-        $activeModerators = User::where('status', 'active')
-            ->where('type', 'moderateur') // Utiliser le champ type au lieu de is_moderator
-            ->pluck('id')
-            ->toArray();
-
-        // Récupérer les modérateurs qui ont déjà un profil attribué
-        $moderatorsWithProfiles = ModeratorProfileAssignment::where('is_active', true)
-            ->where('is_primary', true)
-            ->pluck('user_id')
-            ->toArray();
-
-        // Récupérer les modérateurs déjà en file d'attente
-        $moderatorsInQueue = ModeratorQueue::pluck('moderator_id')->toArray();
-
-        // Identifier les modérateurs sans profil et pas en file d'attente
-        $idleModerators = array_diff($activeModerators, $moderatorsWithProfiles, $moderatorsInQueue);
-
-        $addedCount = 0;
-        foreach ($idleModerators as $moderatorId) {
-            // Vérifier une dernière fois que le modérateur n'a vraiment pas de profil
-            $hasProfile = ModeratorProfileAssignment::where('user_id', $moderatorId)
-                ->where('is_active', true)
-                ->exists();
-
-            if (!$hasProfile) {
-                $this->addToQueue($moderatorId, 0); // Priorité normale
-                $addedCount++;
-
-                Log::info("Modérateur ajouté automatiquement à la file d'attente", [
-                    'moderator_id' => $moderatorId,
-                    'timestamp' => now()->toDateTimeString()
-                ]);
-            }
-        }
-
-        return $addedCount;
-    } */
 
     /**
      * Ajouter les modérateurs inactifs à la file d'attente
@@ -528,74 +385,6 @@ class ModeratorQueueService
     }
 
     /**
-     * Obtenir les profils disponibles pour attribution
-     */
-    /* private function getAvailableProfiles()
-    {
-        // Récupérer tous les profils actifs
-        $allProfiles = Profile::where('status', 'active')->pluck('id')->toArray();
-
-        // Récupérer les profils déjà assignés comme profil principal
-        $assignedProfiles = ModeratorProfileAssignment::where('is_active', true)
-            ->where('is_primary', true)
-            ->pluck('profile_id')
-            ->toArray();
-
-        // Récupérer les profils verrouillés
-        $lockedProfiles = ProfileLock::where('expires_at', '>', now())
-            ->whereNull('deleted_at')
-            ->pluck('profile_id')
-            ->toArray();
-
-        // Récupérer les profils avec des messages en attente
-        $profilesWithPendingMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->select('profile_id')
-            ->distinct()
-            ->pluck('profile_id')
-            ->toArray();
-
-        // Créer une liste de tous les profils non disponibles
-        $unavailableProfiles = [];
-
-        // Ajouter les profils assignés qui n'ont pas de messages en attente
-        foreach ($assignedProfiles as $profileId) {
-            if (!in_array($profileId, $profilesWithPendingMessages)) {
-                $unavailableProfiles[] = $profileId;
-            }
-        }
-
-        // Ajouter les profils verrouillés qui n'ont pas de messages en attente
-        foreach ($lockedProfiles as $profileId) {
-            // Libérer les verrous sur les profils avec des messages en attente
-            if (in_array($profileId, $profilesWithPendingMessages)) {
-                // Déverrouiller les profils qui ont des messages en attente
-                // pour permettre leur attribution
-                $lockService = new ProfileLockService();
-                $lockService->unlockProfile($profileId);
-                Log::info("Profil déverrouillé de force pour réattribution", [
-                    'profile_id' => $profileId,
-                    'timestamp' => now()->toDateTimeString()
-                ]);
-            } else {
-                $unavailableProfiles[] = $profileId;
-            }
-        }
-
-        // Filtrer les profils disponibles
-        $availableProfiles = array_diff($allProfiles, array_unique($unavailableProfiles));
-
-        // S'assurer que tous les profils avec des messages en attente sont inclus
-        foreach ($profilesWithPendingMessages as $profileId) {
-            if (!in_array($profileId, $availableProfiles)) {
-                $availableProfiles[] = $profileId;
-            }
-        }
-
-        return array_values($availableProfiles);
-    } */
-
-    /**
      * Obtenir les profils disponibles pour attribution - VERSION SIMPLIFIÉE
      */
     private function getAvailableProfiles()
@@ -604,9 +393,25 @@ class ModeratorQueueService
         $allProfiles = Profile::where('status', 'active')->pluck('id')->toArray();
 
         // Récupérer les profils avec des messages en attente (PRIORITÉ ABSOLUE)
-        $profilesWithPendingMessages = Message::where('is_from_client', true)
-            ->whereNull('read_at')
-            ->select('profile_id')
+        // Utiliser la même logique que ModeratorAssignmentService pour identifier les messages en attente
+        // Étape 1: Obtenir le dernier message de chaque conversation (client-profil)
+        $latestMessagesSubquery = \Illuminate\Support\Facades\DB::table('messages')
+            ->select(
+                'client_id',
+                'profile_id',
+                \Illuminate\Support\Facades\DB::raw('MAX(created_at) as latest_message_at')
+            )
+            ->groupBy('client_id', 'profile_id');
+
+        // Étape 2: Récupérer les conversations où le dernier message vient du client
+        $profilesWithPendingMessages = \Illuminate\Support\Facades\DB::table('messages as m')
+            ->joinSub($latestMessagesSubquery, 'latest', function ($join) {
+                $join->on('m.client_id', '=', 'latest.client_id')
+                    ->on('m.profile_id', '=', 'latest.profile_id')
+                    ->on('m.created_at', '=', 'latest.latest_message_at');
+            })
+            ->where('m.is_from_client', true)
+            ->select('m.profile_id')
             ->distinct()
             ->pluck('profile_id')
             ->toArray();
@@ -703,43 +508,7 @@ class ModeratorQueueService
         return count($queues);
     }
 
-    /**
-     * Vérifier et traiter la file d'attente - À appeler régulièrement
-     * Cette méthode résout le dysfonctionnement 2 en s'assurant qu'aucun modérateur
-     * ne reste en file d'attente s'il y a des profils disponibles
-     */
-    /* public function checkAndProcessQueue()
-    {
-        // Étape 1 : Ajouter les modérateurs inactifs à la file d'attente
-        $addedToQueue = $this->addIdleModeratorsToQueue();
 
-        // Étape 2 : Traiter la file d'attente existante
-        $processedAssignments = $this->processQueue();
-
-        // Étape 3 : Vérifier s'il reste des incohérences
-        $availableProfiles = $this->getAvailableProfiles();
-        $queuedModerators = ModeratorQueue::count();
-
-        // CORRECTION FORCÉE : S'il y a des profils disponibles mais des modérateurs en attente
-        if (count($availableProfiles) > 0 && $queuedModerators > 0) {
-            Log::warning("Incohérence détectée : profils disponibles mais modérateurs en attente", [
-                'profils_disponibles' => count($availableProfiles),
-                'moderateurs_en_attente' => $queuedModerators,
-                'profils_ids' => $availableProfiles
-            ]);
-
-            // Forcer le traitement immédiat
-            $forcedAssignments = $this->processQueue();
-            $processedAssignments += $forcedAssignments;
-        }
-
-        return [
-            'added_to_queue' => $addedToQueue,
-            'processed_assignments' => $processedAssignments,
-            'remaining_in_queue' => ModeratorQueue::count(),
-            'available_profiles' => count($availableProfiles)
-        ];
-    } */
 
     public function checkAndProcessQueue($assignedModerators = [])
     {

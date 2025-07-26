@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 use App\Models\ProfileLock;
 use App\Models\ClientLock;
@@ -11,152 +12,214 @@ use App\Events\ProfileLockStatusChanged;
 
 /**
  * Service pour gérer les verrous sur les profils et clients.
- * 
- * Ce service permet de :
- * - verrouiller et déverrouiller un profil ou un client pour éviter les accès concurrents,
- * - vérifier si un profil ou client est actuellement verrouillé,
- * - nettoyer automatiquement les verrous expirés,
- * - fournir des informations sur les verrous en cours,
- * - notifier les modérateurs lors des changements de statut de verrouillage.
- * 
- * L'objectif est d'assurer qu'un profil ou client ne soit pas modifié simultanément
- * par plusieurs modérateurs, garantissant ainsi la cohérence et la bonne gestion des conversations.
+ * Version corrigée pour éviter les race conditions et les assignations multiples.
  */
 class ProfileLockService
 {
+    const CACHE_TTL = 60; // Cache TTL en secondes
+    const LOCK_CLEANUP_INTERVAL = 30; // Nettoyage toutes les 30 secondes
+
     /**
-     * Verrouiller un profil
+     * Verrouiller un profil de manière atomique
      */
     public function lockProfile($profileId, $moderatorId = null, $duration = 30)
     {
-        // Vérifier si le profil est déjà verrouillé
-        if ($this->isProfileLocked($profileId)) {
-            return false;
-        }
+        // Utiliser une transaction avec verrous exclusifs pour éviter les race conditions
+        return DB::transaction(function () use ($profileId, $moderatorId, $duration) {
 
-        // Créer un nouveau verrou
-        $lock = new ProfileLock([
-            'profile_id' => $profileId,
-            'moderator_id' => $moderatorId,
-            'locked_at' => now(),
-            'expires_at' => now()->addSeconds($duration),
-            'lock_type' => $moderatorId ? 'assignment' : 'system'
-        ]);
+            // Verrouillage exclusif de la ligne pour éviter les accès concurrents
+            $existingLock = ProfileLock::where('profile_id', $profileId)
+                ->whereNull('deleted_at')
+                ->where('expires_at', '>', now())
+                ->lockForUpdate() // ✅ Verrou exclusif
+                ->first();
 
-        $lock->save();
+            if ($existingLock) {
+                Log::warning("Tentative de verrouillage d'un profil déjà verrouillé", [
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'existing_moderator' => $existingLock->moderator_id
+                ]);
+                return false;
+            }
 
-        // Émettre un événement pour notifier les modérateurs
-        event(new ProfileLockStatusChanged($profileId, 'locked', $moderatorId, $duration));
+            // Créer le nouveau verrou de manière atomique
+            try {
+                $lock = ProfileLock::create([
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'locked_at' => now(),
+                    'expires_at' => now()->addSeconds($duration),
+                    'lock_type' => $moderatorId ? 'assignment' : 'system'
+                ]);
 
-        Log::info("Profil verrouillé", [
-            'profile_id' => $profileId,
-            'moderator_id' => $moderatorId,
-            'duration' => $duration
-        ]);
+                // Cache pour améliorer les performances des vérifications fréquentes
+                $this->cacheProfileLock($profileId, $lock->expires_at);
 
-        return true;
+                // Émettre un événement pour notifier les modérateurs
+                event(new ProfileLockStatusChanged($profileId, 'locked', $moderatorId, $duration));
+
+                Log::info("Profil verrouillé avec succès", [
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'duration' => $duration,
+                    'lock_id' => $lock->id
+                ]);
+
+                return true;
+            } catch (\Exception $e) {
+                Log::error("Erreur lors du verrouillage du profil", [
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'error' => $e->getMessage()
+                ]);
+                return false;
+            }
+        });
     }
 
     /**
-     * Déverrouiller un profil
+     * Déverrouiller un profil de manière atomique
      */
     public function unlockProfile($profileId)
     {
-        $lock = ProfileLock::where('profile_id', $profileId)
-            ->whereNull('deleted_at')
-            ->first();
+        return DB::transaction(function () use ($profileId) {
+            $lock = ProfileLock::where('profile_id', $profileId)
+                ->whereNull('deleted_at')
+                ->lockForUpdate() // ✅ Verrou exclusif
+                ->first();
 
-        if (!$lock) {
-            return false;
-        }
+            if (!$lock) {
+                return false;
+            }
 
-        // Soft delete pour conserver l'historique
-        $lock->delete();
+            // Soft delete pour conserver l'historique
+            $lock->delete();
 
-        // Émettre un événement pour notifier les modérateurs
-        event(new ProfileLockStatusChanged($profileId, 'unlocked'));
+            // Supprimer du cache
+            $this->removeCachedProfileLock($profileId);
 
-        Log::info("Profil déverrouillé", [
-            'profile_id' => $profileId
-        ]);
+            // Émettre un événement pour notifier les modérateurs
+            event(new ProfileLockStatusChanged($profileId, 'unlocked'));
 
-        return true;
+            Log::info("Profil déverrouillé", [
+                'profile_id' => $profileId,
+                'lock_id' => $lock->id
+            ]);
+
+            return true;
+        });
     }
 
     /**
-     * Vérifier si un profil est verrouillé
+     * Vérifier si un profil est verrouillé avec cache optimisé
      */
     public function isProfileLocked($profileId)
     {
-        $this->cleanExpiredLocks();
+        // Vérifier d'abord le cache pour éviter les requêtes fréquentes
+        $cacheKey = "profile_lock_{$profileId}";
+        $cachedExpiry = Cache::get($cacheKey);
 
-        return ProfileLock::where('profile_id', $profileId)
+        if ($cachedExpiry && Carbon::parse($cachedExpiry)->isFuture()) {
+            return true;
+        }
+
+        if ($cachedExpiry && Carbon::parse($cachedExpiry)->isPast()) {
+            Cache::forget($cacheKey);
+            return false;
+        }
+
+        // Vérification en base si pas en cache
+        $isLocked = ProfileLock::where('profile_id', $profileId)
             ->whereNull('deleted_at')
             ->where('expires_at', '>', now())
             ->exists();
+
+        return $isLocked;
     }
 
     /**
-     * Verrouiller un client
+     * Verrouiller un client de manière atomique
      */
     public function lockClient($clientId, $profileId, $moderatorId, $duration = 30)
     {
-        // Vérifier si le client est déjà verrouillé
-        if ($this->isClientLocked($clientId, $profileId)) {
-            return false;
-        }
+        return DB::transaction(function () use ($clientId, $profileId, $moderatorId, $duration) {
 
-        // Créer un nouveau verrou
-        $lock = new ClientLock([
-            'client_id' => $clientId,
-            'profile_id' => $profileId,
-            'moderator_id' => $moderatorId,
-            'locked_at' => now(),
-            'expires_at' => now()->addSeconds($duration),
-            'lock_reason' => 'conversation'
-        ]);
+            // Vérifier les verrous existants avec verrouillage exclusif
+            $existingLock = ClientLock::where('client_id', $clientId)
+                ->where('profile_id', $profileId)
+                ->whereNull('deleted_at')
+                ->where('expires_at', '>', now())
+                ->lockForUpdate()
+                ->first();
 
-        $lock->save();
+            if ($existingLock) {
+                return false;
+            }
 
-        Log::info("Client verrouillé", [
-            'client_id' => $clientId,
-            'profile_id' => $profileId,
-            'moderator_id' => $moderatorId,
-            'duration' => $duration
-        ]);
+            try {
+                $lock = ClientLock::create([
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'locked_at' => now(),
+                    'expires_at' => now()->addSeconds($duration),
+                    'lock_reason' => 'conversation'
+                ]);
 
-        return true;
+                Log::info("Client verrouillé", [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'duration' => $duration,
+                    'lock_id' => $lock->id
+                ]);
+
+                return true;
+            } catch (\Exception $e) {
+                Log::error("Erreur lors du verrouillage du client", [
+                    'client_id' => $clientId,
+                    'profile_id' => $profileId,
+                    'moderator_id' => $moderatorId,
+                    'error' => $e->getMessage()
+                ]);
+                return false;
+            }
+        });
     }
 
     /**
-     * Déverrouiller un client
+     * Déverrouiller un client de manière atomique
      */
     public function unlockClient($clientId, $profileId = null)
     {
-        $query = ClientLock::where('client_id', $clientId)
-            ->whereNull('deleted_at');
+        return DB::transaction(function () use ($clientId, $profileId) {
+            $query = ClientLock::where('client_id', $clientId)
+                ->whereNull('deleted_at')
+                ->lockForUpdate(); // ✅ Verrou exclusif
 
-        if ($profileId) {
-            $query->where('profile_id', $profileId);
-        }
+            if ($profileId) {
+                $query->where('profile_id', $profileId);
+            }
 
-        $locks = $query->get();
+            $locks = $query->get();
 
-        if ($locks->isEmpty()) {
-            return false;
-        }
+            if ($locks->isEmpty()) {
+                return false;
+            }
 
-        foreach ($locks as $lock) {
-            // Soft delete pour conserver l'historique
-            $lock->delete();
-        }
+            foreach ($locks as $lock) {
+                $lock->delete();
+            }
 
-        Log::info("Client déverrouillé", [
-            'client_id' => $clientId,
-            'profile_id' => $profileId
-        ]);
+            Log::info("Client déverrouillé", [
+                'client_id' => $clientId,
+                'profile_id' => $profileId,
+                'locks_removed' => count($locks)
+            ]);
 
-        return true;
+            return true;
+        });
     }
 
     /**
@@ -164,8 +227,6 @@ class ProfileLockService
      */
     public function isClientLocked($clientId, $profileId = null)
     {
-        $this->cleanExpiredLocks();
-
         $query = ClientLock::where('client_id', $clientId)
             ->whereNull('deleted_at')
             ->where('expires_at', '>', now());
@@ -178,35 +239,63 @@ class ProfileLockService
     }
 
     /**
-     * Nettoyer les verrous expirés
+     * Nettoyer les verrous expirés de manière contrôlée
+     * ✅ Optimisation: Appel moins fréquent et plus intelligent
      */
     public function cleanExpiredLocks()
     {
-        // Nettoyer les verrous de profil expirés
-        $expiredProfileLocks = ProfileLock::whereNull('deleted_at')
-            ->where('expires_at', '<=', now())
-            ->get();
+        // Utiliser le cache pour éviter un nettoyage trop fréquent
+        $lastCleanup = Cache::get('last_lock_cleanup', 0);
 
-        foreach ($expiredProfileLocks as $lock) {
-            $lock->delete();
-
-            // Émettre un événement pour notifier les modérateurs
-            event(new ProfileLockStatusChanged($lock->profile_id, 'unlocked'));
+        if (time() - $lastCleanup < self::LOCK_CLEANUP_INTERVAL) {
+            return ['profiles_cleaned' => 0, 'clients_cleaned' => 0];
         }
 
-        // Nettoyer les verrous de client expirés
-        $expiredClientLocks = ClientLock::whereNull('deleted_at')
-            ->where('expires_at', '<=', now())
-            ->get();
+        return DB::transaction(function () {
+            $profilesCleaned = 0;
+            $clientsCleaned = 0;
 
-        foreach ($expiredClientLocks as $lock) {
-            $lock->delete();
-        }
+            // Nettoyer les verrous de profil expirés
+            $expiredProfileLocks = ProfileLock::whereNull('deleted_at')
+                ->where('expires_at', '<=', now())
+                ->lockForUpdate()
+                ->get();
 
-        return [
-            'profiles_cleaned' => count($expiredProfileLocks),
-            'clients_cleaned' => count($expiredClientLocks)
-        ];
+            foreach ($expiredProfileLocks as $lock) {
+                $lock->delete();
+                $this->removeCachedProfileLock($lock->profile_id);
+
+                // Émettre un événement pour notifier les modérateurs
+                event(new ProfileLockStatusChanged($lock->profile_id, 'unlocked'));
+                $profilesCleaned++;
+            }
+
+            // Nettoyer les verrous de client expirés
+            $expiredClientLocks = ClientLock::whereNull('deleted_at')
+                ->where('expires_at', '<=', now())
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($expiredClientLocks as $lock) {
+                $lock->delete();
+                $clientsCleaned++;
+            }
+
+            // Mettre à jour le timestamp du dernier nettoyage
+            Cache::put('last_lock_cleanup', time(), self::CACHE_TTL);
+
+            if ($profilesCleaned > 0 || $clientsCleaned > 0) {
+                Log::info("Nettoyage des verrous expirés", [
+                    'profiles_cleaned' => $profilesCleaned,
+                    'clients_cleaned' => $clientsCleaned
+                ]);
+            }
+
+            return [
+                'profiles_cleaned' => $profilesCleaned,
+                'clients_cleaned' => $clientsCleaned
+            ];
+        });
     }
 
     /**
@@ -237,7 +326,7 @@ class ProfileLockService
             'locked_at' => $lock->locked_at,
             'expires_at' => $lock->expires_at,
             'type' => $type === 'profile' ? $lock->lock_type : $lock->lock_reason,
-            'time_remaining' => $lock->expires_at->diffInSeconds(now())
+            'time_remaining' => max(0, $lock->expires_at->diffInSeconds(now()))
         ];
     }
 
@@ -246,8 +335,6 @@ class ProfileLockService
      */
     public function getLockedProfileIds()
     {
-        $this->cleanExpiredLocks();
-
         return ProfileLock::whereNull('deleted_at')
             ->where('expires_at', '>', now())
             ->pluck('profile_id')
@@ -259,8 +346,6 @@ class ProfileLockService
      */
     public function getAllLockedClients()
     {
-        $this->cleanExpiredLocks();
-
         $locks = ClientLock::whereNull('deleted_at')
             ->where('expires_at', '>', now())
             ->get();
@@ -278,5 +363,83 @@ class ProfileLockService
         }
 
         return $lockedClients;
+    }
+
+    /**
+     * ✅ NOUVEAU: Forcer le déverrouillage d'un profil (pour les cas d'urgence)
+     */
+    public function forceUnlockProfile($profileId, $reason = 'forced_unlock')
+    {
+        return DB::transaction(function () use ($profileId, $reason) {
+            $locks = ProfileLock::where('profile_id', $profileId)
+                ->whereNull('deleted_at')
+                ->lockForUpdate()
+                ->get();
+
+            foreach ($locks as $lock) {
+                $lock->delete();
+            }
+
+            $this->removeCachedProfileLock($profileId);
+
+            Log::warning("Déverrouillage forcé du profil", [
+                'profile_id' => $profileId,
+                'reason' => $reason,
+                'locks_removed' => count($locks)
+            ]);
+
+            event(new ProfileLockStatusChanged($profileId, 'force_unlocked'));
+
+            return count($locks) > 0;
+        });
+    }
+
+    /**
+     * Méthodes de gestion du cache
+     */
+    private function cacheProfileLock($profileId, $expiresAt)
+    {
+        $cacheKey = "profile_lock_{$profileId}";
+        $ttl = max(1, $expiresAt->diffInSeconds(now()));
+        Cache::put($cacheKey, $expiresAt->toISOString(), $ttl);
+    }
+
+    private function removeCachedProfileLock($profileId)
+    {
+        Cache::forget("profile_lock_{$profileId}");
+    }
+
+    /**
+     * ✅ NOUVEAU: Vérifier l'intégrité des verrous
+     */
+    public function checkLockIntegrity()
+    {
+        $issues = [];
+
+        // Vérifier les doublons de verrous de profil
+        $duplicateProfiles = ProfileLock::select('profile_id')
+            ->whereNull('deleted_at')
+            ->where('expires_at', '>', now())
+            ->groupBy('profile_id')
+            ->havingRaw('COUNT(*) > 1')
+            ->pluck('profile_id');
+
+        if ($duplicateProfiles->isNotEmpty()) {
+            $issues['duplicate_profile_locks'] = $duplicateProfiles->toArray();
+        }
+
+        // Vérifier les doublons de verrous de client
+        $duplicateClients = ClientLock::select('client_id', 'profile_id')
+            ->whereNull('deleted_at')
+            ->where('expires_at', '>', now())
+            ->groupBy(['client_id', 'profile_id'])
+            ->havingRaw('COUNT(*) > 1')
+            ->get();
+
+        if ($duplicateClients->isNotEmpty()) {
+            $issues['duplicate_client_locks'] = $duplicateClients->toArray();
+        }
+
+        return $issues;
     }
 }
